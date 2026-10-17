@@ -1,7 +1,7 @@
-import { HttpClient, HttpInterceptorFn } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { Observable, tap, throwError, catchError } from 'rxjs';
+import { Observable, catchError, finalize, map, of, shareReplay, switchMap, tap, throwError } from 'rxjs';
 import { ConfigService } from './config.service';
 import { I18nService } from './i18n/i18n.service';
 import { LoginResponse } from './models';
@@ -9,8 +9,8 @@ import { LoginResponse } from './models';
 const STORAGE_KEY = 'erp.session';
 
 /**
- * Session held in sessionStorage (cleared when the browser tab closes). Tokens are short-lived (60 min);
- * refresh tokens and MFA are on the roadmap.
+ * Session held in sessionStorage (cleared when the tab closes). Access tokens are short-lived; the rotating refresh
+ * token renews them silently. Two-factor sign-in adds a code step after the password.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -18,34 +18,45 @@ export class AuthService {
   private readonly config = inject(ConfigService);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18nService);
+  private refreshing: Observable<boolean> | null = null;
 
   readonly session = signal<LoginResponse | null>(this.restore());
   readonly user = computed(() => this.session()?.user ?? null);
-  readonly isAuthenticated = computed(() => {
-    const s = this.session();
-    return !!s && new Date(s.expiresAt).getTime() > Date.now();
-  });
+  readonly isAuthenticated = computed(() => !!this.session()?.refreshToken || this.accessTokenValid());
   private readonly permissions = computed(() => new Set(this.session()?.permissions ?? []));
 
   get token(): string | null {
     return this.session()?.accessToken ?? null;
   }
 
+  /** Completes with the server response; when `mfaRequired` is true call {@link verifyMfa} next. */
   login(tenantCode: string, email: string, password: string): Observable<LoginResponse> {
-    return this.http.post<LoginResponse>(`${this.config.apiBaseUrl}/api/auth/login`, { tenantCode, email, password }).pipe(
-      tap((response) => {
-        this.session.set(response);
-        try {
-          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(response));
-        } catch {
-          /* ignore */
-        }
-        this.i18n.set(response.user.preferredLanguage === 'en' ? 'en' : 'ar');
-      })
+    return this.http
+      .post<LoginResponse>(this.url('login'), { tenantCode, email, password })
+      .pipe(tap((r) => { if (!r.mfaRequired) this.store(r, true); }));
+  }
+
+  verifyMfa(mfaToken: string, code: string): Observable<LoginResponse> {
+    return this.http.post<LoginResponse>(this.url('mfa/verify'), { mfaToken, code }).pipe(tap((r) => this.store(r, true)));
+  }
+
+  /** One refresh at a time; concurrent 401s share it. Emits false when the session cannot be renewed. */
+  refresh(): Observable<boolean> {
+    const refreshToken = this.session()?.refreshToken;
+    if (!refreshToken) return of(false);
+    this.refreshing ??= this.http.post<LoginResponse>(this.url('refresh'), { refreshToken }).pipe(
+      tap((r) => this.store(r, false)),
+      map(() => true),
+      catchError(() => of(false)),
+      finalize(() => (this.refreshing = null)),
+      shareReplay(1)
     );
+    return this.refreshing;
   }
 
   logout(): void {
+    const refreshToken = this.session()?.refreshToken;
+    if (refreshToken) this.http.post(this.url('logout'), { refreshToken }).subscribe({ error: () => undefined });
     this.session.set(null);
     try {
       sessionStorage.removeItem(STORAGE_KEY);
@@ -61,29 +72,64 @@ export class AuthService {
     return set.has('*') || set.has(permission);
   }
 
+  setMfaEnabled(enabled: boolean): void {
+    const s = this.session();
+    if (s) this.store({ ...s, mfaEnabled: enabled }, false);
+  }
+
+  private store(response: LoginResponse, applyLanguage: boolean): void {
+    this.session.set(response);
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(response));
+    } catch {
+      /* ignore */
+    }
+    if (applyLanguage && response.user) this.i18n.set(response.user.preferredLanguage === 'en' ? 'en' : 'ar');
+  }
+
+  private accessTokenValid(): boolean {
+    const s = this.session();
+    return !!s?.accessToken && !!s.expiresAt && new Date(s.expiresAt).getTime() > Date.now();
+  }
+
+  private url(path: string): string {
+    return `${this.config.apiBaseUrl}/api/auth/${path}`;
+  }
+
   private restore(): LoginResponse | null {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const session = JSON.parse(raw) as LoginResponse;
-      return new Date(session.expiresAt).getTime() > Date.now() ? session : null;
+      return raw ? (JSON.parse(raw) as LoginResponse) : null;
     } catch {
       return null;
     }
   }
 }
 
-/** Adds the bearer token and preferred language; an expired session sends the user back to sign in. */
+const isAuthCall = (req: HttpRequest<unknown>) => /\/api\/auth\/(login|refresh|logout|mfa\/verify)$/.test(req.url);
+
+/** Adds the bearer token and language; on 401 renews the session once and retries, otherwise signs out. */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const i18n = inject(I18nService);
-  const headers: Record<string, string> = { 'Accept-Language': i18n.lang() };
-  const token = auth.token;
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  return next(req.clone({ setHeaders: headers })).pipe(
-    catchError((error) => {
-      if (error?.status === 401 && token) auth.logout();
-      return throwError(() => error);
+  const withToken = (r: HttpRequest<unknown>) => {
+    const headers: Record<string, string> = { 'Accept-Language': i18n.lang() };
+    if (auth.token && !isAuthCall(r)) headers['Authorization'] = `Bearer ${auth.token}`;
+    return r.clone({ setHeaders: headers });
+  };
+
+  return next(withToken(req)).pipe(
+    catchError((error: unknown) => {
+      if (!(error instanceof HttpErrorResponse) || error.status !== 401 || isAuthCall(req) || !auth.session()) return throwError(() => error);
+      return auth.refresh().pipe(
+        switchMap((ok) => {
+          if (!ok) {
+            auth.logout();
+            return throwError(() => error);
+          }
+          return next(withToken(req));
+        })
+      );
     })
   );
 };

@@ -49,6 +49,7 @@ const NAV: NavGroup[] = [
     items: [
       { icon: 'tune', label: 'nav.hrSettings', link: '/settings/payroll', permission: 'hr.payroll:read' },
       { icon: 'apartment', label: 'nav.company', link: '/settings/company' },
+      { icon: 'shield_lock', label: 'nav.security', link: '/settings/security' },
       { icon: 'group', label: 'nav.users', link: '/settings/users', permission: 'core.users:read' }
     ]
   }

@@ -91,6 +91,7 @@ export const routes: Routes = [
         canActivate: [permissionGuard('hr.payroll:read')],
         loadComponent: () => import('./features/settings/hr-settings').then((m) => m.HrSettingsPage)
       },
+      { path: 'settings/security', loadComponent: () => import('./features/settings/security').then((m) => m.SecurityPage) },
       { path: 'settings/company', loadComponent: () => import('./features/settings/company').then((m) => m.CompanyPage) },
       {
         path: 'settings/users',

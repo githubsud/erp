@@ -36,6 +36,9 @@
               "node_modules/@fontsource/ibm-plex-sans-arabic/700.css",
               "node_modules/material-symbols/outlined.css",
               "src/styles.scss"
+            ],
+            "allowedCommonJsDependencies": [
+              "qrcode"
             ]
           },
           "configurations": {

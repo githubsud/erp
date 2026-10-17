@@ -45,7 +45,22 @@ internal static class CoreEndpoints
         var auth = app.MapGroup("/api/auth").WithTags("Auth");
         auth.MapPost("/login", (LoginRequest request, AuthService service, CancellationToken ct) => service.LoginAsync(request, ct))
             .AllowAnonymous();
+        auth.MapPost("/mfa/verify", (MfaVerifyRequest request, AuthService service, CancellationToken ct) => service.VerifyMfaAsync(request, ct))
+            .AllowAnonymous();
+        auth.MapPost("/refresh", (RefreshRequest request, AuthService service, CancellationToken ct) => service.RefreshAsync(request, ct))
+            .AllowAnonymous();
+        auth.MapPost("/logout", async (RefreshRequest request, AuthService service, CancellationToken ct) =>
+        {
+            await service.LogoutAsync(request, ct);
+            return Results.NoContent();
+        }).AllowAnonymous();
         auth.MapGet("/me", GetMe).RequireAuthorization();
+        auth.MapGet("/mfa", (AuthService service, CancellationToken ct) => service.MfaStatusAsync(ct)).RequireAuthorization();
+        auth.MapPost("/mfa/setup", (AuthService service, CancellationToken ct) => service.SetupMfaAsync(ct)).RequireAuthorization();
+        auth.MapPost("/mfa/enable", (MfaCodeRequest request, AuthService service, CancellationToken ct) => service.EnableMfaAsync(request, ct))
+            .RequireAuthorization();
+        auth.MapPost("/mfa/disable", (MfaCodeRequest request, AuthService service, CancellationToken ct) => service.DisableMfaAsync(request, ct))
+            .RequireAuthorization();
 
         var core = app.MapGroup("/api/core").WithTags("Core").RequireAuthorization();
         core.MapGet("/company", GetCompany);

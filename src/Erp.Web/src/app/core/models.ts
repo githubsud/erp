@@ -11,10 +11,14 @@ export interface UserInfo {
 }
 
 export interface LoginResponse {
-  accessToken: string;
-  expiresAt: string;
-  user: UserInfo;
-  permissions: string[];
+  accessToken: string | null;
+  expiresAt: string | null;
+  user: UserInfo | null;
+  permissions: string[] | null;
+  refreshToken: string | null;
+  mfaRequired: boolean;
+  mfaToken: string | null;
+  mfaEnabled: boolean;
 }
 
 export interface Paged<T> {

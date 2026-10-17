@@ -1,5 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
-import { FormBuilder, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -21,33 +21,39 @@ const LAST_COMPANY = 'erp.lastCompany';
         <h1>{{ 'app.name' | t }}</h1>
         <p class="sub">{{ 'login.subtitle' | t }}</p>
 
-        <form [formGroup]="form" (ngSubmit)="submit()">
-          <mat-form-field>
-            <mat-label>{{ 'login.companyCode' | t }}</mat-label>
-            <input matInput formControlName="tenantCode" autocomplete="organization" dir="ltr" />
-            <mat-icon matSuffix>apartment</mat-icon>
-          </mat-form-field>
-          <mat-form-field>
-            <mat-label>{{ 'login.email' | t }}</mat-label>
-            <input matInput type="email" formControlName="email" autocomplete="username" dir="ltr" />
-            <mat-icon matSuffix>mail</mat-icon>
-          </mat-form-field>
-          <mat-form-field>
-            <mat-label>{{ 'login.password' | t }}</mat-label>
-            <input matInput type="password" formControlName="password" autocomplete="current-password" dir="ltr" />
-            <mat-icon matSuffix>lock</mat-icon>
-          </mat-form-field>
-
-          @if (error()) {
-            <div class="error-panel" role="alert">{{ error() }}</div>
-          }
-          <button mat-flat-button type="submit" [disabled]="form.invalid || busy()" class="submit">
-            {{ 'login.submit' | t }}
-          </button>
-          @if (busy()) {
-            <mat-progress-bar mode="indeterminate" />
-          }
-        </form>
+        @if (!mfaToken()) {
+          <form [formGroup]="form" (ngSubmit)="submit()">
+            <mat-form-field>
+              <mat-label>{{ 'login.companyCode' | t }}</mat-label>
+              <input matInput formControlName="tenantCode" autocomplete="organization" dir="ltr" />
+              <mat-icon matSuffix>apartment</mat-icon>
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>{{ 'login.email' | t }}</mat-label>
+              <input matInput type="email" formControlName="email" autocomplete="username" dir="ltr" />
+              <mat-icon matSuffix>mail</mat-icon>
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>{{ 'login.password' | t }}</mat-label>
+              <input matInput type="password" formControlName="password" autocomplete="current-password" dir="ltr" />
+              <mat-icon matSuffix>lock</mat-icon>
+            </mat-form-field>
+            @if (error()) { <div class="error-panel" role="alert">{{ error() }}</div> }
+            <button mat-flat-button type="submit" [disabled]="form.invalid || busy()" class="submit">{{ 'login.submit' | t }}</button>
+          </form>
+        } @else {
+          <form [formGroup]="mfaForm" (ngSubmit)="verify()">
+            <p class="mfa-hint"><mat-icon>verified_user</mat-icon> {{ 'login.mfaHint' | t }}</p>
+            <mat-form-field>
+              <mat-label>{{ 'login.code' | t }}</mat-label>
+              <input matInput [formControl]="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr" class="code" />
+            </mat-form-field>
+            @if (error()) { <div class="error-panel" role="alert">{{ error() }}</div> }
+            <button mat-flat-button type="submit" [disabled]="code.invalid || busy()" class="submit">{{ 'login.verify' | t }}</button>
+            <button mat-button type="button" (click)="mfaToken.set(null)">{{ 'app.back' | t }}</button>
+          </form>
+        }
+        @if (busy()) { <mat-progress-bar mode="indeterminate" /> }
       </mat-card>
     </div>
   `,
@@ -62,6 +68,8 @@ const LAST_COMPANY = 'erp.lastCompany';
     .sub { color: var(--mat-sys-on-surface-variant); margin: 0 0 20px; }
     form { display: flex; flex-direction: column; gap: 4px; }
     .submit { height: 44px; margin-top: 8px; }
+    .mfa-hint { display: flex; gap: 8px; align-items: center; color: var(--mat-sys-on-surface-variant); }
+    .code { letter-spacing: 0.4em; font-size: 20px; text-align: center; }
   `
 })
 export class LoginPage {
@@ -72,6 +80,9 @@ export class LoginPage {
 
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly mfaToken = signal<string | null>(null);
+  protected readonly code = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.pattern(/^\d{6}$/)] });
+  protected readonly mfaForm = new FormGroup({ code: this.code });
   protected readonly form = inject(FormBuilder).nonNullable.group({
     tenantCode: [localStorage.getItem(LAST_COMPANY) ?? '', Validators.required],
     email: ['', [Validators.required, Validators.email]],
@@ -81,17 +92,41 @@ export class LoginPage {
   submit(): void {
     if (this.form.invalid) return;
     const { tenantCode, email, password } = this.form.getRawValue();
-    this.busy.set(true);
-    this.error.set(null);
+    this.start();
     this.auth.login(tenantCode.trim(), email.trim(), password).subscribe({
-      next: () => {
+      next: (r) => {
         localStorage.setItem(LAST_COMPANY, tenantCode.trim());
-        void this.router.navigate(['/dashboard']);
+        if (r.mfaRequired && r.mfaToken) {
+          this.busy.set(false);
+          this.mfaToken.set(r.mfaToken);
+        } else {
+          void this.router.navigate(['/dashboard']);
+        }
       },
+      error: (e) => this.fail(e)
+    });
+  }
+
+  verify(): void {
+    const token = this.mfaToken();
+    if (!token || this.code.invalid) return;
+    this.start();
+    this.auth.verifyMfa(token, this.code.value).subscribe({
+      next: () => void this.router.navigate(['/dashboard']),
       error: (e) => {
-        this.busy.set(false);
-        this.error.set(this.notify.message(e));
+        this.code.reset();
+        this.fail(e);
       }
     });
+  }
+
+  private start(): void {
+    this.busy.set(true);
+    this.error.set(null);
+  }
+
+  private fail(e: unknown): void {
+    this.busy.set(false);
+    this.error.set(this.notify.message(e));
   }
 }

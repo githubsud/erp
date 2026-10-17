@@ -1,4 +1,5 @@
 using Erp.Infrastructure.Persistence;
+using Erp.Infrastructure.Security;
 using Erp.Modules.Core.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -31,6 +32,17 @@ internal sealed class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
     {
         b.ToTable("app_user", "core");
         b.Property(x => x.Version).HasXminConcurrency();
+        b.Property(x => x.MfaSecret).HasColumnName("mfa_secret_encrypted").HasConversion(new EncryptedStringConverter());
+        b.Property(x => x.MfaPendingSecret).HasColumnName("mfa_pending_encrypted").HasConversion(new EncryptedStringConverter());
+    }
+}
+
+internal sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
+{
+    public void Configure(EntityTypeBuilder<RefreshToken> b)
+    {
+        b.ToTable("refresh_token", "core");
+        b.Property(x => x.TokenHash).IsFixedLength();
     }
 }
 

@@ -67,7 +67,22 @@ public sealed class AppUser : TenantEntity
     public int FailedLoginCount { get; set; }
     public DateTimeOffset? LockoutUntil { get; set; }
     public DateTimeOffset? LastLoginAt { get; set; }
+    public bool MfaEnabled { get; set; }
+    [Sensitive] public string? MfaSecret { get; set; }
+    [Sensitive] public string? MfaPendingSecret { get; set; }
+    public long MfaLastStep { get; set; }
     public uint Version { get; private set; }
+}
+
+/// <summary>Only a hash of the token is stored; the raw value lives in the client session.</summary>
+public sealed class RefreshToken : TenantEntity, INotAudited
+{
+    public Guid UserId { get; init; }
+    public required string TokenHash { get; init; }
+    public Guid? CompanyId { get; init; }
+    public DateTimeOffset ExpiresAt { get; init; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public Guid? ReplacedBy { get; set; }
 }
 
 public sealed class Role : TenantEntity
