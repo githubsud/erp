@@ -83,6 +83,21 @@ public interface ICompanyProfileProvider
     Task<CompanyProfile> GetAsync(CancellationToken ct = default);
 }
 
+public sealed record EmailMessage(IReadOnlyList<string> To, string Subject, string HtmlBody, string TextBody);
+
+/// <summary>Sends email. Called from outbox handlers only, so delivery is retried and never blocks a business transaction.</summary>
+public interface IEmailSender
+{
+    Task SendAsync(EmailMessage message, CancellationToken ct = default);
+}
+
+/// <summary>Finds the people to notify for the current tenant.</summary>
+public interface IUserDirectory
+{
+    /// <summary>Email addresses of active users holding <paramref name="permission"/> (owners included through the wildcard).</summary>
+    Task<IReadOnlyList<string>> EmailsWithPermissionAsync(string permission, CancellationToken ct = default);
+}
+
 public sealed record TenantCompany(Guid TenantId, Guid CompanyId);
 
 /// <summary>Enumerates active tenants and their companies for background jobs that work tenant by tenant.</summary>

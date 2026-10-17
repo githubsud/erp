@@ -1,4 +1,5 @@
 using System.Reflection;
+using Erp.Infrastructure.Email;
 using Erp.Infrastructure.Numbering;
 using Erp.Infrastructure.Outbox;
 using Erp.Infrastructure.Persistence;
@@ -23,6 +24,7 @@ public static class DependencyInjection
         var database = configuration.GetSection(DatabaseOptions.Section).Get<DatabaseOptions>() ?? new DatabaseOptions();
         var outbox = configuration.GetSection(OutboxOptions.Section).Get<OutboxOptions>() ?? new OutboxOptions();
         var security = configuration.GetSection(SecurityOptions.Section).Get<SecurityOptions>() ?? new SecurityOptions();
+        var email = configuration.GetSection(EmailOptions.Section).Get<EmailOptions>() ?? new EmailOptions();
         FieldProtector.Configure(security);
 
         var moduleAssemblies = modules.Select(m => m.Assembly).ToList();
@@ -35,6 +37,16 @@ public static class DependencyInjection
         services.AddSingleton(sp => new DatabaseMigrator(database, migrationAssemblies, sp.GetRequiredService<ILogger<DatabaseMigrator>>()));
 
         services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton(email);
+        if (string.IsNullOrWhiteSpace(email.Host))
+        {
+            services.AddSingleton<CapturingEmailSender>();
+            services.AddSingleton<IEmailSender>(sp => sp.GetRequiredService<CapturingEmailSender>());
+        }
+        else
+        {
+            services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        }
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddScoped<TenantSessionInterceptor>();
         services.AddScoped<AuditingInterceptor>();

@@ -26,6 +26,7 @@ public sealed class CoreModule : IModule
         services.AddScoped<TenantProvisioningService>();
         services.AddScoped<ITenantDirectory, TenantDirectory>();
         services.AddScoped<ICompanyProfileProvider, CompanyProfileProvider>();
+        services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddSingleton<IPermissionProvider, CorePermissionProvider>();
     }
 

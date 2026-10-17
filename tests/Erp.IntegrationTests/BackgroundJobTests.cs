@@ -1,3 +1,4 @@
+using Erp.Infrastructure.Email;
 using Erp.Infrastructure.Outbox;
 using Erp.IntegrationTests.Infrastructure;
 using Erp.Modules.HR.Documents;
@@ -31,6 +32,13 @@ public sealed class BackgroundJobTests(ErpFixture fixture)
         (await PlatformTests.CountAsync(connection,
             "SELECT count(*) FROM core.outbox_message WHERE type = 'hr.document_expiry_reminder' AND sent_at IS NOT NULL AND payload->>'docNo' = 'BL-778'"))
             .ShouldBe(1);
+
+        // Delivered as a bilingual email to everyone who manages documents (the owner here).
+        var mail = fixture.Factory.Services.GetRequiredService<CapturingEmailSender>().Sent
+            .Single(m => m.To.Contains($"owner@{t.Code}.qa") && m.TextBody.Contains("BL-778"));
+        mail.Subject.ShouldContain("Expires in 30 days: Municipality license");
+        mail.Subject.ShouldContain("ينتهي خلال 30 يوم: رخصة البلدية");
+        mail.HtmlBody.ShouldContain("dir=\"rtl\"");
     }
 
     [Fact]
