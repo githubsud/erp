@@ -39,7 +39,12 @@ npx ng serve            # http://localhost:4200 (proxies /api to :5080)
 Open **http://localhost:5080/scalar** for the interactive API, or run the requests in [scripts/demo.http](scripts/demo.http)
 (VS Code REST Client / Visual Studio / Rider) to provision a company, hire employees and run a full payroll month.
 
-## Deploying the web app (e.g. Cloudflare Pages)
+## Deployment
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): API container (`Dockerfile`, `--migrate-only` release step) and PostgreSQL in
+Azure Qatar Central, web app on Cloudflare Pages.
+
+### Deploying the web app (e.g. Cloudflare Pages)
 
 `npx ng build` produces static files in `src/Erp.Web/dist/erp-web/browser` (build command `npm ci && npx ng build`,
 root `src/Erp.Web`). Point the app at the API by editing `config.json` in the output (`{ "apiBaseUrl": "https://api.example.qa" }`)

@@ -7,6 +7,15 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
+// Container health probe: `dotnet Erp.Api.dll --healthcheck` exits 0 when /health answers.
+if (args.Contains("--healthcheck"))
+{
+    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+    var port = Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORTS") ?? "8080";
+    try { return (await http.GetAsync($"http://localhost:{port}/health")).IsSuccessStatusCode ? 0 : 1; }
+    catch { return 1; }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 var modules = ModuleCatalog.All;
@@ -42,6 +51,12 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Ad
 
 var app = builder.Build();
 
+// Release step: `dotnet Erp.Api.dll --migrate-only` applies migrations with the owner connection and exits.
+if (args.Contains("--migrate-only"))
+{
+    await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
+    return 0;
+}
 if (app.Configuration.GetValue<bool>($"{DatabaseOptions.Section}:{nameof(DatabaseOptions.MigrateOnStartup)}"))
     await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
 
@@ -62,6 +77,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 foreach (var module in modules)
     module.MapEndpoints(app);
 
-app.Run();
+await app.RunAsync();
+return 0;
 
 public partial class Program;

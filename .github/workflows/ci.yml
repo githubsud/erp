@@ -58,3 +58,10 @@ jobs:
         with:
           name: web-dist
           path: src/Erp.Web/dist/erp-web/browser
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -t qatar-erp-api:ci .

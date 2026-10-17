@@ -1,0 +1,14 @@
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/.angular
+**/TestResults
+.git
+.github
+.vs
+.vscode
+tests
+docs
+src/Erp.Web
+*.md
