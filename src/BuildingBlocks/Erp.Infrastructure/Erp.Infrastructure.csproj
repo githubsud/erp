@@ -10,11 +10,13 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="EFCore.NamingConventions" />
+    <PackageReference Include="QuestPDF" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Erp.SharedKernel\Erp.SharedKernel.csproj" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Migrations\*.sql" />
+    <EmbeddedResource Include="Pdf\Fonts\*.ttf" />
   </ItemGroup>
 </Project>

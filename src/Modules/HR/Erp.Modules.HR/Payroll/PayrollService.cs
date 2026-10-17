@@ -76,6 +76,11 @@ internal sealed class PayrollService(
                             && (e.Status == EmployeeStatus.Active || e.TerminationDate >= run.PeriodStart))
                 .OrderBy(e => e.EmpNo)
                 .ToListAsync(token);
+            // Employees whose final settlement is posted were paid up to their last day there.
+            var settled = await db.Set<FinalSettlement>().AsNoTracking()
+                .Where(s => s.CompanyId == run.CompanyId && (s.Status == SettlementStatus.Posted || s.Status == SettlementStatus.Paid))
+                .Select(s => s.EmployeeId).ToListAsync(token);
+            employees = employees.Where(e => !settled.Contains(e.Id)).ToList();
             var employeeIds = employees.Select(e => e.Id).ToList();
             var contracts = await LoadContractsAsync(employeeIds, run.PeriodStart, run.PeriodEnd, token);
             var components = await db.Set<PayComponent>().AsNoTracking().Where(c => c.CompanyId == run.CompanyId).ToDictionaryAsync(c => c.Id, token);

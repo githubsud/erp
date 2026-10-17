@@ -24,6 +24,9 @@ public sealed class HrModule : IModule
         services.AddScoped<PayrollInputService>();
         services.AddScoped<PayrollService>();
         services.AddScoped<DocumentService>();
+        services.AddScoped<FinalSettlementService>();
+        services.AddScoped<AdvanceService>();
+        services.AddScoped<HrPdfDocuments>();
         services.AddScoped<ITenantProvisioner, HrProvisioner>();
         services.AddSingleton<IPermissionProvider, HrPermissionProvider>();
 

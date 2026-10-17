@@ -143,3 +143,23 @@ Authorization: Bearer {{token}}
 ###
 GET {{api}}/api/hr/documents/expiring?withinDays=90
 Authorization: Bearer {{token}}
+
+### 11. Payslips as bilingual PDF (all employees, one per page)
+GET {{api}}/api/hr/payroll-runs/{{runId}}/payslips.pdf
+Authorization: Bearer {{token}}
+
+### 12. Final settlement (draft): gratuity, leave encashment, unpaid salary, recoveries
+# @name settlement
+POST {{api}}/api/hr/employees/{{employeeId}}/final-settlements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "lastWorkingDay": "2026-10-31", "reason": "Resignation", "noticePay": 0, "airTicket": 1200 }
+
+###
+GET {{api}}/api/hr/final-settlements/{{settlement.response.body.id}}/pdf
+Authorization: Bearer {{token}}
+
+### Post it (terminates the employee, releases the gratuity provision)
+POST {{api}}/api/hr/final-settlements/{{settlement.response.body.id}}/post
+Authorization: Bearer {{token}}

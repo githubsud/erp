@@ -142,3 +142,26 @@ internal sealed class WpsFileConfiguration : IEntityTypeConfiguration<WpsFile>
         b.Property(x => x.Sha256).IsFixedLength();
     }
 }
+
+internal sealed class FinalSettlementConfiguration : IEntityTypeConfiguration<FinalSettlement>
+{
+    public void Configure(EntityTypeBuilder<FinalSettlement> b)
+    {
+        b.ToTable("final_settlement", "hr");
+        b.Property(x => x.GratuityDaysPerYear).HasPrecision(9, 4);
+        b.Property(x => x.LeaveBalanceDays).HasPrecision(9, 2);
+        b.Property(x => x.DailyLeaveRate).AsQuantity();
+        b.Property(x => x.UnpaidSalaryDays).HasPrecision(9, 2);
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.FinalSettlementId);
+    }
+}
+
+internal sealed class FinalSettlementLineConfiguration : IEntityTypeConfiguration<FinalSettlementLine>
+{
+    public void Configure(EntityTypeBuilder<FinalSettlementLine> b)
+    {
+        b.ToTable("final_settlement_line", "hr");
+        b.Property(x => x.Quantity).AsQuantity();
+        b.Property(x => x.Rate).AsQuantity();
+    }
+}

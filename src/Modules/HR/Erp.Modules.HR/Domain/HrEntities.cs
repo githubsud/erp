@@ -30,6 +30,10 @@ public enum AccrualStatus { Posted, Reversed }
 
 public enum WpsFileStatus { Generated, Submitted, Accepted, Rejected }
 
+public enum SettlementReason { Resignation, Termination, EndOfContract, Retirement, Death }
+
+public enum SettlementStatus { Draft, Posted, Paid, Reversed }
+
 public enum EmployeeDocumentType { Qid, Passport, ResidencePermit, WorkPermit, HealthCard, DrivingLicence, ProfessionalLicence, Other }
 
 public enum CompanyDocumentType
@@ -65,6 +69,9 @@ public sealed class HrSettings : TenantEntity
     public decimal MinimumHousingAllowance { get; set; } = 500;
     public decimal MinimumFoodAllowance { get; set; } = 300;
     public int WpsDepositDays { get; set; } = 7;
+
+    /// <summary>Wage used for leave salary / encashment (contract practice varies; basic by default).</summary>
+    public GratuityBasis LeaveSalaryBasis { get; set; } = GratuityBasis.Basic;
 }
 
 public sealed class Department : TenantEntity
@@ -320,4 +327,56 @@ public sealed class WpsFile : TenantEntity
     public decimal TotalSalaries { get; init; }
     public int RecordCount { get; init; }
     public WpsFileStatus Status { get; set; } = WpsFileStatus.Generated;
+}
+
+/// <summary>End-of-service settlement: gratuity payout, leave encashment, unpaid salary and recoveries, posted once.</summary>
+public sealed class FinalSettlement : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public Guid EmployeeId { get; init; }
+    public required string SettlementNo { get; init; }
+    public DateOnly LastWorkingDay { get; init; }
+    public SettlementReason Reason { get; init; }
+    public SettlementStatus Status { get; set; } = SettlementStatus.Draft;
+    public DateOnly JoiningDate { get; init; }
+    public int ServiceDays { get; init; }
+    public int ExcludedDays { get; init; }
+    public decimal BasisWage { get; init; }
+    public decimal GratuityDaysPerYear { get; init; }
+    public bool EligibleForGratuity { get; init; }
+    public decimal GratuityAmount { get; init; }
+
+    /// <summary>Gratuity already provided for in the books (released when the settlement is posted).</summary>
+    public decimal GratuityProvision { get; init; }
+    public decimal LeaveBalanceDays { get; init; }
+    public decimal DailyLeaveRate { get; init; }
+    public DateOnly? UnpaidSalaryFrom { get; init; }
+    public decimal UnpaidSalaryDays { get; init; }
+    public decimal TotalEarnings { get; init; }
+    public decimal TotalDeductions { get; init; }
+    public decimal NetPayable { get; init; }
+    public string? Notes { get; init; }
+    public bool EmployeeWasActive { get; init; }
+    public Guid? EndedContractId { get; set; }
+    public DateTimeOffset? PostedAt { get; set; }
+    public Guid? JournalEntryId { get; set; }
+    public DateTimeOffset? PaidAt { get; set; }
+    public DateOnly? PaymentDate { get; set; }
+    public Guid? PaymentAccountId { get; set; }
+    public Guid? PaymentJournalEntryId { get; set; }
+    public List<FinalSettlementLine> Lines { get; init; } = [];
+}
+
+public sealed class FinalSettlementLine : TenantEntity
+{
+    public Guid FinalSettlementId { get; init; }
+    public int LineNo { get; init; }
+    public required string Code { get; init; }
+    public required string NameEn { get; init; }
+    public required string NameAr { get; init; }
+    public ComponentKind Kind { get; init; }
+    public Guid? PayComponentId { get; init; }
+    public decimal? Quantity { get; init; }
+    public decimal? Rate { get; init; }
+    public decimal Amount { get; init; }
 }

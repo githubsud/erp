@@ -13,6 +13,9 @@ Design document: [docs/ERP-Blueprint-Qatar-SME.md](docs/ERP-Blueprint-Qatar-SME.
 | Platform | Tenant provisioning in one call, company code + email login (JWT), roles & granular permissions, field masking, audit trail, gapless numbering, transactional outbox, row-level security |
 | Finance | Bilingual IFRS-style chart of accounts (with payroll accounts), fiscal years/periods with close/reopen, central posting service, journal vouchers with reversal, trial balance, account ledger, Excel/Tally-friendly journal CSV export |
 | HR | Employees (QID/passport/IBAN encrypted, IBAN mod-97 + QID validation), departments, contracts with minimum-wage/allowance checks, employee & company documents with expiry list and daily reminders, leave requests/approval/annual balance |
+| Final settlement | Gratuity payout (eligibility after 1 year, provision released), unused-leave encashment or excess-leave recovery, salary since the last payroll, notice pay, air ticket, automatic recovery of outstanding advances; post / pay / reverse |
+| Documents | Bilingual PDF payslips and final settlement statements with amount in words (English & Arabic) |
+| Advances | Salary advances/loans to employees, outstanding balance, recovery through payroll or settlement |
 | Payroll | Monthly runs: calculate → approve → post → WPS SIF file → mark paid (or reverse); proration on a 30-day basis, unpaid leave, overtime by type, bonuses/deductions with 50% cap, salary journal by component and cost centre, gratuity accrual with monthly true-up (GRSIA nationals excluded), gratuity liability report |
 
 ## Quick start

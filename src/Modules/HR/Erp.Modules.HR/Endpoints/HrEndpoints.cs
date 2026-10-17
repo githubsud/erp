@@ -19,7 +19,8 @@ public sealed record HrSettingsDto(
     string? EmployerEid, string? PayerEid, string? PayerQid, string? PayerBankShortName, string? PayerIban, string SifFormatVersion,
     decimal GratuityDaysPerYear, decimal GratuityDivisor, int GratuityMinServiceMonths, decimal DailyRateDivisor, decimal HoursPerDay,
     decimal OvertimeNormalRate, decimal OvertimeNightRate, decimal OvertimeRestDayRate, decimal OvertimeHolidayRate,
-    decimal DeductionCapPercent, decimal MinimumBasicWage, decimal MinimumHousingAllowance, decimal MinimumFoodAllowance, int WpsDepositDays);
+    decimal DeductionCapPercent, decimal MinimumBasicWage, decimal MinimumHousingAllowance, decimal MinimumFoodAllowance, int WpsDepositDays,
+    GratuityBasis LeaveSalaryBasis = GratuityBasis.Basic);
 
 public sealed record DepartmentDto(Guid Id, string Code, string NameEn, string NameAr, bool IsActive);
 public sealed record CreateDepartmentRequest(string Code, string? NameEn, string? NameAr);
@@ -55,6 +56,13 @@ public sealed record PayslipDto(PayslipSummaryDto Summary, decimal BasicSalary, 
 public sealed record PayrollRunDetail(PayrollRunDto Run, IReadOnlyList<PayslipSummaryDto> Payslips);
 public sealed record WpsFileDto(Guid Id, string FileName, string FormatVersion, string PayerBankShortName, decimal TotalSalaries,
     int RecordCount, string Sha256, string Status, DateTimeOffset CreatedAt);
+public sealed record SettlementLineDto(int LineNo, string Code, string NameEn, string NameAr, string Kind, decimal? Quantity, decimal? Rate, decimal Amount);
+public sealed record SettlementDto(Guid Id, string SettlementNo, Guid EmployeeId, string EmpNo, string NameEn, string NameAr, DateOnly LastWorkingDay,
+    string Reason, string Status, DateOnly JoiningDate, int ServiceDays, int ExcludedDays, decimal BasisWage, bool EligibleForGratuity,
+    decimal GratuityAmount, decimal GratuityProvision, decimal LeaveBalanceDays, decimal DailyLeaveRate, DateOnly? UnpaidSalaryFrom,
+    decimal UnpaidSalaryDays, decimal TotalEarnings, decimal TotalDeductions, decimal NetPayable, string? Notes, Guid? JournalEntryId,
+    DateOnly? PaymentDate, IReadOnlyList<SettlementLineDto> Lines);
+
 public sealed record GratuityLiabilityRow(Guid EmployeeId, string EmpNo, string NameEn, string NameAr, DateOnly JoiningDate,
     decimal BasisWage, int ServiceDays, decimal Liability, decimal Provision, bool EligibleForPayout);
 
@@ -145,6 +153,49 @@ internal static class HrEndpoints
         g.MapGet("/payroll-runs/{id:guid}/wps-files", ListWpsFiles).RequirePermission(HrPermissions.PayrollRead);
         g.MapGet("/wps-files/{id:guid}/download", DownloadWps).RequirePermission(HrPermissions.PayrollPost);
 
+        g.MapGet("/payroll-runs/{id:guid}/payslips/{payslipId:guid}/pdf", async (Guid id, Guid payslipId, HrPdfDocuments pdf, CancellationToken ct) =>
+        {
+            var (content, name) = await pdf.PayslipsAsync(id, payslipId, ct);
+            return Results.File(content, "application/pdf", name);
+        }).RequirePermission(HrPermissions.PayrollRead);
+        g.MapGet("/payroll-runs/{id:guid}/payslips.pdf", async (Guid id, HrPdfDocuments pdf, CancellationToken ct) =>
+        {
+            var (content, name) = await pdf.PayslipsAsync(id, null, ct);
+            return Results.File(content, "application/pdf", name);
+        }).RequirePermission(HrPermissions.PayrollRead);
+
+        g.MapGet("/employees/{id:guid}/advances", async (Guid id, ErpDbContext db, CancellationToken ct) =>
+            (await db.Set<EmployeeAdvance>().AsNoTracking().Where(a => a.EmployeeId == id).OrderByDescending(a => a.AdvanceDate).ToListAsync(ct))
+            .Select(AdvanceService.ToDto).ToList()).RequirePermission(HrPermissions.PayrollRead);
+        g.MapPost("/employees/{id:guid}/advances", async (Guid id, CreateAdvanceRequest r, AdvanceService s, CancellationToken ct) =>
+            AdvanceService.ToDto(await s.CreateAsync(id, r, ct))).RequirePermission(HrPermissions.PayrollPost);
+        g.MapGet("/employees/{id:guid}/advance-balance", (Guid id, AdvanceService s, IClock clock, CancellationToken ct, DateOnly? asOf = null) =>
+            s.BalanceAsync(id, asOf ?? clock.Today, ct)).RequirePermission(HrPermissions.PayrollRead);
+
+        g.MapGet("/final-settlements", ListSettlements).RequirePermission(HrPermissions.PayrollRead);
+        g.MapGet("/final-settlements/{id:guid}", async (Guid id, ErpDbContext db, ITenantContext t, CancellationToken ct) =>
+            (await SettlementsAsync(db, t, id, ct)).SingleOrDefault() ?? throw new NotFoundException("Final settlement", id))
+            .RequirePermission(HrPermissions.PayrollRead);
+        g.MapPost("/employees/{id:guid}/final-settlements", async (Guid id, CreateSettlementRequest r, FinalSettlementService s, ErpDbContext db,
+            ITenantContext t, CancellationToken ct) => await SettlementDtoAsync(db, t, (await s.CreateAsync(id, r, ct)).Id, ct))
+            .RequirePermission(HrPermissions.PayrollPrepare);
+        g.MapDelete("/final-settlements/{id:guid}", async (Guid id, FinalSettlementService s, CancellationToken ct) =>
+        {
+            await s.DeleteDraftAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(HrPermissions.PayrollPrepare);
+        g.MapPost("/final-settlements/{id:guid}/post", async (Guid id, FinalSettlementService s, ErpDbContext db, ITenantContext t, CancellationToken ct) =>
+            await SettlementDtoAsync(db, t, (await s.PostAsync(id, ct)).Id, ct)).RequirePermission(HrPermissions.PayrollPost);
+        g.MapPost("/final-settlements/{id:guid}/mark-paid", async (Guid id, MarkPaidRequest r, FinalSettlementService s, ErpDbContext db, ITenantContext t,
+            CancellationToken ct) => await SettlementDtoAsync(db, t, (await s.MarkPaidAsync(id, r, ct)).Id, ct)).RequirePermission(HrPermissions.PayrollPost);
+        g.MapPost("/final-settlements/{id:guid}/reverse", async (Guid id, ReversePayrollRequest r, FinalSettlementService s, ErpDbContext db, ITenantContext t,
+            CancellationToken ct) => await SettlementDtoAsync(db, t, (await s.ReverseAsync(id, r, ct)).Id, ct)).RequirePermission(HrPermissions.PayrollPost);
+        g.MapGet("/final-settlements/{id:guid}/pdf", async (Guid id, HrPdfDocuments pdf, CancellationToken ct) =>
+        {
+            var (content, name) = await pdf.SettlementAsync(id, ct);
+            return Results.File(content, "application/pdf", name);
+        }).RequirePermission(HrPermissions.PayrollRead);
+
         g.MapGet("/reports/gratuity-liability", GratuityLiability).RequirePermission(HrPermissions.PayrollRead);
     }
 
@@ -183,6 +234,7 @@ internal static class HrEndpoints
         s.MinimumHousingAllowance = r.MinimumHousingAllowance;
         s.MinimumFoodAllowance = r.MinimumFoodAllowance;
         s.WpsDepositDays = r.WpsDepositDays;
+        s.LeaveSalaryBasis = r.LeaveSalaryBasis;
         await db.SaveChangesAsync(ct);
         return ToDto(s);
     }
@@ -190,7 +242,7 @@ internal static class HrEndpoints
     private static HrSettingsDto ToDto(HrSettings s) => new(s.EmployerEid, s.PayerEid, s.PayerQid, s.PayerBankShortName, s.PayerIban,
         s.SifFormatVersion, s.GratuityDaysPerYear, s.GratuityDivisor, s.GratuityMinServiceMonths, s.DailyRateDivisor, s.HoursPerDay,
         s.OvertimeNormalRate, s.OvertimeNightRate, s.OvertimeRestDayRate, s.OvertimeHolidayRate, s.DeductionCapPercent, s.MinimumBasicWage,
-        s.MinimumHousingAllowance, s.MinimumFoodAllowance, s.WpsDepositDays);
+        s.MinimumHousingAllowance, s.MinimumFoodAllowance, s.WpsDepositDays, s.LeaveSalaryBasis);
 
     private static async Task<List<DepartmentDto>> ListDepartments(ErpDbContext db, ITenantContext t, CancellationToken ct) =>
         await db.Set<Department>().AsNoTracking().Where(d => d.CompanyId == t.RequireCompanyId()).OrderBy(d => d.Code)
@@ -345,6 +397,27 @@ internal static class HrEndpoints
     {
         var file = await db.Set<WpsFile>().AsNoTracking().SingleOrDefaultAsync(f => f.Id == id, ct) ?? throw new NotFoundException("WPS file", id);
         return Results.File(Encoding.UTF8.GetBytes(file.Content), "text/csv", file.FileName);
+    }
+
+    private static Task<List<SettlementDto>> ListSettlements(ErpDbContext db, ITenantContext t, CancellationToken ct) => SettlementsAsync(db, t, null, ct);
+
+    private static async Task<SettlementDto> SettlementDtoAsync(ErpDbContext db, ITenantContext t, Guid id, CancellationToken ct) =>
+        (await SettlementsAsync(db, t, id, ct)).Single();
+
+    private static async Task<List<SettlementDto>> SettlementsAsync(ErpDbContext db, ITenantContext t, Guid? id, CancellationToken ct)
+    {
+        var companyId = t.RequireCompanyId();
+        var settlements = await db.Set<FinalSettlement>().AsNoTracking().Include(x => x.Lines)
+            .Where(x => x.CompanyId == companyId && (id == null || x.Id == id))
+            .OrderByDescending(x => x.CreatedAt).Take(500).ToListAsync(ct);
+        var employeeIds = settlements.Select(x => x.EmployeeId).Distinct().ToList();
+        var employees = await db.Set<Employee>().AsNoTracking().Where(e => employeeIds.Contains(e.Id)).ToDictionaryAsync(e => e.Id, ct);
+        return settlements.Select(x => new SettlementDto(x.Id, x.SettlementNo, x.EmployeeId, employees[x.EmployeeId].EmpNo, employees[x.EmployeeId].NameEn,
+            employees[x.EmployeeId].NameAr, x.LastWorkingDay, x.Reason.ToString(), x.Status.ToString(), x.JoiningDate, x.ServiceDays, x.ExcludedDays,
+            x.BasisWage, x.EligibleForGratuity, x.GratuityAmount, x.GratuityProvision, x.LeaveBalanceDays, x.DailyLeaveRate, x.UnpaidSalaryFrom,
+            x.UnpaidSalaryDays, x.TotalEarnings, x.TotalDeductions, x.NetPayable, x.Notes, x.JournalEntryId, x.PaymentDate,
+            x.Lines.OrderBy(l => l.LineNo).Select(l => new SettlementLineDto(l.LineNo, l.Code, l.NameEn, l.NameAr, l.Kind.ToString(), l.Quantity, l.Rate, l.Amount)).ToList()))
+            .ToList();
     }
 
     private static async Task<List<GratuityLiabilityRow>> GratuityLiability(ErpDbContext db, ITenantContext t, HrSettingsProvider settingsProvider,

@@ -74,6 +74,15 @@ public interface ITenantProvisioner
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 
+public sealed record CompanyProfile(string NameEn, string NameAr, string? CrNo, string? EstablishmentId, string? AddressEn,
+    string? AddressAr, string? Phone, string? Email);
+
+/// <summary>Letterhead details of the current company, for printed documents in any module.</summary>
+public interface ICompanyProfileProvider
+{
+    Task<CompanyProfile> GetAsync(CancellationToken ct = default);
+}
+
 public sealed record TenantCompany(Guid TenantId, Guid CompanyId);
 
 /// <summary>Enumerates active tenants and their companies for background jobs that work tenant by tenant.</summary>

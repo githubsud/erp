@@ -9,4 +9,7 @@ public interface IFinanceQueries
 
     /// <summary>Balance (debit − credit, base currency) of the account a role resolves to, up to a date.</summary>
     Task<decimal> GetRoleBalanceAsync(string accountRole, DateOnly asOf, CancellationToken ct = default);
+
+    /// <summary>Balance (debit − credit, base currency) of one party on the account a role resolves to, up to a date.</summary>
+    Task<decimal> GetPartyBalanceAsync(string accountRole, PartyType partyType, Guid partyId, DateOnly asOf, CancellationToken ct = default);
 }

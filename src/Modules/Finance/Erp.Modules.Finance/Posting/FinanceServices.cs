@@ -98,4 +98,16 @@ internal sealed class FinanceQueries(ErpDbContext db, ITenantContext tenant) : I
                       where l.AccountId == accountId && e.PostingDate <= asOf
                       select l.DebitBase - l.CreditBase).SumAsync(ct);
     }
+
+    public async Task<decimal> GetPartyBalanceAsync(string accountRole, PartyType partyType, Guid partyId, DateOnly asOf, CancellationToken ct = default)
+    {
+        var companyId = tenant.RequireCompanyId();
+        var rules = await db.Set<PostingRule>().AsNoTracking()
+            .Where(r => r.CompanyId == companyId && r.AccountRole == accountRole && r.RoleKey == null).ToListAsync(ct);
+        var accountId = PostingService.Resolve(rules, accountRole, null);
+        return await (from l in db.Set<JournalLine>()
+                      join e in db.Set<JournalEntry>() on l.JournalEntryId equals e.Id
+                      where l.AccountId == accountId && l.PartyType == partyType && l.PartyId == partyId && e.PostingDate <= asOf
+                      select l.DebitBase - l.CreditBase).SumAsync(ct);
+    }
 }
