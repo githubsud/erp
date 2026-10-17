@@ -70,6 +70,7 @@ internal sealed class HrProvisioner(ErpDbContext db, IPostingRuleRegistry rules)
                 NameEn = l.En,
                 NameAr = l.Ar,
                 IsPaid = l.Paid,
+                PayRule = l.Code == "SICK" ? LeavePayRule.SickBands : l.Paid ? LeavePayRule.Full : LeavePayRule.Unpaid,
                 AffectsService = l.AffectsService,
                 DeductsAnnualBalance = l.Annual,
                 IsSystem = true

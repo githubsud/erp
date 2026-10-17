@@ -110,6 +110,7 @@ internal sealed class PayslipConfiguration : IEntityTypeConfiguration<Payslip>
         b.Property(x => x.Iban).HasColumnName("iban_encrypted").HasConversion(new EncryptedStringConverter());
         b.Property(x => x.PaidDays).HasPrecision(9, 2);
         b.Property(x => x.UnpaidDays).HasPrecision(9, 2);
+        b.Property(x => x.HalfPayDays).HasPrecision(9, 2);
         b.Property(x => x.OvertimeHours).AsQuantity();
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.PayslipId);
     }

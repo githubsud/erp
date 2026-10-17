@@ -59,6 +59,7 @@ internal sealed class HrPdfDocuments(ErpDbContext db, ITenantContext tenant, ICo
                             PdfKit.Field(t, "Job title", JoinTitle(titleEn, titleAr), "المسمى الوظيفي");
                             PdfKit.Field(t, "Paid days", p.PaidDays.ToString("0.##"), "أيام العمل المدفوعة");
                             if (p.UnpaidDays > 0) PdfKit.Field(t, "Unpaid leave days", p.UnpaidDays.ToString("0.##"), "أيام إجازة بدون راتب");
+                            if (p.HalfPayDays > 0) PdfKit.Field(t, "Sick leave at half pay (days)", p.HalfPayDays.ToString("0.##"), "إجازة مرضية بنصف راتب (أيام)");
                             if (p.OvertimeHours > 0) PdfKit.Field(t, "Overtime hours", p.OvertimeHours.ToString("0.##"), "ساعات العمل الإضافي");
                             PdfKit.Field(t, "Paid to", $"{p.BankShortName} {MaskIban(p.Iban)}".Trim(), "طريقة الصرف");
                         });

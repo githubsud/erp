@@ -237,6 +237,7 @@ export interface PayslipSummary {
   net: number;
   inWps: boolean;
   warnings: string | null;
+  halfPayDays: number;
 }
 
 export interface PayslipLine {
@@ -364,6 +365,9 @@ export interface HrSettings {
   minimumFoodAllowance: number;
   wpsDepositDays: number;
   leaveSalaryBasis: 'Basic' | 'BasicPlusFixedAllowances';
+  sickFullPayDays: number;
+  sickHalfPayDays: number;
+  sickMinServiceMonths: number;
 }
 
 export interface Department {

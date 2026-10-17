@@ -124,7 +124,7 @@ import { MONTHS_AR, MONTHS_EN, statusClass } from './payroll-list';
           </ng-container>
           <ng-container matColumnDef="days">
             <th mat-header-cell *matHeaderCellDef>{{ 'payroll.paidDays' | t }}</th>
-            <td mat-cell *matCellDef="let p">{{ p.paidDays }}@if (p.unpaidDays) { <span class="secondary"> (−{{ p.unpaidDays }})</span> }</td>
+            <td mat-cell *matCellDef="let p">{{ p.paidDays }}@if (p.unpaidDays) { <span class="secondary"> (−{{ p.unpaidDays }})</span> }@if (p.halfPayDays) { <span class="secondary" [matTooltip]="'payroll.halfPay' | t"> ½×{{ p.halfPayDays }}</span> }</td>
             <td mat-footer-cell *matFooterCellDef></td>
           </ng-container>
           <ng-container matColumnDef="gross">

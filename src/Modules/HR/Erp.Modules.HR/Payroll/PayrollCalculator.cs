@@ -42,7 +42,8 @@ public sealed record EmployeePayInput(
     IReadOnlyList<FixedPay> Fixed,
     IReadOnlyList<VariablePay> Variable,
     IReadOnlyList<OvertimeHours> Overtime,
-    decimal UnpaidLeaveDays);
+    decimal UnpaidLeaveDays,
+    decimal HalfPayLeaveDays = 0);
 
 public sealed record PayLine(ComponentRef Component, decimal? Quantity, decimal? Rate, decimal Amount);
 
@@ -51,6 +52,7 @@ public sealed record PayResult(
     decimal PaidDays,
     decimal UnpaidDays,
     decimal BasicSalary,
+    decimal HalfPayDays,
     decimal OvertimeHours,
     IReadOnlyList<PayLine> Lines,
     decimal Gross,
@@ -77,12 +79,13 @@ public static class PayrollCalculator
         var start = input.JoiningDate > input.PeriodStart ? input.JoiningDate : input.PeriodStart;
         var end = input.TerminationDate is { } t && t < input.PeriodEnd ? t : input.PeriodEnd;
         if (end < start)
-            return new PayResult(false, 0, 0, 0, 0, [], 0, 0, 0, warnings, errors);
+            return new PayResult(false, 0, 0, 0, 0, 0, [], 0, 0, 0, warnings, errors);
 
         var fullMonth = start == input.PeriodStart && end == input.PeriodEnd;
         var employedDays = fullMonth ? MonthBasisDays : Math.Min(MonthBasisDays, end.DayNumber - start.DayNumber + 1);
         var unpaid = Math.Min(employedDays, Math.Max(0, input.UnpaidLeaveDays));
-        var paidDays = employedDays - unpaid;
+        var halfPay = Math.Min(employedDays - unpaid, Math.Max(0, input.HalfPayLeaveDays));
+        var paidDays = employedDays - unpaid - halfPay / 2;
 
         var basic = input.Fixed.Where(f => f.Component.WpsField == WpsField.Basic).Sum(f => f.MonthlyAmount);
         if (basic <= 0) errors.Add("No basic salary in the active contract.");
@@ -119,7 +122,7 @@ public static class PayrollCalculator
         if (deductions > gross)
             errors.Add("Deductions exceed gross pay.");
 
-        return new PayResult(true, paidDays, unpaid, basic, overtimeHours, lines, gross, deductions, gross - deductions, warnings, errors);
+        return new PayResult(true, paidDays, unpaid, basic, halfPay, overtimeHours, lines, gross, deductions, gross - deductions, warnings, errors);
     }
 
     /// <summary>Calendar days of <paramref name="from"/>..<paramref name="to"/> that fall inside the period.</summary>

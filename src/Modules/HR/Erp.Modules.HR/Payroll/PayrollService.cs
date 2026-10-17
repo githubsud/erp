@@ -86,7 +86,7 @@ internal sealed class PayrollService(
             var components = await db.Set<PayComponent>().AsNoTracking().Where(c => c.CompanyId == run.CompanyId).ToDictionaryAsync(c => c.Id, token);
             var inputs = await db.Set<PayrollInput>().AsNoTracking()
                 .Where(i => i.Year == run.Year && i.Month == run.Month && employeeIds.Contains(i.EmployeeId)).ToListAsync(token);
-            var unpaidLeave = await LoadLeaveDaysAsync(employeeIds, run.PeriodStart, run.PeriodEnd, paidLeave: false, token);
+            var leave = await LoadLeaveEffectsAsync(employees, run.PeriodStart, run.PeriodEnd, settings, token);
 
             var errors = new List<string>();
             var payslips = new List<Payslip>();
@@ -106,7 +106,8 @@ internal sealed class PayrollService(
                         .Select(i => new VariablePay(Ref(components[i.PayComponentId]), i.Amount!.Value)).ToList(),
                     inputs.Where(i => i.EmployeeId == employee.Id && i.Hours is not null)
                         .Select(i => new OvertimeHours(Ref(components[i.PayComponentId]), i.OvertimeType!.Value, i.Hours!.Value)).ToList(),
-                    unpaidLeave.GetValueOrDefault(employee.Id));
+                    leave.GetValueOrDefault(employee.Id).Unpaid,
+                    leave.GetValueOrDefault(employee.Id).HalfPay);
 
                 var result = PayrollCalculator.Calculate(input, policy);
                 if (!result.IsPayable) continue;
@@ -131,6 +132,7 @@ internal sealed class PayrollService(
                     InWps = employee.InWps,
                     PaidDays = result.PaidDays,
                     UnpaidDays = result.UnpaidDays,
+                    HalfPayDays = result.HalfPayDays,
                     BasicSalary = result.BasicSalary,
                     OvertimeHours = result.OvertimeHours,
                     Gross = result.Gross,
@@ -452,7 +454,9 @@ internal sealed class PayrollService(
         return new SifRecord(p.Qid, p.VisaId, p.NameEn, p.BankShortName ?? "", p.Iban ?? "", p.PaidDays, p.Net,
             Sum(WpsField.Basic), p.OvertimeHours, Sum(WpsField.ExtraIncome), Sum(WpsField.Deduction),
             Sum(WpsField.Housing), Sum(WpsField.Food), Sum(WpsField.Transport), Sum(WpsField.Overtime),
-            p.UnpaidDays > 0 ? $"Unpaid leave {p.UnpaidDays:0.##} days" : null);
+            p.UnpaidDays > 0 || p.HalfPayDays > 0
+                ? string.Join("; ", new[] { p.UnpaidDays > 0 ? $"Unpaid {p.UnpaidDays:0.##} days" : null, p.HalfPayDays > 0 ? $"Half-pay sick {p.HalfPayDays:0.##} days" : null }.Where(x => x is not null))
+                : null);
     }
 
     /// <summary>The contract in force for the period: the latest one that started on or before the period end.</summary>
@@ -465,16 +469,48 @@ internal sealed class PayrollService(
         return candidates.GroupBy(c => c.EmployeeId).ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.StartDate).First());
     }
 
-    private async Task<Dictionary<Guid, decimal>> LoadLeaveDaysAsync(IReadOnlyCollection<Guid> employeeIds, DateOnly periodStart, DateOnly periodEnd,
-        bool paidLeave, CancellationToken ct)
+    /// <summary>
+    /// Unpaid and half-paid days in the period: unpaid leave counts fully; sick leave is split into full / half / unpaid
+    /// bands using the sick days already taken earlier in the employee's service year.
+    /// </summary>
+    private async Task<Dictionary<Guid, (decimal Unpaid, decimal HalfPay)>> LoadLeaveEffectsAsync(IReadOnlyList<Employee> employees,
+        DateOnly periodStart, DateOnly periodEnd, HrSettings settings, CancellationToken ct)
     {
+        var employeeIds = employees.Select(e => e.Id).ToList();
+        var windowStart = periodStart.AddYears(-1);
         var leaves = await (from l in db.Set<LeaveRequest>()
                             join t in db.Set<LeaveType>() on l.LeaveTypeId equals t.Id
-                            where employeeIds.Contains(l.EmployeeId) && l.Status == LeaveStatus.Approved && t.IsPaid == paidLeave
-                                  && l.FromDate <= periodEnd && l.ToDate >= periodStart
-                            select new { l.EmployeeId, l.FromDate, l.ToDate }).ToListAsync(ct);
-        return leaves.GroupBy(l => l.EmployeeId)
-            .ToDictionary(g => g.Key, g => (decimal)g.Sum(l => PayrollCalculator.OverlapDays(l.FromDate, l.ToDate, periodStart, periodEnd)));
+                            where employeeIds.Contains(l.EmployeeId) && l.Status == LeaveStatus.Approved && t.PayRule != LeavePayRule.Full
+                                  && l.FromDate <= periodEnd && l.ToDate >= windowStart
+                            select new { l.EmployeeId, l.FromDate, l.ToDate, t.PayRule }).ToListAsync(ct);
+
+        var result = new Dictionary<Guid, (decimal, decimal)>();
+        foreach (var employee in employees)
+        {
+            var own = leaves.Where(l => l.EmployeeId == employee.Id).ToList();
+            if (own.Count == 0) continue;
+
+            decimal unpaid = own.Where(l => l.PayRule == LeavePayRule.Unpaid)
+                .Sum(l => PayrollCalculator.OverlapDays(l.FromDate, l.ToDate, periodStart, periodEnd));
+
+            var sick = own.Where(l => l.PayRule == LeavePayRule.SickBands).ToList();
+            decimal half = 0;
+            var sickNow = sick.Sum(l => PayrollCalculator.OverlapDays(l.FromDate, l.ToDate, periodStart, periodEnd));
+            if (sickNow > 0)
+            {
+                var yearStart = SickLeaveCalculator.ServiceYearStart(employee.JoiningDate, periodStart);
+                var prior = periodStart > yearStart
+                    ? sick.Sum(l => PayrollCalculator.OverlapDays(l.FromDate, l.ToDate, yearStart, periodStart.AddDays(-1)))
+                    : 0;
+                var firstSickDay = sick.Where(l => l.ToDate >= periodStart).Min(l => l.FromDate < periodStart ? periodStart : l.FromDate);
+                var eligible = employee.JoiningDate.AddMonths(settings.SickMinServiceMonths) <= firstSickDay;
+                var allocation = SickLeaveCalculator.Allocate(prior, sickNow, settings.SickFullPayDays, settings.SickHalfPayDays, eligible);
+                unpaid += allocation.UnpaidDays;
+                half = allocation.HalfPayDays;
+            }
+            result[employee.Id] = (unpaid, half);
+        }
+        return result;
     }
 
     /// <summary>Days of approved leave that do not count as service (unpaid leave), up to <paramref name="asOf"/>.</summary>

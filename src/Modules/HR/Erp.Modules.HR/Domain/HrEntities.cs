@@ -22,6 +22,9 @@ public enum GratuityBasis { Basic, BasicPlusFixedAllowances }
 
 public enum LeaveStatus { Pending, Approved, Rejected, Cancelled }
 
+/// <summary>How a leave type affects pay.</summary>
+public enum LeavePayRule { Full, Unpaid, SickBands }
+
 public enum OvertimeType { Normal, Night, RestDay, Holiday }
 
 public enum PayrollStatus { Draft, Calculated, Approved, Posted, Paid, Reversed }
@@ -69,6 +72,10 @@ public sealed class HrSettings : TenantEntity
     public decimal MinimumHousingAllowance { get; set; } = 500;
     public decimal MinimumFoodAllowance { get; set; } = 300;
     public int WpsDepositDays { get; set; } = 7;
+
+    public int SickFullPayDays { get; set; } = 14;
+    public int SickHalfPayDays { get; set; } = 28;
+    public int SickMinServiceMonths { get; set; } = 3;
 
     /// <summary>Wage used for leave salary / encashment (contract practice varies; basic by default).</summary>
     public GratuityBasis LeaveSalaryBasis { get; set; } = GratuityBasis.Basic;
@@ -195,6 +202,7 @@ public sealed class LeaveType : TenantEntity
     public required string NameEn { get; set; }
     public required string NameAr { get; set; }
     public bool IsPaid { get; init; }
+    public LeavePayRule PayRule { get; init; } = LeavePayRule.Full;
 
     /// <summary>Unpaid leave is excluded from service when calculating gratuity.</summary>
     public bool AffectsService { get; init; }
@@ -277,6 +285,7 @@ public sealed class Payslip : TenantEntity
     public bool InWps { get; init; }
     public decimal PaidDays { get; init; }
     public decimal UnpaidDays { get; init; }
+    public decimal HalfPayDays { get; init; }
     public decimal BasicSalary { get; init; }
     public decimal OvertimeHours { get; init; }
     public decimal Gross { get; init; }

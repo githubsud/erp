@@ -16,7 +16,8 @@ public sealed class PayrollTests(ErpFixture fixture)
     public sealed record Employee(Guid Id, string EmpNo, string NameEn, string? Qid, string? Iban, bool SensitiveMasked);
     public sealed record Run(Guid Id, string RunNo, string Status, int EmployeeCount, decimal TotalGross, decimal TotalDeductions,
         decimal TotalNet, decimal TotalGratuityAccrual, DateOnly DueDate, DateOnly WpsDeadline, Guid? JournalEntryId, Guid? GratuityJournalEntryId);
-    public sealed record Payslip(Guid Id, Guid EmployeeId, string EmpNo, decimal PaidDays, decimal UnpaidDays, decimal Gross, decimal Deductions, decimal Net);
+    public sealed record Payslip(Guid Id, Guid EmployeeId, string EmpNo, decimal PaidDays, decimal UnpaidDays, decimal Gross, decimal Deductions, decimal Net,
+        decimal HalfPayDays = 0);
     public sealed record RunDetail(Run Run, IReadOnlyList<Payslip> Payslips);
     public sealed record WpsFile(Guid Id, string FileName, decimal TotalSalaries, int RecordCount);
     public sealed record GratuityRow(Guid EmployeeId, string EmpNo, decimal Liability, decimal Provision);
@@ -281,6 +282,40 @@ public sealed class PayrollTests(ErpFixture fixture)
         // Search by exact QID works through the blind index.
         var found = await t.Client.GetAsync<JsonElement>("/api/hr/employees?search=28435677777");
         found.GetProperty("total").GetInt32().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Sick_leave_is_paid_in_full_then_half_and_unpaid_before_minimum_service()
+    {
+        var t = await fixture.CreateTenantAsync();
+        var c = t.Client;
+        var senior = await HireAsync(c, "K001", "Senior Staff", "IN", new DateOnly(2024, 1, 1), "28435655555", "000000000005050505050");
+        var newcomer = await HireAsync(c, "K002", "New Joiner", "IN", MonthStart.AddMonths(-1), "28435655556", "000000000005050505051");
+        await ContractAsync(c, senior.Id, new DateOnly(2024, 1, 1), ("BASIC", 3000), ("HOUSING", 1000));
+        await ContractAsync(c, newcomer.Id, MonthStart.AddMonths(-1), ("BASIC", 3000), ("HOUSING", 1000));
+
+        foreach (var (employee, days) in new[] { (senior, 20), (newcomer, 4) })
+        {
+            var sick = await c.PostAsync<JsonElement>("/api/hr/leave-requests",
+                new { employeeId = employee.Id, leaveTypeCode = "SICK", fromDate = MonthStart, toDate = MonthStart.AddDays(days - 1) });
+            await c.PostAsync<JsonElement>($"/api/hr/leave-requests/{sick.GetProperty("id").GetGuid()}/approve", new { });
+        }
+
+        var run = await c.PostAsync<Run>("/api/hr/payroll-runs", new { year = MonthStart.Year, month = MonthStart.Month });
+        await c.PostAsync<Run>($"/api/hr/payroll-runs/{run.Id}/calculate", new { });
+        var detail = await c.GetAsync<RunDetail>($"/api/hr/payroll-runs/{run.Id}");
+
+        // 20 sick days, first of the service year: 14 at full pay, 6 at half pay → 3 days' pay lost.
+        var s = detail.Payslips.Single(p => p.EmpNo == "K001");
+        s.HalfPayDays.ShouldBe(6);
+        s.UnpaidDays.ShouldBe(0);
+        s.PaidDays.ShouldBe(27);
+        s.Gross.ShouldBe(2700m + 900m);
+
+        // Less than 3 months' service: sick leave is unpaid.
+        var n = detail.Payslips.Single(p => p.EmpNo == "K002");
+        n.UnpaidDays.ShouldBe(4);
+        n.PaidDays.ShouldBe(26);
     }
 
     [Fact]

@@ -20,7 +20,10 @@ public sealed record HrSettingsDto(
     decimal GratuityDaysPerYear, decimal GratuityDivisor, int GratuityMinServiceMonths, decimal DailyRateDivisor, decimal HoursPerDay,
     decimal OvertimeNormalRate, decimal OvertimeNightRate, decimal OvertimeRestDayRate, decimal OvertimeHolidayRate,
     decimal DeductionCapPercent, decimal MinimumBasicWage, decimal MinimumHousingAllowance, decimal MinimumFoodAllowance, int WpsDepositDays,
-    GratuityBasis LeaveSalaryBasis = GratuityBasis.Basic);
+    GratuityBasis LeaveSalaryBasis = GratuityBasis.Basic,
+    int SickFullPayDays = 14,
+    int SickHalfPayDays = 28,
+    int SickMinServiceMonths = 3);
 
 public sealed record DepartmentDto(Guid Id, string Code, string NameEn, string NameAr, bool IsActive);
 public sealed record CreateDepartmentRequest(string Code, string? NameEn, string? NameAr);
@@ -50,7 +53,7 @@ public sealed record PayrollRunDto(Guid Id, string RunNo, int Year, int Month, D
     decimal TotalGratuityAccrual, DateTimeOffset? CalculatedAt, DateTimeOffset? ApprovedAt, DateTimeOffset? PostedAt, DateOnly? PaymentDate,
     Guid? JournalEntryId, Guid? GratuityJournalEntryId, Guid? PaymentJournalEntryId);
 public sealed record PayslipSummaryDto(Guid Id, Guid EmployeeId, string EmpNo, string NameEn, string NameAr, decimal PaidDays,
-    decimal UnpaidDays, decimal Gross, decimal Deductions, decimal Net, bool InWps, string? Warnings);
+    decimal UnpaidDays, decimal Gross, decimal Deductions, decimal Net, bool InWps, string? Warnings, decimal HalfPayDays);
 public sealed record PayslipLineDto(int LineNo, string Code, string NameEn, string NameAr, string Kind, decimal? Quantity, decimal? Rate, decimal Amount);
 public sealed record PayslipDto(PayslipSummaryDto Summary, decimal BasicSalary, decimal OvertimeHours, IReadOnlyList<PayslipLineDto> Lines);
 public sealed record PayrollRunDetail(PayrollRunDto Run, IReadOnlyList<PayslipSummaryDto> Payslips);
@@ -235,6 +238,11 @@ internal static class HrEndpoints
         s.MinimumFoodAllowance = r.MinimumFoodAllowance;
         s.WpsDepositDays = r.WpsDepositDays;
         s.LeaveSalaryBasis = r.LeaveSalaryBasis;
+        if (r.SickFullPayDays < 0 || r.SickHalfPayDays < 0 || r.SickMinServiceMonths < 0)
+            throw new BusinessRuleException("hr.invalid_settings", "Sick leave bands cannot be negative.", "لا يمكن أن تكون فترات الإجازة المرضية سالبة.");
+        s.SickFullPayDays = r.SickFullPayDays;
+        s.SickHalfPayDays = r.SickHalfPayDays;
+        s.SickMinServiceMonths = r.SickMinServiceMonths;
         await db.SaveChangesAsync(ct);
         return ToDto(s);
     }
@@ -242,7 +250,8 @@ internal static class HrEndpoints
     private static HrSettingsDto ToDto(HrSettings s) => new(s.EmployerEid, s.PayerEid, s.PayerQid, s.PayerBankShortName, s.PayerIban,
         s.SifFormatVersion, s.GratuityDaysPerYear, s.GratuityDivisor, s.GratuityMinServiceMonths, s.DailyRateDivisor, s.HoursPerDay,
         s.OvertimeNormalRate, s.OvertimeNightRate, s.OvertimeRestDayRate, s.OvertimeHolidayRate, s.DeductionCapPercent, s.MinimumBasicWage,
-        s.MinimumHousingAllowance, s.MinimumFoodAllowance, s.WpsDepositDays, s.LeaveSalaryBasis);
+        s.MinimumHousingAllowance, s.MinimumFoodAllowance, s.WpsDepositDays, s.LeaveSalaryBasis, s.SickFullPayDays, s.SickHalfPayDays,
+        s.SickMinServiceMonths);
 
     private static async Task<List<DepartmentDto>> ListDepartments(ErpDbContext db, ITenantContext t, CancellationToken ct) =>
         await db.Set<Department>().AsNoTracking().Where(d => d.CompanyId == t.RequireCompanyId()).OrderBy(d => d.Code)
@@ -328,7 +337,7 @@ internal static class HrEndpoints
 
     private static async Task<object> ListLeaveTypes(ErpDbContext db, ITenantContext t, CancellationToken ct) =>
         await db.Set<LeaveType>().AsNoTracking().Where(l => l.CompanyId == t.RequireCompanyId()).OrderBy(l => l.Code)
-            .Select(l => new { l.Id, l.Code, l.NameEn, l.NameAr, l.IsPaid, l.AffectsService, l.DeductsAnnualBalance }).ToListAsync(ct);
+            .Select(l => new { l.Id, l.Code, l.NameEn, l.NameAr, l.IsPaid, l.PayRule, l.AffectsService, l.DeductsAnnualBalance }).ToListAsync(ct);
 
     private static async Task<List<LeaveDto>> ListLeave(ErpDbContext db, CancellationToken ct, Guid? employeeId = null, string? status = null)
     {
@@ -381,7 +390,7 @@ internal static class HrEndpoints
     }
 
     private static PayslipSummaryDto ToSummary(Payslip p) =>
-        new(p.Id, p.EmployeeId, p.EmpNo, p.NameEn, p.NameAr, p.PaidDays, p.UnpaidDays, p.Gross, p.Deductions, p.Net, p.InWps, p.Warnings);
+        new(p.Id, p.EmployeeId, p.EmpNo, p.NameEn, p.NameAr, p.PaidDays, p.UnpaidDays, p.Gross, p.Deductions, p.Net, p.InWps, p.Warnings, p.HalfPayDays);
 
     private static PayrollRunDto ToDto(PayrollRun r) => new(r.Id, r.RunNo, r.Year, r.Month, r.PeriodStart, r.PeriodEnd, r.DueDate, r.WpsDeadline,
         r.Status.ToString(), r.EmployeeCount, r.TotalGross, r.TotalDeductions, r.TotalNet, r.TotalGratuityAccrual, r.CalculatedAt, r.ApprovedAt,

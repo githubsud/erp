@@ -20,7 +20,10 @@ const NUMBER_FIELDS: [keyof HrSettings, string][] = [
   ['minimumBasicWage', 'settings.minBasic'],
   ['minimumHousingAllowance', 'settings.minHousing'],
   ['minimumFoodAllowance', 'settings.minFood'],
-  ['wpsDepositDays', 'settings.wpsDays']
+  ['wpsDepositDays', 'settings.wpsDays'],
+  ['sickFullPayDays', 'settings.sickFull'],
+  ['sickHalfPayDays', 'settings.sickHalf'],
+  ['sickMinServiceMonths', 'settings.sickMinService']
 ];
 
 @Component({
@@ -118,6 +121,9 @@ export class HrSettingsPage {
     minimumHousingAllowance: [500, Validators.required],
     minimumFoodAllowance: [300, Validators.required],
     wpsDepositDays: [7, Validators.required],
+    sickFullPayDays: [14, Validators.required],
+    sickHalfPayDays: [28, Validators.required],
+    sickMinServiceMonths: [3, Validators.required],
     leaveSalaryBasis: ['Basic' as HrSettings['leaveSalaryBasis']]
   });
 
