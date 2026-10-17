@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Erp.Api</RootNamespace>
+    <UserSecretsId>erp-qatar-sme-api</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BuildingBlocks\Erp.Infrastructure\Erp.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Core\Erp.Modules.Core\Erp.Modules.Core.csproj" />
+    <ProjectReference Include="..\Modules\Finance\Erp.Modules.Finance\Erp.Modules.Finance.csproj" />
+    <ProjectReference Include="..\Modules\HR\Erp.Modules.HR\Erp.Modules.HR.csproj" />
+  </ItemGroup>
+</Project>

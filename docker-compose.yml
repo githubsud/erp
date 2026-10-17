@@ -1,0 +1,22 @@
+# Local development database. Port 5433 avoids clashing with a locally installed PostgreSQL on 5432.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: erp-postgres
+    environment:
+      POSTGRES_DB: erp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: UTC
+    ports:
+      - "5433:5432"
+    volumes:
+      - erp-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d erp"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  erp-pgdata:

@@ -1,0 +1,145 @@
+### Qatar SME ERP — end-to-end payroll demo
+### Run top to bottom (VS Code REST Client, Visual Studio or Rider). Requires the API on http://localhost:5080.
+
+@api = http://localhost:5080
+@company = demo-trading
+
+### 1. Provision a company (platform admin)
+POST {{api}}/api/platform/tenants
+X-Platform-Key: dev-platform-key
+Content-Type: application/json; charset=utf-8
+
+{
+  "code": "{{company}}",
+  "nameEn": "Demo Trading WLL",
+  "nameAr": "شركة العرض للتجارة ذ.م.م",
+  "crNo": "123456",
+  "establishmentId": "1234567",
+  "adminEmail": "owner@demo.qa",
+  "adminPassword": "Demo-Password-2026",
+  "adminNameEn": "Demo Owner",
+  "adminNameAr": "مالك الشركة",
+  "preferredLanguage": "ar"
+}
+
+### 2. Log in
+# @name login
+POST {{api}}/api/auth/login
+Content-Type: application/json
+
+{ "tenantCode": "{{company}}", "email": "owner@demo.qa", "password": "Demo-Password-2026" }
+
+###
+@token = {{login.response.body.accessToken}}
+
+### 3. WPS settings (employer establishment ID and the paying bank account)
+# Read current settings first, then PUT them back with these fields filled in.
+GET {{api}}/api/hr/settings
+Authorization: Bearer {{token}}
+
+###
+PUT {{api}}/api/hr/settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "employerEid": "1234567", "payerEid": "1234567", "payerQid": null,
+  "payerBankShortName": "QNBA", "payerIban": "QA54QNBA000000000000693123456", "sifFormatVersion": "1",
+  "gratuityDaysPerYear": 21, "gratuityDivisor": 30, "gratuityMinServiceMonths": 12,
+  "dailyRateDivisor": 30, "hoursPerDay": 8,
+  "overtimeNormalRate": 1.25, "overtimeNightRate": 1.5, "overtimeRestDayRate": 1.5, "overtimeHolidayRate": 1.5,
+  "deductionCapPercent": 50, "minimumBasicWage": 1000, "minimumHousingAllowance": 500, "minimumFoodAllowance": 300,
+  "wpsDepositDays": 7
+}
+
+### 4. Hire an employee
+# @name hire
+POST {{api}}/api/hr/employees
+Authorization: Bearer {{token}}
+Content-Type: application/json; charset=utf-8
+
+{
+  "empNo": "E001", "nameEn": "Ramesh Kumar", "nameAr": "راميش كومار", "nationality": "IN", "gender": "Male",
+  "joiningDate": "2024-03-01", "qid": "28435612345", "jobTitleEn": "Storekeeper",
+  "iban": "QA54QNBA000000000000693123456"
+}
+
+###
+@employeeId = {{hire.response.body.id}}
+
+### 5. Employment contract (minimum wage and allowance rules are enforced)
+POST {{api}}/api/hr/employees/{{employeeId}}/contracts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "startDate": "2024-03-01", "contractType": "Unlimited", "probationMonths": 0,
+  "accommodationProvided": false, "foodProvided": true, "gratuityBasis": "Basic",
+  "components": [
+    { "componentCode": "BASIC", "amount": 3000 },
+    { "componentCode": "HOUSING", "amount": 1000 },
+    { "componentCode": "TRANSPORT", "amount": 500 }
+  ]
+}
+
+### 6. QID expiry (shows up in the expiring-documents list and daily reminders)
+POST {{api}}/api/hr/employees/{{employeeId}}/documents
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "docType": "Qid", "docNo": "28435612345", "expiryDate": "2026-12-15" }
+
+### 7. Overtime for the month
+POST {{api}}/api/hr/payroll-inputs
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "employeeId": "{{employeeId}}", "year": 2026, "month": 10, "componentCode": "OVERTIME", "overtimeType": "Normal", "hours": 10 }
+
+### 8. Payroll run → calculate → approve → post
+# @name run
+POST {{api}}/api/hr/payroll-runs
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "year": 2026, "month": 10 }
+
+###
+@runId = {{run.response.body.id}}
+
+###
+POST {{api}}/api/hr/payroll-runs/{{runId}}/calculate
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/api/hr/payroll-runs/{{runId}}
+Authorization: Bearer {{token}}
+
+###
+POST {{api}}/api/hr/payroll-runs/{{runId}}/approve
+Authorization: Bearer {{token}}
+
+###
+POST {{api}}/api/hr/payroll-runs/{{runId}}/post
+Authorization: Bearer {{token}}
+
+### 9. Generate the WPS Salary Information File, then download it
+# @name wps
+POST {{api}}/api/hr/payroll-runs/{{runId}}/wps-files
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/api/hr/wps-files/{{wps.response.body.id}}/download
+Authorization: Bearer {{token}}
+
+### 10. Accounting impact
+GET {{api}}/api/finance/reports/trial-balance?from=2026-10-01&to=2026-10-31
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/api/hr/reports/gratuity-liability?asOf=2026-10-31
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/api/hr/documents/expiring?withinDays=90
+Authorization: Bearer {{token}}
