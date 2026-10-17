@@ -22,6 +22,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/employees/employee-form').then((m) => m.EmployeeFormPage)
       },
       {
+        path: 'employees/import',
+        canActivate: [permissionGuard('hr.employees:manage')],
+        loadComponent: () => import('./features/employees/employee-import').then((m) => m.EmployeeImportPage)
+      },
+      {
         path: 'employees/:id/edit',
         canActivate: [permissionGuard('hr.employees:manage')],
         loadComponent: () => import('./features/employees/employee-form').then((m) => m.EmployeeFormPage)

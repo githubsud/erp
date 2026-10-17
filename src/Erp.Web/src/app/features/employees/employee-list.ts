@@ -18,6 +18,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
     <div class="page-header">
       <h1>{{ 'employee.title' | t }}</h1>
       @if (auth.can('hr.employees:manage')) {
+        <a mat-stroked-button routerLink="/employees/import"><mat-icon>upload_file</mat-icon> {{ 'import.title' | t }}</a>
         <a mat-flat-button routerLink="/employees/new"><mat-icon>person_add</mat-icon> {{ 'employee.new' | t }}</a>
       }
     </div>

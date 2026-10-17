@@ -115,6 +115,17 @@ export const en = {
   'employee.masked': 'Hidden — you do not have permission to view identifiers.',
   'employee.allStatuses': 'All',
 
+  'import.title': 'Import from Excel',
+  'import.step1': 'Download the template.',
+  'import.template': 'Excel template',
+  'import.step2': 'Fill one employee per row (salary, IBAN, QID and document expiries).',
+  'import.step3': 'Choose the completed file.',
+  'import.choose': 'Choose file',
+  'import.validate': 'Validate',
+  'import.import': 'Import',
+  'import.summary': '{valid} of {total} rows are valid. Nothing has been saved yet.',
+  'import.done': '{n} employees imported with their contracts and documents.',
+
   'tab.profile': 'Profile',
   'tab.contract': 'Contract',
   'tab.documents': 'Documents',

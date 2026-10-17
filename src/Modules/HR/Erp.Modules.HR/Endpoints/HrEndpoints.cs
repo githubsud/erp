@@ -3,6 +3,7 @@ using Erp.Infrastructure.Persistence;
 using Erp.Infrastructure.Web;
 using Erp.Modules.HR.Documents;
 using Erp.Modules.HR.Domain;
+using Erp.Modules.HR.Import;
 using Erp.Modules.HR.Payroll;
 using Erp.Modules.HR.People;
 using Erp.Modules.HR.Wps;
@@ -89,6 +90,19 @@ internal static class HrEndpoints
             ToDto(await s.UpdateAsync(id, r, ct), await p.HasAsync(HrPermissions.SensitiveView, ct))).RequirePermission(HrPermissions.EmployeesManage);
         g.MapPost("/employees/{id:guid}/terminate", async (Guid id, TerminateRequest r, EmployeeService s, IPermissionService p, CancellationToken ct) =>
             ToDto(await s.TerminateAsync(id, r, ct), await p.HasAsync(HrPermissions.SensitiveView, ct))).RequirePermission(HrPermissions.EmployeesManage);
+
+        g.MapGet("/imports/employees/template", () => Results.File(EmployeeImportService.Template(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "employees_import_template.xlsx"))
+            .RequirePermission(HrPermissions.EmployeesManage);
+        g.MapPost("/imports/employees", async (IFormFile file, EmployeeImportService importer, IPermissionService permissions, CancellationToken ct,
+            bool dryRun = true) =>
+        {
+            if (!await permissions.HasAsync(HrPermissions.ContractsManage, ct)) throw new ForbiddenException();
+            if (file.Length > 10 * 1024 * 1024)
+                throw new BusinessRuleException("import.too_large", "The file is larger than 10 MB.", "حجم الملف أكبر من 10 ميغابايت.");
+            await using var stream = file.OpenReadStream();
+            return await importer.ImportAsync(stream, dryRun, ct);
+        }).RequirePermission(HrPermissions.EmployeesManage).DisableAntiforgery();
 
         g.MapGet("/employees/{id:guid}/contracts", ListContracts).RequirePermission(HrPermissions.SensitiveView);
         g.MapPost("/employees/{id:guid}/contracts", async (Guid id, ContractRequest r, ContractService s, ErpDbContext db, CancellationToken ct) =>

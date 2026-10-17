@@ -1,6 +1,7 @@
 using Erp.Infrastructure.Web;
 using Erp.Modules.HR.Documents;
 using Erp.Modules.HR.Endpoints;
+using Erp.Modules.HR.Import;
 using Erp.Modules.HR.Payroll;
 using Erp.Modules.HR.People;
 using Erp.Modules.HR.Provisioning;
@@ -26,6 +27,7 @@ public sealed class HrModule : IModule
         services.AddScoped<DocumentService>();
         services.AddScoped<FinalSettlementService>();
         services.AddScoped<AdvanceService>();
+        services.AddScoped<EmployeeImportService>();
         services.AddScoped<HrPdfDocuments>();
         services.AddScoped<ITenantProvisioner, HrProvisioner>();
         services.AddSingleton<IPermissionProvider, HrPermissionProvider>();

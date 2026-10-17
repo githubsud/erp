@@ -117,6 +117,17 @@ export const ar: Record<TranslationKey, string> = {
   'employee.masked': 'مخفي — لا تملك صلاحية عرض بيانات الهوية.',
   'employee.allStatuses': 'الكل',
 
+  'import.title': 'استيراد من إكسل',
+  'import.step1': 'نزّل القالب.',
+  'import.template': 'قالب إكسل',
+  'import.step2': 'أدخل موظفاً في كل صف (الراتب والآيبان والرقم الشخصي وتواريخ انتهاء المستندات).',
+  'import.step3': 'اختر الملف بعد تعبئته.',
+  'import.choose': 'اختيار ملف',
+  'import.validate': 'تحقق',
+  'import.import': 'استيراد',
+  'import.summary': '{valid} من {total} صفوف صحيحة. لم يتم حفظ أي بيانات بعد.',
+  'import.done': 'تم استيراد {n} موظفين مع عقودهم ومستنداتهم.',
+
   'tab.profile': 'الملف',
   'tab.contract': 'العقد',
   'tab.documents': 'المستندات',

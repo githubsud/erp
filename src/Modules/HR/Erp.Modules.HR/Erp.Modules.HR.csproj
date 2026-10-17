@@ -6,6 +6,9 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="ClosedXML" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.Infrastructure\Erp.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Finance\Erp.Modules.Finance.Contracts\Erp.Modules.Finance.Contracts.csproj" />
   </ItemGroup>
