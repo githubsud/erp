@@ -45,10 +45,19 @@ tests/Erp.IntegrationTests             real PostgreSQL; each test provisions its
 - Endpoints: `RequirePermission("module.resource:action")`; permissions declared in the module's `IPermissionProvider` with default roles.
 - New tenant defaults go in the module's `ITenantProvisioner` (Finance = 10, HR = 20).
 
+## Frontend (src/Erp.Web — Angular 22, zoneless, standalone, Material 3)
+- **Arabic-first.** Every user-visible string goes through `I18nService` (`'key' | t`). Add keys to `en.ts`; `ar.ts` is typed against it so a missing Arabic key fails the build.
+- Bilingual records: `{{ record | bi }}` / `| bi:'jobTitle'`; money: `| money`; dates: `| d` (dd/MM/yyyy); API dates are `yyyy-MM-dd` strings (use `core/dates.ts`, never `Date.toISOString()`).
+- Layout uses logical CSS only (`margin-inline-start`, `text-align: end`); numbers/codes/IBANs get class `ltr`; directional icons get `flip-rtl`.
+- State in signals; data via `ApiService` (typed in `core/models.ts`); errors via `NotifyService` (shows `message_ar` in Arabic).
+- Permissions: hide actions with `auth.can('perm')`; routes use `permissionGuard`. The server still enforces everything.
+- Downloads (PDF/SIF/CSV) go through `api.download(...)` which keeps the server file name.
+
 ## Running
 ```
 docker compose up -d                      # PostgreSQL 17 on localhost:5433
 dotnet run --project src/Erp.Api          # http://localhost:5080/scalar (migrates on start in Development)
+cd src/Erp.Web && npx ng serve            # http://localhost:4200, proxies /api
 dotnet test                               # integration tests use ERP_TEST_POSTGRES or localhost:5433, else Testcontainers
 ```
 

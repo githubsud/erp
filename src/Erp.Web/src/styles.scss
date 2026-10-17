@@ -1,0 +1,119 @@
+@use '@angular/material' as mat;
+
+// One font for Arabic and Latin text. Layout uses logical properties only (margin-inline-start, ...)
+// so the same styles work right-to-left and left-to-right.
+html {
+  color-scheme: light;
+  @include mat.theme((
+    color: (
+      primary: mat.$cyan-palette,
+      tertiary: mat.$rose-palette,
+      theme-type: light
+    ),
+    typography: ('IBM Plex Sans Arabic', system-ui, sans-serif),
+    density: -1
+  ));
+}
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  background: var(--mat-sys-surface-container-lowest);
+  color: var(--mat-sys-on-surface);
+}
+
+// Directional icons (back/forward arrows) point the reading direction.
+[dir='rtl'] .flip-rtl { transform: scaleX(-1); }
+
+// Numbers, codes, IBANs and QIDs read left-to-right even inside Arabic text.
+.ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+// On table cells keep table layout and the page's alignment; digits still render left-to-right.
+td.ltr, th.ltr { display: table-cell; direction: inherit; unicode-bidi: normal; }
+.num { font-variant-numeric: tabular-nums; text-align: end; white-space: nowrap; }
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-block-end: 20px;
+
+  h1 { font: var(--mat-sys-headline-small); margin: 0; flex: 1; }
+  .sub { color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-body-medium); }
+}
+
+.card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  margin-block-end: 20px;
+}
+
+.stat {
+  padding: 16px 20px;
+  .label { color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-label-large); }
+  .value { font: var(--mat-sys-headline-medium); margin-block: 6px; }
+  .hint { color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-body-small); }
+}
+
+.form-grid {
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  .full { grid-column: 1 / -1; }
+}
+
+.section-title { font: var(--mat-sys-title-medium); margin-block: 16px 8px; color: var(--mat-sys-primary); }
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  background: var(--mat-sys-surface);
+  table { width: 100%; }
+  tr.clickable { cursor: pointer; }
+  // Material sets cell alignment with higher specificity; amounts align to the end of the reading direction.
+  .mat-mdc-cell.num, .mat-mdc-header-cell.num, .mat-mdc-footer-cell.num { text-align: end; }
+  tr.clickable:hover { background: var(--mat-sys-surface-container); }
+  .mat-mdc-footer-row td { font-weight: 600; }
+}
+
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-block-end: 16px;
+  mat-form-field { min-width: 180px; }
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.empty { padding: 32px; text-align: center; color: var(--mat-sys-on-surface-variant); }
+
+.chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font: var(--mat-sys-label-medium);
+  background: var(--mat-sys-surface-container-high);
+  &.ok { background: #d8f3e5; color: #0b5a35; }
+  &.warn { background: #fff1d6; color: #7a4a00; }
+  &.bad { background: #ffdcd9; color: #8c1d18; }
+  &.info { background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); }
+}
+
+.error-panel {
+  border: 1px solid #f2b8b5;
+  background: #fff4f3;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-block-end: 16px;
+  ul { margin: 8px 0 0; padding-inline-start: 20px; }
+}
+
+.snack-success { --mat-snack-bar-container-color: #0b5a35; }
+.snack-error { --mat-snack-bar-container-color: #8c1d18; }
+
+mat-dialog-content .form-grid { min-width: min(560px, 80vw); }

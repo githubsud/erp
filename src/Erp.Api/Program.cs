@@ -29,6 +29,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+
+// The web app may be served from another origin (e.g. Cloudflare Pages); list allowed origins in Cors:AllowedOrigins.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+    policy.WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .WithExposedHeaders("Content-Disposition")));
 builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
@@ -39,6 +47,7 @@ if (app.Configuration.GetValue<bool>($"{DatabaseOptions.Section}:{nameof(Databas
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseCors();
 app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();
 app.UseAuthorization();

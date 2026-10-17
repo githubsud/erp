@@ -6,7 +6,7 @@ multi-tenant core.
 
 Design document: [docs/ERP-Blueprint-Qatar-SME.md](docs/ERP-Blueprint-Qatar-SME.md) · Engineering rules: [CLAUDE.md](CLAUDE.md)
 
-## What works today (backend API)
+## What works today
 
 | Area | Capabilities |
 |---|---|
@@ -16,6 +16,7 @@ Design document: [docs/ERP-Blueprint-Qatar-SME.md](docs/ERP-Blueprint-Qatar-SME.
 | Final settlement | Gratuity payout (eligibility after 1 year, provision released), unused-leave encashment or excess-leave recovery, salary since the last payroll, notice pay, air ticket, automatic recovery of outstanding advances; post / pay / reverse |
 | Documents | Bilingual PDF payslips and final settlement statements with amount in words (English & Arabic) |
 | Advances | Salary advances/loans to employees, outstanding balance, recovery through payroll or settlement |
+| Web app | Angular 22, Arabic-first (RTL) with one-click switch to English, Material 3 design, works on phones; dashboard, employees (profile, contract, documents, leave, advances, final settlement), payroll runs with WPS/PDF downloads, overtime inputs, leave approvals, document expiry, gratuity report, chart of accounts, trial balance, journal, settings, users |
 | Payroll | Monthly runs: calculate → approve → post → WPS SIF file → mark paid (or reverse); proration on a 30-day basis, unpaid leave, overtime by type, bonuses/deductions with 50% cap, salary journal by component and cost centre, gratuity accrual with monthly true-up (GRSIA nationals excluded), gratuity liability report |
 
 ## Quick start
@@ -27,13 +28,28 @@ docker compose up -d                     # PostgreSQL 17 on localhost:5433
 dotnet run --project src/Erp.Api         # migrates the database, listens on http://localhost:5080
 ```
 
+Then start the web app (Node 22):
+
+```bash
+cd src/Erp.Web
+npm install
+npx ng serve            # http://localhost:4200 (proxies /api to :5080)
+```
+
 Open **http://localhost:5080/scalar** for the interactive API, or run the requests in [scripts/demo.http](scripts/demo.http)
 (VS Code REST Client / Visual Studio / Rider) to provision a company, hire employees and run a full payroll month.
+
+## Deploying the web app (e.g. Cloudflare Pages)
+
+`npx ng build` produces static files in `src/Erp.Web/dist/erp-web/browser` (build command `npm ci && npx ng build`,
+root `src/Erp.Web`). Point the app at the API by editing `config.json` in the output (`{ "apiBaseUrl": "https://api.example.qa" }`)
+and add the site's origin to the API setting `Cors:AllowedOrigins`. `_redirects` already routes deep links to `index.html`.
 
 ## Tests
 
 ```bash
-dotnet test
+dotnet test                                   # backend
+cd src/Erp.Web && npx ng test --watch=false   # frontend
 ```
 
 - **Unit tests** — payroll, gratuity, IBAN/QID, SIF layout, architecture rules.
