@@ -23,7 +23,9 @@ internal sealed class HrProvisioner(ErpDbContext db, IPostingRuleRegistry rules)
         new("OVERTIME", "Overtime", "العمل الإضافي", ComponentKind.Earning, WpsField.Overtime, false, false, false, AccountRoles.PayrollExpense, "5260"),
         new("BONUS", "Bonus / Incentive", "مكافأة / حافز", ComponentKind.Earning, WpsField.ExtraIncome, false, false, false, AccountRoles.PayrollExpense, "5265"),
         new("ADVANCE_RECOVERY", "Salary Advance Recovery", "استرداد سلفة راتب", ComponentKind.Deduction, WpsField.Deduction, false, false, false, AccountRoles.EmployeeAdvances, null),
-        new("OTHER_DED", "Other Deduction", "خصم آخر", ComponentKind.Deduction, WpsField.Deduction, false, false, false, AccountRoles.PayrollDeduction, "4210")
+        new("OTHER_DED", "Other Deduction", "خصم آخر", ComponentKind.Deduction, WpsField.Deduction, false, false, false, AccountRoles.PayrollDeduction, "4210"),
+        new("SI_EMPLOYEE", "Social insurance (employee share)", "التأمينات الاجتماعية (حصة الموظف)", ComponentKind.Deduction, WpsField.Deduction, false, false,
+            false, AccountRoles.SocialInsurancePayable, null)
     ];
 
     private static readonly (string Code, string En, string Ar, bool Paid, bool AffectsService, bool Annual)[] LeaveTypes =
@@ -54,6 +56,7 @@ internal sealed class HrProvisioner(ErpDbContext db, IPostingRuleRegistry rules)
                 IsFixed = c.Fixed,
                 ProrateByDays = c.Prorate,
                 InGratuityBasis = c.Gratuity,
+                InSocialInsuranceBasis = c.Code is "BASIC" or "HOUSING",
                 PostingRole = c.Role,
                 IsSystem = true
             };

@@ -372,6 +372,9 @@ export interface HrSettings {
   sickFullPayDays: number;
   sickHalfPayDays: number;
   sickMinServiceMonths: number;
+  siEmployeeRatePercent: number;
+  siEmployerRatePercent: number;
+  siMaxContributionSalary: number;
 }
 
 export interface Department {

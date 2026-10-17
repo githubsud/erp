@@ -15,7 +15,8 @@ internal sealed class HrSettingsConfiguration : IEntityTypeConfiguration<HrSetti
                  {
                      nameof(HrSettings.GratuityDaysPerYear), nameof(HrSettings.GratuityDivisor), nameof(HrSettings.DailyRateDivisor),
                      nameof(HrSettings.HoursPerDay), nameof(HrSettings.OvertimeNormalRate), nameof(HrSettings.OvertimeNightRate),
-                     nameof(HrSettings.OvertimeRestDayRate), nameof(HrSettings.OvertimeHolidayRate), nameof(HrSettings.DeductionCapPercent)
+                     nameof(HrSettings.OvertimeRestDayRate), nameof(HrSettings.OvertimeHolidayRate), nameof(HrSettings.DeductionCapPercent),
+                     nameof(HrSettings.SiEmployeeRatePercent), nameof(HrSettings.SiEmployerRatePercent)
                  })
             b.Property(rate).HasPrecision(9, 4);
     }

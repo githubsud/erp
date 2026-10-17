@@ -98,6 +98,20 @@ internal sealed class PayrollService(
                     continue;
                 }
 
+                SocialInsuranceContribution? socialInsurance = null;
+                if (employee.SocialInsuranceScheme == SocialInsuranceScheme.Grsia)
+                {
+                    var siComponent = components.Values.FirstOrDefault(c => c.Code == "SI_EMPLOYEE");
+                    if (siComponent is null)
+                    {
+                        errors.Add($"{employee.EmpNo} {employee.NameEn}: the SI_EMPLOYEE pay component is missing.");
+                        continue;
+                    }
+                    var siBase = Math.Min(settings.SiMaxContributionSalary,
+                        contract.Components.Where(c => components[c.PayComponentId].InSocialInsuranceBasis).Sum(c => c.Amount));
+                    socialInsurance = new SocialInsuranceContribution(Ref(siComponent), siBase, settings.SiEmployeeRatePercent, settings.SiEmployerRatePercent);
+                }
+
                 var input = new EmployeePayInput(
                     run.PeriodStart, run.PeriodEnd, employee.JoiningDate, employee.TerminationDate,
                     contract.Components.Where(c => components[c.PayComponentId].IsFixed)
@@ -107,13 +121,16 @@ internal sealed class PayrollService(
                     inputs.Where(i => i.EmployeeId == employee.Id && i.Hours is not null)
                         .Select(i => new OvertimeHours(Ref(components[i.PayComponentId]), i.OvertimeType!.Value, i.Hours!.Value)).ToList(),
                     leave.GetValueOrDefault(employee.Id).Unpaid,
-                    leave.GetValueOrDefault(employee.Id).HalfPay);
+                    leave.GetValueOrDefault(employee.Id).HalfPay,
+                    socialInsurance);
 
                 var result = PayrollCalculator.Calculate(input, policy);
                 if (!result.IsPayable) continue;
                 errors.AddRange(result.Errors.Select(e => $"{employee.EmpNo} {employee.NameEn}: {e}"));
 
                 var warnings = result.Warnings.ToList();
+                if (employee.SocialInsuranceScheme == SocialInsuranceScheme.GccHome)
+                    warnings.Add("GCC home-country social insurance is not calculated automatically; add it as a deduction.");
                 if (employee.InWps && (employee.Iban is null || !QatarIdentifiers.IsValidQatarIban(employee.Iban)))
                     warnings.Add("Missing or invalid IBAN: the employee cannot be paid through WPS.");
 
@@ -133,6 +150,7 @@ internal sealed class PayrollService(
                     PaidDays = result.PaidDays,
                     UnpaidDays = result.UnpaidDays,
                     HalfPayDays = result.HalfPayDays,
+                    EmployerSocialInsurance = result.EmployerSocialInsurance,
                     BasicSalary = result.BasicSalary,
                     OvertimeHours = result.OvertimeHours,
                     Gross = result.Gross,
@@ -369,6 +387,26 @@ internal sealed class PayrollService(
             Amount = payslips.Sum(p => p.Net),
             Description = "Net salaries payable"
         });
+
+        // Employer's social insurance share: expense by cost centre, owed to GRSIA with the employee share.
+        foreach (var g in payslips.Where(p => p.EmployerSocialInsurance > 0).GroupBy(p => p.CostCenterId))
+            lines.Add(new PostingLine
+            {
+                AccountRole = AccountRoles.SocialInsuranceExpense,
+                Side = PostingSide.Debit,
+                Amount = g.Sum(p => p.EmployerSocialInsurance),
+                CostCenterId = g.Key,
+                Description = "Social insurance - employer share"
+            });
+        var employerTotal = payslips.Sum(p => p.EmployerSocialInsurance);
+        if (employerTotal > 0)
+            lines.Add(new PostingLine
+            {
+                AccountRole = AccountRoles.SocialInsurancePayable,
+                Side = PostingSide.Credit,
+                Amount = employerTotal,
+                Description = "Social insurance - employer share"
+            });
         return lines;
     }
 
@@ -539,7 +577,8 @@ internal sealed class PayrollService(
                 $"حالة مسيرة الرواتب {run.RunNo} لا تسمح بهذا الإجراء.");
     }
 
-    private static ComponentRef Ref(PayComponent c) => new(c.Id, c.Code, c.NameEn, c.NameAr, c.Kind, c.WpsField, c.ProrateByDays);
+    private static ComponentRef Ref(PayComponent c) =>
+        new(c.Id, c.Code, c.NameEn, c.NameAr, c.Kind, c.WpsField, c.ProrateByDays, Statutory: c.PostingRole == AccountRoles.SocialInsurancePayable);
 }
 
 /// <summary>Loads (and caches per request) the company's HR settings.</summary>

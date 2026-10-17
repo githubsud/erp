@@ -26,7 +26,12 @@ public sealed record PayrollPolicy(
     };
 }
 
-public sealed record ComponentRef(Guid Id, string Code, string NameEn, string NameAr, ComponentKind Kind, WpsField WpsField, bool ProrateByDays);
+/// <summary>A pay component as the calculator sees it. Statutory deductions (social insurance) are outside the deduction cap.</summary>
+public sealed record ComponentRef(Guid Id, string Code, string NameEn, string NameAr, ComponentKind Kind, WpsField WpsField, bool ProrateByDays,
+    bool Statutory = false);
+
+/// <summary>GRSIA contributions: percentages of the monthly contribution salary, prorated with paid days.</summary>
+public sealed record SocialInsuranceContribution(ComponentRef EmployeeComponent, decimal MonthlyBase, decimal EmployeeRatePercent, decimal EmployerRatePercent);
 
 public sealed record FixedPay(ComponentRef Component, decimal MonthlyAmount);
 
@@ -43,7 +48,8 @@ public sealed record EmployeePayInput(
     IReadOnlyList<VariablePay> Variable,
     IReadOnlyList<OvertimeHours> Overtime,
     decimal UnpaidLeaveDays,
-    decimal HalfPayLeaveDays = 0);
+    decimal HalfPayLeaveDays = 0,
+    SocialInsuranceContribution? SocialInsurance = null);
 
 public sealed record PayLine(ComponentRef Component, decimal? Quantity, decimal? Rate, decimal Amount);
 
@@ -59,7 +65,8 @@ public sealed record PayResult(
     decimal Deductions,
     decimal Net,
     IReadOnlyList<string> Warnings,
-    IReadOnlyList<string> Errors);
+    IReadOnlyList<string> Errors,
+    decimal EmployerSocialInsurance = 0);
 
 /// <summary>
 /// Monthly pay for one employee on a 30-day basis (Qatar practice: daily rate = monthly / 30).
@@ -113,16 +120,28 @@ public static class PayrollCalculator
         foreach (var v in input.Variable.Where(v => v.Amount > 0))
             lines.Add(new PayLine(v.Component, null, null, Money.Round(v.Amount)));
 
+        var employerSocialInsurance = 0m;
+        if (input.SocialInsurance is { MonthlyBase: > 0 } si)
+        {
+            var contributionBase = paidDays == MonthBasisDays ? si.MonthlyBase : Money.Round(si.MonthlyBase * paidDays / MonthBasisDays);
+            var employeeShare = Money.Round(contributionBase * si.EmployeeRatePercent / 100m);
+            employerSocialInsurance = Money.Round(contributionBase * si.EmployerRatePercent / 100m);
+            if (employeeShare > 0) lines.Add(new PayLine(si.EmployeeComponent, contributionBase, si.EmployeeRatePercent, employeeShare));
+        }
+
         var gross = lines.Where(l => l.Component.Kind == ComponentKind.Earning).Sum(l => l.Amount);
         var deductions = lines.Where(l => l.Component.Kind == ComponentKind.Deduction).Sum(l => l.Amount);
 
+        // The legal cap applies to deductions the employer chooses to make, not to statutory contributions.
+        var cappedDeductions = lines.Where(l => l.Component.Kind == ComponentKind.Deduction && !l.Component.Statutory).Sum(l => l.Amount);
         var cap = Money.Round(gross * policy.DeductionCapPercent / 100m);
-        if (deductions > cap)
-            errors.Add($"Deductions {deductions:N2} exceed {policy.DeductionCapPercent:0.##}% of wages ({cap:N2}).");
+        if (cappedDeductions > cap)
+            errors.Add($"Deductions {cappedDeductions:N2} exceed {policy.DeductionCapPercent:0.##}% of wages ({cap:N2}).");
         if (deductions > gross)
             errors.Add("Deductions exceed gross pay.");
 
-        return new PayResult(true, paidDays, unpaid, basic, halfPay, overtimeHours, lines, gross, deductions, gross - deductions, warnings, errors);
+        return new PayResult(true, paidDays, unpaid, basic, halfPay, overtimeHours, lines, gross, deductions, gross - deductions, warnings, errors,
+            employerSocialInsurance);
     }
 
     /// <summary>Calendar days of <paramref name="from"/>..<paramref name="to"/> that fall inside the period.</summary>

@@ -24,7 +24,10 @@ public sealed record HrSettingsDto(
     GratuityBasis LeaveSalaryBasis = GratuityBasis.Basic,
     int SickFullPayDays = 14,
     int SickHalfPayDays = 28,
-    int SickMinServiceMonths = 3);
+    int SickMinServiceMonths = 3,
+    decimal SiEmployeeRatePercent = 7,
+    decimal SiEmployerRatePercent = 14,
+    decimal SiMaxContributionSalary = 100000);
 
 public sealed record DepartmentDto(Guid Id, string Code, string NameEn, string NameAr, bool IsActive);
 public sealed record CreateDepartmentRequest(string Code, string? NameEn, string? NameAr);
@@ -257,6 +260,11 @@ internal static class HrEndpoints
         s.SickFullPayDays = r.SickFullPayDays;
         s.SickHalfPayDays = r.SickHalfPayDays;
         s.SickMinServiceMonths = r.SickMinServiceMonths;
+        if (r.SiEmployeeRatePercent < 0 || r.SiEmployerRatePercent < 0 || r.SiMaxContributionSalary <= 0)
+            throw new BusinessRuleException("hr.invalid_settings", "Social insurance settings are out of range.", "إعدادات التأمينات الاجتماعية خارج النطاق.");
+        s.SiEmployeeRatePercent = r.SiEmployeeRatePercent;
+        s.SiEmployerRatePercent = r.SiEmployerRatePercent;
+        s.SiMaxContributionSalary = r.SiMaxContributionSalary;
         await db.SaveChangesAsync(ct);
         return ToDto(s);
     }
@@ -265,7 +273,7 @@ internal static class HrEndpoints
         s.SifFormatVersion, s.GratuityDaysPerYear, s.GratuityDivisor, s.GratuityMinServiceMonths, s.DailyRateDivisor, s.HoursPerDay,
         s.OvertimeNormalRate, s.OvertimeNightRate, s.OvertimeRestDayRate, s.OvertimeHolidayRate, s.DeductionCapPercent, s.MinimumBasicWage,
         s.MinimumHousingAllowance, s.MinimumFoodAllowance, s.WpsDepositDays, s.LeaveSalaryBasis, s.SickFullPayDays, s.SickHalfPayDays,
-        s.SickMinServiceMonths);
+        s.SickMinServiceMonths, s.SiEmployeeRatePercent, s.SiEmployerRatePercent, s.SiMaxContributionSalary);
 
     private static async Task<List<DepartmentDto>> ListDepartments(ErpDbContext db, ITenantContext t, CancellationToken ct) =>
         await db.Set<Department>().AsNoTracking().Where(d => d.CompanyId == t.RequireCompanyId()).OrderBy(d => d.Code)

@@ -10,14 +10,16 @@ Design document: [docs/ERP-Blueprint-Qatar-SME.md](docs/ERP-Blueprint-Qatar-SME.
 
 | Area | Capabilities |
 |---|---|
-| Platform | Tenant provisioning in one call, company code + email login (JWT), roles & granular permissions, field masking, audit trail, gapless numbering, transactional outbox, row-level security |
+| Platform | Tenant provisioning in one call, company code + email login with optional two-factor (authenticator app) and rotating refresh tokens, roles & granular permissions, field masking, audit trail, gapless numbering, transactional outbox, row-level security |
 | Finance | Bilingual IFRS-style chart of accounts (with payroll accounts), fiscal years/periods with close/reopen, central posting service, journal vouchers with reversal, trial balance, account ledger, Excel/Tally-friendly journal CSV export |
 | HR | Employees (QID/passport/IBAN encrypted, IBAN mod-97 + QID validation), departments, contracts with minimum-wage/allowance checks, employee & company documents with expiry list and daily reminders, leave requests/approval/annual balance |
 | Final settlement | Gratuity payout (eligibility after 1 year, provision released), unused-leave encashment or excess-leave recovery, salary since the last payroll, notice pay, air ticket, automatic recovery of outstanding advances; post / pay / reverse |
 | Documents | Bilingual PDF payslips and final settlement statements with amount in words (English & Arabic) |
+| Onboarding | Excel import of employees with contracts and document expiries (bilingual template, validate first, all-or-nothing) |
+| Notifications | Bilingual emails (SMTP) for document expiry, posted payroll and missed WPS deadlines |
 | Advances | Salary advances/loans to employees, outstanding balance, recovery through payroll or settlement |
 | Web app | Angular 22, Arabic-first (RTL) with one-click switch to English, Material 3 design, works on phones; dashboard, employees (profile, contract, documents, leave, advances, final settlement), payroll runs with WPS/PDF downloads, overtime inputs, leave approvals, document expiry, gratuity report, chart of accounts, trial balance, journal, settings, users |
-| Payroll | Monthly runs: calculate → approve → post → WPS SIF file → mark paid (or reverse); proration on a 30-day basis, unpaid leave, overtime by type, bonuses/deductions with 50% cap, salary journal by component and cost centre, gratuity accrual with monthly true-up (GRSIA nationals excluded), gratuity liability report |
+| Payroll | Monthly runs: calculate → approve → post → WPS SIF file → mark paid (or reverse); proration on a 30-day basis, unpaid leave, sick leave in full/half/unpaid bands (art. 82), GRSIA social insurance for Qatari staff (employee 7% / employer 14%, configurable), overtime by type, bonuses/deductions with 50% cap, salary journal by component and cost centre, gratuity accrual with monthly true-up (GRSIA nationals excluded), gratuity liability report |
 
 ## Quick start
 

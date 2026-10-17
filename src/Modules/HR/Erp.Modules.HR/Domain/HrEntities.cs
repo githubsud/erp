@@ -73,6 +73,10 @@ public sealed class HrSettings : TenantEntity
     public decimal MinimumFoodAllowance { get; set; } = 300;
     public int WpsDepositDays { get; set; } = 7;
 
+    /// <summary>GRSIA contribution rates for Qatari employees (Law No. 1 of 2022). ⚠️ Verify with GRSIA.</summary>
+    public decimal SiEmployeeRatePercent { get; set; } = 7;
+    public decimal SiEmployerRatePercent { get; set; } = 14;
+    public decimal SiMaxContributionSalary { get; set; } = 100000;
     public int SickFullPayDays { get; set; } = 14;
     public int SickHalfPayDays { get; set; } = 28;
     public int SickMinServiceMonths { get; set; } = 3;
@@ -103,6 +107,7 @@ public sealed class PayComponent : TenantEntity
     public bool IsFixed { get; init; }
     public bool ProrateByDays { get; init; } = true;
     public bool InGratuityBasis { get; set; }
+    public bool InSocialInsuranceBasis { get; set; }
 
     /// <summary>Finance posting role used for this component (refined by the component id in posting rules).</summary>
     public required string PostingRole { get; init; }
@@ -286,6 +291,7 @@ public sealed class Payslip : TenantEntity
     public decimal PaidDays { get; init; }
     public decimal UnpaidDays { get; init; }
     public decimal HalfPayDays { get; init; }
+    public decimal EmployerSocialInsurance { get; init; }
     public decimal BasicSalary { get; init; }
     public decimal OvertimeHours { get; init; }
     public decimal Gross { get; init; }

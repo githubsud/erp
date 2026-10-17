@@ -119,7 +119,11 @@ public sealed class PayrollTests(ErpFixture fixture)
         maria.Deductions.ShouldBe(100m);
         maria.Net.ShouldBe(maria.Gross - 100m);
 
-        detail.Payslips.Single(p => p.EmpNo == "E003").Gross.ShouldBe(20000m);
+        // Qatari under GRSIA: 7% of basic + housing withheld (employer adds 14% at posting).
+        var ahmed = detail.Payslips.Single(p => p.EmpNo == "E003");
+        ahmed.Gross.ShouldBe(20000m);
+        ahmed.Deductions.ShouldBe(1400m);
+        ahmed.Net.ShouldBe(18600m);
         run.TotalNet.ShouldBe(detail.Payslips.Sum(p => p.Net));
 
         // Inputs are locked once payroll is approved.
@@ -146,6 +150,8 @@ public sealed class PayrollTests(ErpFixture fixture)
         tb.Rows.Single(r => r.Code == "2210").Closing.ShouldBe(-run.TotalGratuityAccrual);
         tb.Rows.Single(r => r.Code == "5210").Debit.ShouldBe(2800m + Round(2500m * mariaDays / 30) + 15000m);
         tb.Rows.Single(r => r.Code == "4210").Credit.ShouldBe(100m); // deduction recognised as other income
+        tb.Rows.Single(r => r.Code == "5295").Debit.ShouldBe(2800m);  // employer social insurance
+        tb.Rows.Single(r => r.Code == "2180").Closing.ShouldBe(-4200m); // owed to GRSIA: 1,400 + 2,800
 
         // WPS Salary Information File.
         var wps = await c.PostAsync<WpsFile>($"/api/hr/payroll-runs/{run.Id}/wps-files", new { });

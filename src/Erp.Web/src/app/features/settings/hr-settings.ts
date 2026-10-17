@@ -23,7 +23,10 @@ const NUMBER_FIELDS: [keyof HrSettings, string][] = [
   ['wpsDepositDays', 'settings.wpsDays'],
   ['sickFullPayDays', 'settings.sickFull'],
   ['sickHalfPayDays', 'settings.sickHalf'],
-  ['sickMinServiceMonths', 'settings.sickMinService']
+  ['sickMinServiceMonths', 'settings.sickMinService'],
+  ['siEmployeeRatePercent', 'settings.siEmployee'],
+  ['siEmployerRatePercent', 'settings.siEmployer'],
+  ['siMaxContributionSalary', 'settings.siMax']
 ];
 
 @Component({
@@ -124,6 +127,9 @@ export class HrSettingsPage {
     sickFullPayDays: [14, Validators.required],
     sickHalfPayDays: [28, Validators.required],
     sickMinServiceMonths: [3, Validators.required],
+    siEmployeeRatePercent: [7, Validators.required],
+    siEmployerRatePercent: [14, Validators.required],
+    siMaxContributionSalary: [100000, Validators.required],
     leaveSalaryBasis: ['Basic' as HrSettings['leaveSalaryBasis']]
   });
 
