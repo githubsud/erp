@@ -168,6 +168,10 @@ public static class GratuityCalculator
     public static bool IsEligibleForPayout(DateOnly joiningDate, DateOnly asOf, int minServiceMonths) =>
         joiningDate.AddMonths(minServiceMonths) <= asOf.AddDays(1);
 
+    /// <summary>Unused annual leave: entitlement accrued pro rata for service, less days taken (never negative for provisions).</summary>
+    public static decimal UnusedLeaveDays(int daysPerYear, int serviceDays, decimal daysTaken) =>
+        Math.Max(0, Math.Round(daysPerYear * serviceDays / 365m, 2, MidpointRounding.AwayFromZero) - daysTaken);
+
     /// <summary>Annual leave entitlement (art. 79): 3 weeks below 5 years' service, 4 weeks from 5 years.</summary>
     public static int AnnualLeaveDaysPerYear(DateOnly joiningDate, DateOnly asOf, int? contractDays) =>
         contractDays ?? (joiningDate.AddYears(5) <= asOf ? 28 : 21);

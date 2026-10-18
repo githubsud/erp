@@ -142,6 +142,13 @@ export const en = {
   'security.enable': 'Turn on',
   'security.disable': 'Turn off',
 
+  'contract.airTicket': 'Annual air ticket value',
+  'gratuity.titleAll': 'End-of-service, leave and ticket provisions',
+  'gratuity.leave': 'Leave salary',
+  'gratuity.ticket': 'Air ticket',
+  'payroll.provisions': 'Provisions booked',
+  'settings.accrueLeave': 'Book a monthly leave salary provision',
+
   'tab.profile': 'Profile',
   'tab.contract': 'Contract',
   'tab.documents': 'Documents',

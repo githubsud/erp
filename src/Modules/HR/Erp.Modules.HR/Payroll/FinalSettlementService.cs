@@ -83,6 +83,10 @@ internal sealed class FinalSettlementService(
                 : [];
 
             var provision = await GratuityProvisionAsync(employee, token);
+            var benefitProvisions = (await db.Set<BenefitAccrual>().AsNoTracking()
+                    .Where(a => a.EmployeeId == employeeId && a.Status == AccrualStatus.Posted)
+                    .Select(a => new { a.Kind, a.PeriodEnd, a.Liability }).ToListAsync(token))
+                .GroupBy(a => a.Kind).ToDictionary(g => g.Key, g => g.MaxBy(a => a.PeriodEnd)!.Liability);
             var advances = r.AdvanceRecovery ?? Math.Max(0,
                 await finance.GetPartyBalanceAsync(AccountRoles.EmployeeAdvances, PartyType.Employee, employeeId, r.LastWorkingDay, token));
 
@@ -119,6 +123,8 @@ internal sealed class FinalSettlementService(
                 EligibleForGratuity = result.EligibleForGratuity,
                 GratuityAmount = result.GratuityAmount,
                 GratuityProvision = employee.SocialInsuranceScheme == SocialInsuranceScheme.None ? provision : 0,
+                LeaveProvision = benefitProvisions.GetValueOrDefault(BenefitKind.LeaveSalary),
+                TicketProvision = benefitProvisions.GetValueOrDefault(BenefitKind.AirTicket),
                 LeaveBalanceDays = result.LeaveBalanceDays,
                 DailyLeaveRate = result.DailyLeaveRate,
                 UnpaidSalaryFrom = unpaidFrom <= r.LastWorkingDay ? unpaidFrom : null,
@@ -277,11 +283,24 @@ internal sealed class FinalSettlementService(
                 Description = "Gratuity difference on settlement"
             });
 
+        // Leave salary and air ticket provisions are released against their expense; the dues below are then expensed in full.
+        foreach (var (amount, provisionRole, expenseRole, label) in new[]
+                 {
+                     (s.LeaveProvision, AccountRoles.LeaveSalaryProvision, AccountRoles.LeaveSalaryExpense, "Release leave salary provision"),
+                     (s.TicketProvision, AccountRoles.AirTicketProvision, AccountRoles.AirTicketExpense, "Release air ticket provision")
+                 })
+        {
+            if (amount == 0) continue;
+            lines.Add(new PostingLine { AccountRole = provisionRole, Side = amount > 0 ? PostingSide.Debit : PostingSide.Credit, Amount = Math.Abs(amount), Description = label });
+            lines.Add(new PostingLine { AccountRole = expenseRole, Side = amount > 0 ? PostingSide.Credit : PostingSide.Debit, Amount = Math.Abs(amount), Description = label });
+        }
+
         foreach (var l in s.Lines.Where(l => l.Code != SettlementCalculator.Gratuity))
         {
             lines.Add(l.Code switch
             {
                 SettlementCalculator.LeaveEncashment => new PostingLine { AccountRole = AccountRoles.LeaveSalaryExpense, Side = PostingSide.Debit, Amount = l.Amount, Description = l.NameEn },
+                SettlementCalculator.AirTicket => new PostingLine { AccountRole = AccountRoles.AirTicketExpense, Side = PostingSide.Debit, Amount = l.Amount, Description = l.NameEn },
                 SettlementCalculator.AdvanceRecovery => new PostingLine
                 {
                     AccountRole = AccountRoles.EmployeeAdvances, Side = PostingSide.Credit, Amount = l.Amount, PartyType = party.Type, PartyId = party.Id, Description = l.NameEn

@@ -167,3 +167,13 @@ internal sealed class FinalSettlementLineConfiguration : IEntityTypeConfiguratio
         b.Property(x => x.Rate).AsQuantity();
     }
 }
+
+internal sealed class BenefitAccrualConfiguration : IEntityTypeConfiguration<BenefitAccrual>
+{
+    public void Configure(EntityTypeBuilder<BenefitAccrual> b)
+    {
+        b.ToTable("benefit_accrual", "hr");
+        b.Property(x => x.Quantity).AsQuantity();
+        b.Property(x => x.Rate).AsQuantity();
+    }
+}

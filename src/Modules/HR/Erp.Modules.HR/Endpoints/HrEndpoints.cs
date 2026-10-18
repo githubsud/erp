@@ -27,7 +27,8 @@ public sealed record HrSettingsDto(
     int SickMinServiceMonths = 3,
     decimal SiEmployeeRatePercent = 7,
     decimal SiEmployerRatePercent = 14,
-    decimal SiMaxContributionSalary = 100000);
+    decimal SiMaxContributionSalary = 100000,
+    bool AccrueLeaveSalary = true);
 
 public sealed record DepartmentDto(Guid Id, string Code, string NameEn, string NameAr, bool IsActive);
 public sealed record CreateDepartmentRequest(string Code, string? NameEn, string? NameAr);
@@ -42,7 +43,7 @@ public sealed record EmployeeDto(
 
 public sealed record ContractDto(Guid Id, DateOnly StartDate, DateOnly? EndDate, string ContractType, int ProbationMonths,
     bool AccommodationProvided, bool FoodProvided, decimal? GratuityDaysPerYear, string GratuityBasis, int? AnnualLeaveDays, string Status,
-    IReadOnlyList<ContractComponentDto> Components, decimal MonthlyGross);
+    IReadOnlyList<ContractComponentDto> Components, decimal MonthlyGross, decimal? AnnualAirTicketAmount);
 public sealed record ContractComponentDto(string Code, string NameEn, string NameAr, decimal Amount);
 
 public sealed record DocumentDto(Guid Id, string DocType, string? DocNo, DateOnly? IssueDate, DateOnly? ExpiryDate, string? Notes);
@@ -54,7 +55,7 @@ public sealed record PayrollInputDto(Guid Id, Guid EmployeeId, int Year, int Mon
 
 public sealed record PayrollRunDto(Guid Id, string RunNo, int Year, int Month, DateOnly PeriodStart, DateOnly PeriodEnd, DateOnly DueDate,
     DateOnly WpsDeadline, string Status, int EmployeeCount, decimal TotalGross, decimal TotalDeductions, decimal TotalNet,
-    decimal TotalGratuityAccrual, DateTimeOffset? CalculatedAt, DateTimeOffset? ApprovedAt, DateTimeOffset? PostedAt, DateOnly? PaymentDate,
+    decimal TotalGratuityAccrual, decimal TotalLeaveAccrual, decimal TotalTicketAccrual, DateTimeOffset? CalculatedAt, DateTimeOffset? ApprovedAt, DateTimeOffset? PostedAt, DateOnly? PaymentDate,
     Guid? JournalEntryId, Guid? GratuityJournalEntryId, Guid? PaymentJournalEntryId);
 public sealed record PayslipSummaryDto(Guid Id, Guid EmployeeId, string EmpNo, string NameEn, string NameAr, decimal PaidDays,
     decimal UnpaidDays, decimal Gross, decimal Deductions, decimal Net, bool InWps, string? Warnings, decimal HalfPayDays);
@@ -71,7 +72,7 @@ public sealed record SettlementDto(Guid Id, string SettlementNo, Guid EmployeeId
     DateOnly? PaymentDate, IReadOnlyList<SettlementLineDto> Lines);
 
 public sealed record GratuityLiabilityRow(Guid EmployeeId, string EmpNo, string NameEn, string NameAr, DateOnly JoiningDate,
-    decimal BasisWage, int ServiceDays, decimal Liability, decimal Provision, bool EligibleForPayout);
+    decimal BasisWage, int ServiceDays, decimal Liability, decimal Provision, bool EligibleForPayout, decimal LeaveProvision, decimal TicketProvision);
 
 internal static class HrEndpoints
 {
@@ -265,6 +266,7 @@ internal static class HrEndpoints
         s.SiEmployeeRatePercent = r.SiEmployeeRatePercent;
         s.SiEmployerRatePercent = r.SiEmployerRatePercent;
         s.SiMaxContributionSalary = r.SiMaxContributionSalary;
+        s.AccrueLeaveSalary = r.AccrueLeaveSalary;
         await db.SaveChangesAsync(ct);
         return ToDto(s);
     }
@@ -273,7 +275,7 @@ internal static class HrEndpoints
         s.SifFormatVersion, s.GratuityDaysPerYear, s.GratuityDivisor, s.GratuityMinServiceMonths, s.DailyRateDivisor, s.HoursPerDay,
         s.OvertimeNormalRate, s.OvertimeNightRate, s.OvertimeRestDayRate, s.OvertimeHolidayRate, s.DeductionCapPercent, s.MinimumBasicWage,
         s.MinimumHousingAllowance, s.MinimumFoodAllowance, s.WpsDepositDays, s.LeaveSalaryBasis, s.SickFullPayDays, s.SickHalfPayDays,
-        s.SickMinServiceMonths, s.SiEmployeeRatePercent, s.SiEmployerRatePercent, s.SiMaxContributionSalary);
+        s.SickMinServiceMonths, s.SiEmployeeRatePercent, s.SiEmployerRatePercent, s.SiMaxContributionSalary, s.AccrueLeaveSalary);
 
     private static async Task<List<DepartmentDto>> ListDepartments(ErpDbContext db, ITenantContext t, CancellationToken ct) =>
         await db.Set<Department>().AsNoTracking().Where(d => d.CompanyId == t.RequireCompanyId()).OrderBy(d => d.Code)
@@ -338,7 +340,7 @@ internal static class HrEndpoints
             c.FoodProvided, c.GratuityDaysPerYear, c.GratuityBasis.ToString(), c.AnnualLeaveDays, c.Status.ToString(),
             c.Components.Select(x => new ContractComponentDto(components[x.PayComponentId].Code, components[x.PayComponentId].NameEn,
                 components[x.PayComponentId].NameAr, x.Amount)).OrderBy(x => x.Code).ToList(),
-            c.Components.Sum(x => x.Amount))).ToList();
+            c.Components.Sum(x => x.Amount), c.AnnualAirTicketAmount)).ToList();
     }
 
     // Documents ---------------------------------------------------------------------------------------
@@ -415,7 +417,8 @@ internal static class HrEndpoints
         new(p.Id, p.EmployeeId, p.EmpNo, p.NameEn, p.NameAr, p.PaidDays, p.UnpaidDays, p.Gross, p.Deductions, p.Net, p.InWps, p.Warnings, p.HalfPayDays);
 
     private static PayrollRunDto ToDto(PayrollRun r) => new(r.Id, r.RunNo, r.Year, r.Month, r.PeriodStart, r.PeriodEnd, r.DueDate, r.WpsDeadline,
-        r.Status.ToString(), r.EmployeeCount, r.TotalGross, r.TotalDeductions, r.TotalNet, r.TotalGratuityAccrual, r.CalculatedAt, r.ApprovedAt,
+        r.Status.ToString(), r.EmployeeCount, r.TotalGross, r.TotalDeductions, r.TotalNet, r.TotalGratuityAccrual, r.TotalLeaveAccrual, r.TotalTicketAccrual,
+        r.CalculatedAt, r.ApprovedAt,
         r.PostedAt, r.PaymentDate, r.JournalEntryId, r.GratuityJournalEntryId, r.PaymentJournalEntryId);
 
     private static async Task<List<WpsFileDto>> ListWpsFiles(Guid id, ErpDbContext db, CancellationToken ct) =>
@@ -457,7 +460,7 @@ internal static class HrEndpoints
         var date = asOf ?? clock.Today;
         var settings = await settingsProvider.GetAsync(ct);
         var employees = await db.Set<Employee>().AsNoTracking()
-            .Where(e => e.CompanyId == t.RequireCompanyId() && e.SocialInsuranceScheme == SocialInsuranceScheme.None && e.JoiningDate <= date
+            .Where(e => e.CompanyId == t.RequireCompanyId() && e.JoiningDate <= date
                         && (e.Status == EmployeeStatus.Active || e.TerminationDate >= date))
             .OrderBy(e => e.EmpNo).ToListAsync(ct);
         var ids = employees.Select(e => e.Id).ToList();
@@ -468,6 +471,10 @@ internal static class HrEndpoints
                 .Where(a => ids.Contains(a.EmployeeId) && a.Status == AccrualStatus.Posted && a.PeriodEnd <= date)
                 .Select(a => new { a.EmployeeId, a.PeriodEnd, a.Liability }).ToListAsync(ct))
             .GroupBy(a => a.EmployeeId).ToDictionary(g => g.Key, g => g.MaxBy(a => a.PeriodEnd)!.Liability);
+        var benefits = (await db.Set<BenefitAccrual>().AsNoTracking()
+                .Where(a => ids.Contains(a.EmployeeId) && a.Status == AccrualStatus.Posted && a.PeriodEnd <= date)
+                .Select(a => new { a.EmployeeId, a.Kind, a.PeriodEnd, a.Liability }).ToListAsync(ct))
+            .GroupBy(a => (a.EmployeeId, a.Kind)).ToDictionary(g => g.Key, g => g.MaxBy(a => a.PeriodEnd)!.Liability);
 
         return employees.Where(e => contracts.ContainsKey(e.Id)).Select(e =>
         {
@@ -476,10 +483,13 @@ internal static class HrEndpoints
                     || (contract.GratuityBasis == GratuityBasis.BasicPlusFixedAllowances && components[c.PayComponentId].InGratuityBasis))
                 .Sum(c => c.Amount);
             var serviceDays = GratuityCalculator.ServiceDays(e.JoiningDate, date, excluded.GetValueOrDefault(e.Id));
-            var liability = GratuityCalculator.Liability(basis, contract.GratuityDaysPerYear ?? settings.GratuityDaysPerYear, settings.GratuityDivisor, serviceDays);
+            // Employees under GRSIA / GCC schemes have no gratuity, but still earn leave salary and tickets.
+            var liability = e.SocialInsuranceScheme != SocialInsuranceScheme.None ? 0
+                : GratuityCalculator.Liability(basis, contract.GratuityDaysPerYear ?? settings.GratuityDaysPerYear, settings.GratuityDivisor, serviceDays);
             return new GratuityLiabilityRow(e.Id, e.EmpNo, e.NameEn, e.NameAr, e.JoiningDate, basis, serviceDays, liability,
                 provisions.TryGetValue(e.Id, out var p) ? p : e.OpeningGratuityLiability,
-                GratuityCalculator.IsEligibleForPayout(e.JoiningDate, date, settings.GratuityMinServiceMonths));
+                GratuityCalculator.IsEligibleForPayout(e.JoiningDate, date, settings.GratuityMinServiceMonths),
+                benefits.GetValueOrDefault((e.Id, BenefitKind.LeaveSalary)), benefits.GetValueOrDefault((e.Id, BenefitKind.AirTicket)));
         }).ToList();
     }
 }

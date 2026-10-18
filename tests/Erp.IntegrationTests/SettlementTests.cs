@@ -16,7 +16,8 @@ public sealed class SettlementTests(ErpFixture fixture)
         decimal GratuityProvision, decimal LeaveBalanceDays, decimal UnpaidSalaryDays, decimal TotalEarnings, decimal TotalDeductions,
         decimal NetPayable, IReadOnlyList<Line> Lines);
 
-    private static async Task<Guid> HireWithContractAsync(HttpClient c, string empNo, DateOnly joining, string qid, string account)
+    private static async Task<Guid> HireWithContractAsync(HttpClient c, string empNo, DateOnly joining, string qid, string account,
+        decimal? annualAirTicket = null)
     {
         var e = await c.PostAsync<PayrollTests.Employee>("/api/hr/employees", new
         {
@@ -27,6 +28,7 @@ public sealed class SettlementTests(ErpFixture fixture)
         {
             startDate = joining, contractType = "Unlimited", probationMonths = 0, accommodationProvided = false, foodProvided = true,
             gratuityBasis = "Basic",
+            annualAirTicketAmount = annualAirTicket,
             components = new[] { new { componentCode = "BASIC", amount = 3000m }, new { componentCode = "HOUSING", amount = 1000m } }
         });
         return e.Id;
@@ -41,7 +43,7 @@ public sealed class SettlementTests(ErpFixture fixture)
         var t = await fixture.CreateTenantAsync();
         var c = t.Client;
         var bank = await BankAsync(c);
-        var employeeId = await HireWithContractAsync(c, "S001", new DateOnly(2024, 3, 1), "28435611111", "000000000001010101010");
+        var employeeId = await HireWithContractAsync(c, "S001", new DateOnly(2024, 3, 1), "28435611111", "000000000001010101010", annualAirTicket: 2400m);
 
         // Salary advance of 2,000 paid from the bank.
         var advance = await c.PostAsync<JsonElement>($"/api/hr/employees/{employeeId}/advances",
@@ -56,9 +58,12 @@ public sealed class SettlementTests(ErpFixture fixture)
         await c.PostAsync<PayrollTests.Run>($"/api/hr/payroll-runs/{run.Id}/approve", new { });
         run = await c.PostAsync<PayrollTests.Run>($"/api/hr/payroll-runs/{run.Id}/post", new { });
         await c.PostAsync<PayrollTests.Run>($"/api/hr/payroll-runs/{run.Id}/mark-paid", new { paymentAccountId = bank, paymentDate = MonthEnd });
+        var provisioned = await c.GetAsync<FinanceTests.Tb>($"/api/finance/reports/trial-balance?from={MonthStart:yyyy-MM-dd}&to={MonthEnd:yyyy-MM-dd}");
+        provisioned.Rows.Single(r => r.Code == "2160").Closing.ShouldBe(-200m);   // 2,400 / 12 air ticket provision
+        provisioned.Rows.Single(r => r.Code == "2150").Closing.ShouldBeLessThan(0m); // leave salary provision
 
         var settlement = await c.PostAsync<Settlement>($"/api/hr/employees/{employeeId}/final-settlements",
-            new { lastWorkingDay = MonthEnd, reason = "Resignation", noticePay = 500m });
+            new { lastWorkingDay = MonthEnd, reason = "Resignation", noticePay = 500m, airTicket = 1200m });
         settlement.Status.ShouldBe("Draft");
         settlement.EligibleForGratuity.ShouldBeTrue();
         settlement.UnpaidSalaryDays.ShouldBe(0);                       // salary already paid by the month's payroll
@@ -79,6 +84,9 @@ public sealed class SettlementTests(ErpFixture fixture)
         tb.IsBalanced.ShouldBeTrue();
         tb.Rows.Single(r => r.Code == "2210").Closing.ShouldBe(0m);      // provision released
         tb.Rows.Single(r => r.Code == "1160").Closing.ShouldBe(0m);      // advance recovered
+        tb.Rows.Single(r => r.Code == "2150").Closing.ShouldBe(0m);      // leave provision released
+        tb.Rows.Single(r => r.Code == "2160").Closing.ShouldBe(0m);      // ticket provision released
+        tb.Rows.Single(r => r.Code == "5290").Closing.ShouldBe(1200m);   // ticket cost = amount paid (200 accrued, released, 1,200 expensed)
         tb.Rows.Single(r => r.Code == "2140").Closing.ShouldBe(-settlement.NetPayable);
 
         var employee = await c.GetAsync<JsonElement>($"/api/hr/employees/{employeeId}");

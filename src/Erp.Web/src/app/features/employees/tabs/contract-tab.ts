@@ -22,6 +22,7 @@ import { SHARED } from '../../../shared/shared';
             <span>{{ 'contract.gratuityBasis' | t }}: <b>{{ 'contract.basis.' + c.gratuityBasis | t }}</b></span>
             @if (c.accommodationProvided) { <span class="chip info">{{ 'contract.accommodation' | t }}</span> }
             @if (c.foodProvided) { <span class="chip info">{{ 'contract.food' | t }}</span> }
+            @if (c.annualAirTicketAmount) { <span>{{ 'contract.airTicket' | t }}: <b class="ltr">{{ c.annualAirTicketAmount | money }}</b></span> }
           </div>
           <table class="components">
             @for (x of c.components; track x.code) {
@@ -77,6 +78,10 @@ import { SHARED } from '../../../shared/shared';
                 <mat-form-field>
                   <mat-label>{{ 'contract.leaveDays' | t }}</mat-label>
                   <input matInput type="number" formControlName="annualLeaveDays" />
+                </mat-form-field>
+                <mat-form-field>
+                  <mat-label>{{ 'contract.airTicket' | t }}</mat-label>
+                  <input matInput type="number" min="0" formControlName="annualAirTicketAmount" dir="ltr" />
                 </mat-form-field>
                 <mat-slide-toggle formControlName="accommodationProvided">{{ 'contract.accommodation' | t }}</mat-slide-toggle>
                 <mat-slide-toggle formControlName="foodProvided">{{ 'contract.food' | t }}</mat-slide-toggle>
@@ -161,7 +166,8 @@ export class ContractTab implements OnInit {
     foodProvided: [false],
     gratuityBasis: ['Basic'],
     gratuityDaysPerYear: [null as number | null],
-    annualLeaveDays: [null as number | null]
+    annualLeaveDays: [null as number | null],
+    annualAirTicketAmount: [null as number | null]
   });
 
   ngOnInit(): void {
@@ -193,6 +199,7 @@ export class ContractTab implements OnInit {
         probationMonths: Number(v.probationMonths ?? 0),
         gratuityDaysPerYear: v.gratuityDaysPerYear || null,
         annualLeaveDays: v.annualLeaveDays || null,
+        annualAirTicketAmount: v.annualAirTicketAmount ? Number(v.annualAirTicketAmount) : null,
         components
       })
       .subscribe({

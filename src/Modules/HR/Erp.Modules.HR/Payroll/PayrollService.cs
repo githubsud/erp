@@ -224,25 +224,29 @@ internal sealed class PayrollService(
             }, token);
 
             var accruals = await BuildGratuityAccrualsAsync(run, payslips, settings, token);
+            var benefits = await BuildBenefitAccrualsAsync(run, payslips, settings, token);
             db.AddRange(accruals);
-            var gratuityLines = BuildGratuityLines(accruals, payslips);
-            if (gratuityLines.Count > 0)
+            db.AddRange(benefits);
+            var provisionLines = BuildGratuityLines(accruals, payslips).Concat(BuildBenefitLines(benefits, payslips)).ToList();
+            if (provisionLines.Count > 0)
             {
-                var gratuity = await posting.PostAsync(new PostingRequest
+                var provisions = await posting.PostAsync(new PostingRequest
                 {
                     SourceType = GratuitySourceType,
                     SourceId = run.Id,
                     SourceNo = run.RunNo,
                     PostingDate = run.PeriodEnd,
-                    MemoEn = $"End of service benefit accrual {run.Year}-{run.Month:D2}",
-                    MemoAr = $"استحقاق مكافأة نهاية الخدمة {run.Year}-{run.Month:D2}",
-                    Lines = gratuityLines
+                    MemoEn = $"End of service, leave salary and air ticket provisions {run.Year}-{run.Month:D2}",
+                    MemoAr = $"مخصصات نهاية الخدمة والإجازات وتذاكر السفر {run.Year}-{run.Month:D2}",
+                    Lines = provisionLines
                 }, token);
-                run.GratuityJournalEntryId = gratuity.JournalEntryId;
+                run.GratuityJournalEntryId = provisions.JournalEntryId;
             }
 
             run.JournalEntryId = salary.JournalEntryId;
             run.TotalGratuityAccrual = accruals.Sum(a => a.Delta);
+            run.TotalLeaveAccrual = benefits.Where(b => b.Kind == BenefitKind.LeaveSalary).Sum(b => b.Expense);
+            run.TotalTicketAccrual = benefits.Where(b => b.Kind == BenefitKind.AirTicket).Sum(b => b.Expense);
             run.Status = PayrollStatus.Posted;
             run.PostedAt = clock.UtcNow;
             outbox.Enqueue("hr.payroll_posted", new { runId = run.Id, run.RunNo, run.Year, run.Month, run.TotalNet, run.WpsDeadline });
@@ -335,6 +339,9 @@ internal sealed class PayrollService(
             if (run.GratuityJournalEntryId is not null)
                 await posting.ReverseAsync(GratuitySourceType, run.Id, request.Date, request.Reason, token);
 
+            await db.Set<BenefitAccrual>().Where(a => a.PayrollRunId == run.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.Status, AccrualStatus.Reversed)
+                    .SetProperty(a => a.UpdatedAt, clock.UtcNow).SetProperty(a => a.UpdatedBy, tenant.ActingUserId), token);
             await db.Set<GratuityAccrual>().Where(a => a.PayrollRunId == run.Id)
                 .ExecuteUpdateAsync(s => s.SetProperty(a => a.Status, AccrualStatus.Reversed)
                     .SetProperty(a => a.UpdatedAt, clock.UtcNow).SetProperty(a => a.UpdatedBy, tenant.ActingUserId), token);
@@ -456,6 +463,115 @@ internal sealed class PayrollService(
             });
         }
         return accruals;
+    }
+
+    /// <summary>
+    /// Leave salary: the full liability for unused annual leave (accrued − taken, at the daily rate) is recomputed each
+    /// month and the difference expensed. Air ticket: the contractual annual amount is provided monthly; tickets paid
+    /// through payroll (AIR_TICKET) are charged against the provision.
+    /// </summary>
+    private async Task<List<BenefitAccrual>> BuildBenefitAccrualsAsync(PayrollRun run, IReadOnlyList<Payslip> payslips, HrSettings settings,
+        CancellationToken ct)
+    {
+        var employeeIds = payslips.Select(p => p.EmployeeId).ToList();
+        var employees = await db.Set<Employee>().AsNoTracking().Where(e => employeeIds.Contains(e.Id)).ToDictionaryAsync(e => e.Id, ct);
+        var contracts = await LoadContractsAsync(employeeIds, run.PeriodStart, run.PeriodEnd, ct);
+        var components = await db.Set<PayComponent>().AsNoTracking().Where(c => c.CompanyId == run.CompanyId).ToDictionaryAsync(c => c.Id, ct);
+        var excluded = await LoadServiceExclusionsAsync(employeeIds, run.PeriodEnd, ct);
+        var annualLeave = await (from l in db.Set<LeaveRequest>()
+                                 join t in db.Set<LeaveType>() on l.LeaveTypeId equals t.Id
+                                 where employeeIds.Contains(l.EmployeeId) && l.Status == LeaveStatus.Approved && t.DeductsAnnualBalance
+                                       && l.FromDate <= run.PeriodEnd
+                                 select new { l.EmployeeId, l.FromDate, l.ToDate }).ToListAsync(ct);
+        var previous = (await db.Set<BenefitAccrual>().AsNoTracking()
+                .Where(a => employeeIds.Contains(a.EmployeeId) && a.Status == AccrualStatus.Posted && a.PeriodEnd < run.PeriodEnd)
+                .Select(a => new { a.EmployeeId, a.Kind, a.PeriodEnd, a.Liability }).ToListAsync(ct))
+            .GroupBy(a => (a.EmployeeId, a.Kind))
+            .ToDictionary(g => g.Key, g => g.MaxBy(a => a.PeriodEnd)!.Liability);
+
+        var result = new List<BenefitAccrual>();
+        foreach (var payslip in payslips)
+        {
+            var employee = employees[payslip.EmployeeId];
+            var contract = contracts[employee.Id];
+            var asOf = employee.TerminationDate is { } t && t < run.PeriodEnd ? t : run.PeriodEnd;
+
+            if (settings.AccrueLeaveSalary)
+            {
+                var perYear = GratuityCalculator.AnnualLeaveDaysPerYear(employee.JoiningDate, asOf, contract.AnnualLeaveDays);
+                var serviceDays = GratuityCalculator.ServiceDays(employee.JoiningDate, asOf, excluded.GetValueOrDefault(employee.Id));
+                var taken = annualLeave.Where(l => l.EmployeeId == employee.Id)
+                    .Sum(l => PayrollCalculator.OverlapDays(l.FromDate, l.ToDate, DateOnly.MinValue, asOf));
+                var wage = contract.Components
+                    .Where(c => settings.LeaveSalaryBasis == GratuityBasis.Basic
+                        ? components[c.PayComponentId].WpsField == WpsField.Basic
+                        : components[c.PayComponentId].IsFixed && components[c.PayComponentId].Kind == ComponentKind.Earning)
+                    .Sum(c => c.Amount);
+                var unused = GratuityCalculator.UnusedLeaveDays(perYear, serviceDays, taken);
+                var liability = Money.Round(unused * wage / settings.DailyRateDivisor);
+                var prior = previous.GetValueOrDefault((employee.Id, BenefitKind.LeaveSalary));
+                result.Add(new BenefitAccrual
+                {
+                    EmployeeId = employee.Id,
+                    PayrollRunId = run.Id,
+                    Kind = BenefitKind.LeaveSalary,
+                    PeriodEnd = run.PeriodEnd,
+                    Quantity = unused,
+                    Rate = Math.Round(wage / settings.DailyRateDivisor, 6, MidpointRounding.AwayFromZero),
+                    Liability = liability,
+                    PreviousLiability = prior,
+                    Expense = liability - prior
+                });
+            }
+
+            if (contract.AnnualAirTicketAmount is > 0 and var annual)
+            {
+                var monthly = Money.Round(annual / 12m * payslip.PaidDays / PayrollCalculator.MonthBasisDays);
+                var paid = payslip.Lines.Where(l => l.Code == "AIR_TICKET").Sum(l => l.Amount);
+                var prior = previous.GetValueOrDefault((employee.Id, BenefitKind.AirTicket));
+                result.Add(new BenefitAccrual
+                {
+                    EmployeeId = employee.Id,
+                    PayrollRunId = run.Id,
+                    Kind = BenefitKind.AirTicket,
+                    PeriodEnd = run.PeriodEnd,
+                    Rate = monthly,
+                    Liability = prior + monthly - paid,
+                    PreviousLiability = prior,
+                    Expense = monthly
+                });
+            }
+        }
+        return result;
+    }
+
+    internal static List<PostingLine> BuildBenefitLines(IReadOnlyList<BenefitAccrual> accruals, IReadOnlyList<Payslip> payslips)
+    {
+        var costCenters = payslips.ToDictionary(p => p.EmployeeId, p => p.CostCenterId);
+        var lines = new List<PostingLine>();
+        foreach (var (kind, expenseRole, provisionRole, label) in new[]
+                 {
+                     (BenefitKind.LeaveSalary, AccountRoles.LeaveSalaryExpense, AccountRoles.LeaveSalaryProvision, "Leave salary provision"),
+                     (BenefitKind.AirTicket, AccountRoles.AirTicketExpense, AccountRoles.AirTicketProvision, "Air ticket provision")
+                 })
+        {
+            foreach (var g in accruals.Where(a => a.Kind == kind).GroupBy(a => costCenters[a.EmployeeId]))
+            {
+                var amount = g.Sum(a => a.Expense);
+                if (amount == 0) continue;
+                var increase = amount > 0;
+                lines.Add(new PostingLine
+                {
+                    AccountRole = expenseRole, Side = increase ? PostingSide.Debit : PostingSide.Credit, Amount = Math.Abs(amount),
+                    CostCenterId = g.Key, Description = label
+                });
+                lines.Add(new PostingLine
+                {
+                    AccountRole = provisionRole, Side = increase ? PostingSide.Credit : PostingSide.Debit, Amount = Math.Abs(amount), Description = label
+                });
+            }
+        }
+        return lines;
     }
 
     internal static List<PostingLine> BuildGratuityLines(IReadOnlyList<GratuityAccrual> accruals, IReadOnlyList<Payslip> payslips)

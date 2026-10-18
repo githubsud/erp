@@ -107,6 +107,8 @@ internal static class ChartOfAccountsTemplate
         (AccountRoles.GratuityProvision, "2210"),
         (AccountRoles.LeaveSalaryExpense, "5280"),
         (AccountRoles.LeaveSalaryProvision, "2150"),
+        (AccountRoles.AirTicketExpense, "5290"),
+        (AccountRoles.AirTicketProvision, "2160"),
         (AccountRoles.SocialInsuranceExpense, "5295"),
         (AccountRoles.SocialInsurancePayable, "2180")
     ];

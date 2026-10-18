@@ -11,7 +11,7 @@ import { SHARED } from '../../shared/shared';
   imports: [...SHARED],
   template: `
     <div class="page-header">
-      <h1>{{ 'gratuity.title' | t }}</h1>
+      <h1>{{ 'gratuity.titleAll' | t }}</h1>
       <mat-form-field class="date">
         <mat-label>{{ 'gratuity.asOf' | t }}</mat-label>
         <input matInput type="date" [formControl]="asOf" />
@@ -50,6 +50,16 @@ import { SHARED } from '../../shared/shared';
           <td mat-cell *matCellDef="let r" class="num ltr" [class.diff]="r.provision !== r.liability">{{ r.provision | money }}</td>
           <td mat-footer-cell *matFooterCellDef class="num ltr">{{ totals().provision | money }}</td>
         </ng-container>
+        <ng-container matColumnDef="leave">
+          <th mat-header-cell *matHeaderCellDef class="num">{{ 'gratuity.leave' | t }}</th>
+          <td mat-cell *matCellDef="let r" class="num ltr">{{ r.leaveProvision | money }}</td>
+          <td mat-footer-cell *matFooterCellDef class="num ltr">{{ totals().leave | money }}</td>
+        </ng-container>
+        <ng-container matColumnDef="ticket">
+          <th mat-header-cell *matHeaderCellDef class="num">{{ 'gratuity.ticket' | t }}</th>
+          <td mat-cell *matCellDef="let r" class="num ltr">{{ r.ticketProvision | money }}</td>
+          <td mat-footer-cell *matFooterCellDef class="num ltr">{{ totals().ticket | money }}</td>
+        </ng-container>
         <ng-container matColumnDef="eligible">
           <th mat-header-cell *matHeaderCellDef>{{ 'gratuity.eligible' | t }}</th>
           <td mat-cell *matCellDef="let r"><span class="chip" [class.ok]="r.eligibleForPayout">{{ (r.eligibleForPayout ? 'app.yes' : 'app.no') | t }}</span></td>
@@ -71,12 +81,14 @@ import { SHARED } from '../../shared/shared';
 export class GratuityReportPage {
   private readonly api = inject(ApiService);
   private readonly notify = inject(NotifyService);
-  protected readonly columns = ['employee', 'joining', 'basis', 'days', 'liability', 'provision', 'eligible'];
+  protected readonly columns = ['employee', 'joining', 'basis', 'days', 'liability', 'provision', 'leave', 'ticket', 'eligible'];
   protected readonly asOf = new FormControl(todayIso(), { nonNullable: true });
   protected readonly rows = signal<GratuityRow[]>([]);
   protected readonly totals = computed(() => ({
     liability: this.rows().reduce((s, r) => s + r.liability, 0),
-    provision: this.rows().reduce((s, r) => s + r.provision, 0)
+    provision: this.rows().reduce((s, r) => s + r.provision, 0),
+    leave: this.rows().reduce((s, r) => s + r.leaveProvision, 0),
+    ticket: this.rows().reduce((s, r) => s + r.ticketProvision, 0)
   }));
 
   constructor() {

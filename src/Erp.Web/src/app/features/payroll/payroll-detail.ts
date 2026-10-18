@@ -82,10 +82,15 @@ import { MONTHS_AR, MONTHS_EN, statusClass } from './payroll-list';
             }
           </div>
         </mat-card>
-        @if (d.run.totalGratuityAccrual) {
+        @if (d.run.totalGratuityAccrual || d.run.totalLeaveAccrual || d.run.totalTicketAccrual) {
           <mat-card appearance="outlined" class="stat">
-            <div class="label">{{ 'payroll.gratuity' | t }}</div>
-            <div class="value ltr">{{ d.run.totalGratuityAccrual | money }}</div>
+            <div class="label">{{ 'payroll.provisions' | t }}</div>
+            <div class="value ltr">{{ d.run.totalGratuityAccrual + d.run.totalLeaveAccrual + d.run.totalTicketAccrual | money }}</div>
+            <div class="hint">
+              {{ 'payroll.gratuity' | t }} <span class="ltr">{{ d.run.totalGratuityAccrual | money }}</span> ·
+              {{ 'gratuity.leave' | t }} <span class="ltr">{{ d.run.totalLeaveAccrual | money }}</span> ·
+              {{ 'gratuity.ticket' | t }} <span class="ltr">{{ d.run.totalTicketAccrual | money }}</span>
+            </div>
           </mat-card>
         }
       </div>

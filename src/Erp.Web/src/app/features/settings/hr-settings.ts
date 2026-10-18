@@ -76,6 +76,7 @@ const NUMBER_FIELDS: [keyof HrSettings, string][] = [
               <input matInput type="number" [formControlName]="f[0]" dir="ltr" />
             </mat-form-field>
           }
+          <mat-slide-toggle formControlName="accrueLeaveSalary">{{ 'settings.accrueLeave' | t }}</mat-slide-toggle>
           <mat-form-field>
             <mat-label>{{ 'settings.leaveBasis' | t }}</mat-label>
             <mat-select formControlName="leaveSalaryBasis">
@@ -130,6 +131,7 @@ export class HrSettingsPage {
     siEmployeeRatePercent: [7, Validators.required],
     siEmployerRatePercent: [14, Validators.required],
     siMaxContributionSalary: [100000, Validators.required],
+    accrueLeaveSalary: [true],
     leaveSalaryBasis: ['Basic' as HrSettings['leaveSalaryBasis']]
   });
 

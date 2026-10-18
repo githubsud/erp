@@ -35,6 +35,8 @@ public enum WpsFileStatus { Generated, Submitted, Accepted, Rejected }
 
 public enum SettlementReason { Resignation, Termination, EndOfContract, Retirement, Death }
 
+public enum BenefitKind { LeaveSalary, AirTicket }
+
 public enum SettlementStatus { Draft, Posted, Paid, Reversed }
 
 public enum EmployeeDocumentType { Qid, Passport, ResidencePermit, WorkPermit, HealthCard, DrivingLicence, ProfessionalLicence, Other }
@@ -77,6 +79,9 @@ public sealed class HrSettings : TenantEntity
     public decimal SiEmployeeRatePercent { get; set; } = 7;
     public decimal SiEmployerRatePercent { get; set; } = 14;
     public decimal SiMaxContributionSalary { get; set; } = 100000;
+
+    /// <summary>Book a monthly provision for unused annual leave (true-up of the full liability each month).</summary>
+    public bool AccrueLeaveSalary { get; set; } = true;
     public int SickFullPayDays { get; set; } = 14;
     public int SickHalfPayDays { get; set; } = 28;
     public int SickMinServiceMonths { get; set; } = 3;
@@ -189,6 +194,9 @@ public sealed class EmploymentContract : TenantEntity
     public decimal? GratuityDaysPerYear { get; init; }
     public GratuityBasis GratuityBasis { get; init; }
     public int? AnnualLeaveDays { get; init; }
+
+    /// <summary>Contractual air ticket value per year; provided for monthly.</summary>
+    public decimal? AnnualAirTicketAmount { get; init; }
     public ContractStatus Status { get; set; } = ContractStatus.Active;
     public List<ContractComponent> Components { get; init; } = [];
 }
@@ -261,6 +269,8 @@ public sealed class PayrollRun : TenantEntity
     public decimal TotalDeductions { get; set; }
     public decimal TotalNet { get; set; }
     public decimal TotalGratuityAccrual { get; set; }
+    public decimal TotalLeaveAccrual { get; set; }
+    public decimal TotalTicketAccrual { get; set; }
     public Guid? CalculatedBy { get; set; }
     public DateTimeOffset? CalculatedAt { get; set; }
     public Guid? ApprovedBy { get; set; }
@@ -298,6 +308,7 @@ public sealed class Payslip : TenantEntity
     public decimal Deductions { get; init; }
     public decimal Net { get; init; }
     public string? Warnings { get; init; }
+    public DateTimeOffset? EmailedAt { get; set; }
     public List<PayslipLine> Lines { get; init; } = [];
 }
 
@@ -363,6 +374,10 @@ public sealed class FinalSettlement : TenantEntity
 
     /// <summary>Gratuity already provided for in the books (released when the settlement is posted).</summary>
     public decimal GratuityProvision { get; init; }
+
+    /// <summary>Leave salary and air ticket provisions released by the settlement.</summary>
+    public decimal LeaveProvision { get; init; }
+    public decimal TicketProvision { get; init; }
     public decimal LeaveBalanceDays { get; init; }
     public decimal DailyLeaveRate { get; init; }
     public DateOnly? UnpaidSalaryFrom { get; init; }
@@ -394,4 +409,19 @@ public sealed class FinalSettlementLine : TenantEntity
     public decimal? Quantity { get; init; }
     public decimal? Rate { get; init; }
     public decimal Amount { get; init; }
+}
+
+/// <summary>Monthly leave-salary or air-ticket provision per employee; liability is the running balance.</summary>
+public sealed class BenefitAccrual : TenantEntity
+{
+    public Guid EmployeeId { get; init; }
+    public Guid PayrollRunId { get; init; }
+    public BenefitKind Kind { get; init; }
+    public DateOnly PeriodEnd { get; init; }
+    public decimal? Quantity { get; init; }
+    public decimal? Rate { get; init; }
+    public decimal Liability { get; init; }
+    public decimal PreviousLiability { get; init; }
+    public decimal Expense { get; init; }
+    public AccrualStatus Status { get; set; } = AccrualStatus.Posted;
 }

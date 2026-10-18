@@ -114,6 +114,7 @@ export interface Contract {
   status: 'Active' | 'Ended';
   components: ContractComponent[];
   monthlyGross: number;
+  annualAirTicketAmount: number | null;
 }
 
 export interface EmployeeDocument {
@@ -219,6 +220,8 @@ export interface PayrollRun {
   totalDeductions: number;
   totalNet: number;
   totalGratuityAccrual: number;
+  totalLeaveAccrual: number;
+  totalTicketAccrual: number;
   calculatedAt: string | null;
   approvedAt: string | null;
   postedAt: string | null;
@@ -345,6 +348,8 @@ export interface GratuityRow {
   liability: number;
   provision: number;
   eligibleForPayout: boolean;
+  leaveProvision: number;
+  ticketProvision: number;
 }
 
 export interface HrSettings {
@@ -375,6 +380,7 @@ export interface HrSettings {
   siEmployeeRatePercent: number;
   siEmployerRatePercent: number;
   siMaxContributionSalary: number;
+  accrueLeaveSalary: boolean;
 }
 
 export interface Department {

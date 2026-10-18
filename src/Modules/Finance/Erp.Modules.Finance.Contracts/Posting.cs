@@ -87,6 +87,8 @@ public static class AccountRoles
     public const string GratuityProvision = "hr.gratuity_provision";
     public const string LeaveSalaryExpense = "hr.leave_expense";
     public const string LeaveSalaryProvision = "hr.leave_provision";
+    public const string AirTicketExpense = "hr.air_ticket_expense";
+    public const string AirTicketProvision = "hr.air_ticket_provision";
     public const string SocialInsuranceExpense = "hr.social_insurance_expense";
     public const string SocialInsurancePayable = "hr.social_insurance_payable";
 }

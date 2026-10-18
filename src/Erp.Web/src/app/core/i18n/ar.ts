@@ -144,6 +144,13 @@ export const ar: Record<TranslationKey, string> = {
   'security.enable': 'تفعيل',
   'security.disable': 'إيقاف',
 
+  'contract.airTicket': 'قيمة تذكرة السفر السنوية',
+  'gratuity.titleAll': 'مخصصات نهاية الخدمة والإجازات وتذاكر السفر',
+  'gratuity.leave': 'رواتب الإجازات',
+  'gratuity.ticket': 'تذاكر السفر',
+  'payroll.provisions': 'المخصصات المسجلة',
+  'settings.accrueLeave': 'تسجيل مخصص شهري لرواتب الإجازات',
+
   'tab.profile': 'الملف',
   'tab.contract': 'العقد',
   'tab.documents': 'المستندات',

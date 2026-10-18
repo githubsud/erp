@@ -20,7 +20,8 @@ public sealed class PayrollTests(ErpFixture fixture)
         decimal HalfPayDays = 0);
     public sealed record RunDetail(Run Run, IReadOnlyList<Payslip> Payslips);
     public sealed record WpsFile(Guid Id, string FileName, decimal TotalSalaries, int RecordCount);
-    public sealed record GratuityRow(Guid EmployeeId, string EmpNo, decimal Liability, decimal Provision);
+    public sealed record GratuityRow(Guid EmployeeId, string EmpNo, decimal Liability, decimal Provision, decimal LeaveProvision = 0,
+        decimal TicketProvision = 0);
 
     public static string Iban(string bank, string account)
     {
@@ -136,9 +137,10 @@ public sealed class PayrollTests(ErpFixture fixture)
         run.JournalEntryId.ShouldNotBeNull();
         run.GratuityJournalEntryId.ShouldNotBeNull();
 
-        // Gratuity: GRSIA-covered Qatari excluded; provision equals the computed liability per employee.
-        var gratuity = await c.GetAsync<List<GratuityRow>>($"/api/hr/reports/gratuity-liability?asOf={MonthEnd:yyyy-MM-dd}");
-        gratuity.Select(g => g.EmpNo).Order().ShouldBe(["E001", "E002"]);
+        // Gratuity: GRSIA-covered Qatari has none; provision equals the computed liability per employee.
+        var provisions = await c.GetAsync<List<GratuityRow>>($"/api/hr/reports/gratuity-liability?asOf={MonthEnd:yyyy-MM-dd}");
+        provisions.Single(g => g.EmpNo == "E003").Liability.ShouldBe(0m);
+        var gratuity = provisions.Where(g => g.EmpNo != "E003").ToList();
         gratuity.ShouldAllBe(g => g.Liability == g.Provision);
         var rameshServiceDays = MonthEnd.DayNumber - new DateOnly(2024, 3, 1).DayNumber + 1 - 2; // unpaid leave excluded
         gratuity.Single(g => g.EmpNo == "E001").Provision.ShouldBe(Round(3000m * 21m / 30m * rameshServiceDays / 365m));
@@ -148,6 +150,12 @@ public sealed class PayrollTests(ErpFixture fixture)
         tb.IsBalanced.ShouldBeTrue();
         tb.Rows.Single(r => r.Code == "2140").Closing.ShouldBe(-run.TotalNet);
         tb.Rows.Single(r => r.Code == "2210").Closing.ShouldBe(-run.TotalGratuityAccrual);
+
+        // Leave salary provision: unused annual leave × basic / 30 for everyone (Qatari included).
+        var rameshLeaveDays = Round(21m * rameshServiceDays / 365m);
+        provisions.Single(g => g.EmpNo == "E001").LeaveProvision.ShouldBe(Round(rameshLeaveDays * 3000m / 30m));
+        provisions.Single(g => g.EmpNo == "E003").LeaveProvision.ShouldBeGreaterThan(0m);
+        tb.Rows.Single(r => r.Code == "2150").Closing.ShouldBe(-provisions.Sum(g => g.LeaveProvision));
         tb.Rows.Single(r => r.Code == "5210").Debit.ShouldBe(2800m + Round(2500m * mariaDays / 30) + 15000m);
         tb.Rows.Single(r => r.Code == "4210").Credit.ShouldBe(100m); // deduction recognised as other income
         tb.Rows.Single(r => r.Code == "5295").Debit.ShouldBe(2800m);  // employer social insurance

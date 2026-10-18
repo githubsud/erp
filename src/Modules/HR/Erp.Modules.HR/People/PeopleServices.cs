@@ -47,7 +47,8 @@ public sealed record ContractRequest(
     decimal? GratuityDaysPerYear,
     GratuityBasis GratuityBasis,
     int? AnnualLeaveDays,
-    IReadOnlyList<ContractComponentRequest> Components);
+    IReadOnlyList<ContractComponentRequest> Components,
+    decimal? AnnualAirTicketAmount = null);
 
 public sealed record LeaveRequestCreate(Guid EmployeeId, string LeaveTypeCode, DateOnly FromDate, DateOnly ToDate, string? Reason);
 
@@ -233,7 +234,8 @@ internal sealed class ContractService(ErpDbContext db, ITenantContext tenant, Hr
                 FoodProvided = r.FoodProvided,
                 GratuityDaysPerYear = r.GratuityDaysPerYear,
                 GratuityBasis = r.GratuityBasis,
-                AnnualLeaveDays = r.AnnualLeaveDays
+                AnnualLeaveDays = r.AnnualLeaveDays,
+                AnnualAirTicketAmount = r.AnnualAirTicketAmount is > 0 ? Money.Round(r.AnnualAirTicketAmount.Value) : null
             };
             contract.Components.AddRange(r.Components.Select(c => new ContractComponent
             {
