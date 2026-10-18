@@ -101,6 +101,8 @@ public static class AccountRoles
     public const string GoodsReceivedNotInvoiced = "pur.grni";
     public const string AccountsPayable = "pur.payable";
     public const string WithholdingTaxPayable = "pur.wht_payable";
+    /// <summary>Post-dated cheques issued to suppliers and not yet presented.</summary>
+    public const string PdcPayable = "pur.pdc_payable";
     /// <summary>Freight, clearing and customs invoices waiting to be allocated to receipts by a landed cost voucher.</summary>
     public const string LandedCostClearing = "pur.landed_cost_clearing";
     /// <summary>Non-stock purchases (services, supplies); keyed by item group.</summary>

@@ -76,6 +76,7 @@ export class TradeApi {
   reverseLandedCost = (id: string, date: string, reason: string) => this.api.post<LandedCost>(`purchasing/landed-costs/${id}/reverse`, { date, reason });
   payments = (supplierId?: string) => this.api.get<SupplierPayment[]>('purchasing/payments', { supplierId });
   createPayment = (body: unknown) => this.api.post<SupplierPayment>('purchasing/payments', body);
+  clearPayment = (id: string, date: string) => this.api.post<SupplierPayment>(`purchasing/payments/${id}/clear`, { date });
   reversePayment = (id: string, date: string, reason: string) => this.api.post<SupplierPayment>(`purchasing/payments/${id}/reverse`, { date, reason });
   grni = () => this.api.get<GrniReport>('purchasing/reports/grni');
   aging = (asOf: string) => this.api.get<AgingReport>('purchasing/reports/aging', { asOf });

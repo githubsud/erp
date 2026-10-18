@@ -22,8 +22,11 @@ public sealed record LandedCostRequest(DateOnly Date, AllocationMethod Method, I
 public sealed record PaymentAllocationRequest(Guid SupplierInvoiceId, decimal Amount);
 
 /// <summary>Allocations are in the invoices' currency; a rate for the payment date is needed when that is not QAR.</summary>
+/// <summary>A cheque dated after <see cref="Date"/> is post-dated: it settles the invoices now and leaves the bank when it clears.</summary>
 public sealed record PaymentRequest(Guid SupplierId, DateOnly Date, Guid PaymentAccountId, string? Reference, IReadOnlyList<PaymentAllocationRequest> Allocations,
-    decimal? ExchangeRate = null);
+    decimal? ExchangeRate = null, string? ChequeNo = null, DateOnly? ChequeDate = null);
+
+public sealed record PdcClearRequest(DateOnly Date);
 
 /// <summary>Collects signed amounts per account role and key, then emits balanced debit/credit posting lines.</summary>
 internal sealed class PostingBuilder
@@ -419,6 +422,7 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
     IFinanceQueries finance)
 {
     public const string SourceType = "supplier_payment";
+    public const string ClearSourceType = "supplier_pdc_clear";
 
     public Task<SupplierPayment> CreateAsync(PaymentRequest r, CancellationToken ct) =>
         db.InTransactionAsync(async token =>
@@ -439,6 +443,11 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
             if (currencies.Count > 1)
                 throw new BusinessRuleException("pur.payment_currencies", "Pay invoices in different currencies separately.", "سدد الفواتير ذات العملات المختلفة بشكل منفصل.");
             var currency = currencies.SingleOrDefault() ?? Money.BaseCurrency;
+            var postDated = r.ChequeDate is { } chequeDate && chequeDate > r.Date;
+            if (postDated && account.Subtype != "bank")
+                throw new BusinessRuleException("pur.pdc_bank", "A post-dated cheque must be drawn on a bank account.", "يجب أن يكون الشيك الآجل مسحوباً على حساب بنكي.");
+            if (postDated && string.IsNullOrWhiteSpace(r.ChequeNo))
+                throw new BusinessRuleException("pur.pdc_cheque_no", "Enter the cheque number.", "أدخل رقم الشيك.");
             var payment = new SupplierPayment
             {
                 CompanyId = supplier.CompanyId,
@@ -448,7 +457,10 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
                 PaymentAccountId = account.Id,
                 Reference = SupplierService.Clean(r.Reference),
                 Currency = currency,
-                ExchangeRate = PurchasingRules.ExchangeRate(currency, r.ExchangeRate)
+                ExchangeRate = PurchasingRules.ExchangeRate(currency, r.ExchangeRate),
+                ChequeNo = SupplierService.Clean(r.ChequeNo),
+                ChequeDate = r.ChequeDate,
+                PdcStatus = postDated ? PdcStatus.Issued : null
             };
             foreach (var a in r.Allocations)
             {
@@ -489,7 +501,9 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
                     AccountRole = AccountRoles.AccountsPayable, Side = PostingSide.Debit, Amount = clearedBase, PartyType = PartyType.Supplier,
                     PartyId = supplier.Id
                 },
-                new() { AccountId = account.Id, Side = PostingSide.Credit, Amount = netBase }
+                postDated
+                    ? new() { AccountRole = AccountRoles.PdcPayable, Side = PostingSide.Credit, Amount = netBase, Description = $"Cheque {payment.ChequeNo}" }
+                    : new() { AccountId = account.Id, Side = PostingSide.Credit, Amount = netBase }
             ];
             if (whtBase > 0)
                 lines.Add(new PostingLine
@@ -513,15 +527,42 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
             return payment;
         }, ct);
 
+    /// <summary>The supplier presented the cheque and the bank paid it: debit PDC payable, credit the bank.</summary>
+    public Task<SupplierPayment> ClearAsync(Guid id, PdcClearRequest r, CancellationToken ct) =>
+        db.InTransactionAsync(async token =>
+        {
+            var payment = await FindAsync(id, token);
+            if (payment.Status != DocumentStatus.Posted || payment.PdcStatus != PdcStatus.Issued)
+                throw new ConflictException("pur.pdc_not_issued", "Only post-dated cheques not yet cleared can be cleared.", "يمكن تسوية الشيكات الآجلة غير المصروفة فقط.");
+            if (r.Date < payment.ChequeDate)
+                throw new BusinessRuleException("pur.pdc_early", $"The cheque is dated {payment.ChequeDate:dd/MM/yyyy}.", $"تاريخ الشيك {payment.ChequeDate:dd/MM/yyyy}.");
+            var amount = PurchasingRules.ToBase(payment.NetAmount, payment.ExchangeRate);
+            await posting.PostAsync(new PostingRequest
+            {
+                SourceType = ClearSourceType, SourceId = payment.Id, SourceNo = payment.PaymentNo, PostingDate = r.Date,
+                MemoEn = $"Cheque {payment.ChequeNo} cleared", MemoAr = $"صرف الشيك {payment.ChequeNo}",
+                Lines =
+                [
+                    new PostingLine { AccountRole = AccountRoles.PdcPayable, Side = PostingSide.Debit, Amount = amount },
+                    new PostingLine { AccountId = payment.PaymentAccountId, Side = PostingSide.Credit, Amount = amount }
+                ]
+            }, token);
+            payment.PdcStatus = PdcStatus.Cleared;
+            payment.PdcClearedDate = r.Date;
+            await db.SaveChangesAsync(token);
+            return payment;
+        }, ct);
+
+    /// <summary>Cancels a payment entered by mistake, or a cheque stopped before (or returned after) clearing; the invoices reopen.</summary>
     public Task<SupplierPayment> ReverseAsync(Guid id, ReverseRequest r, CancellationToken ct) =>
         db.InTransactionAsync(async token =>
         {
-            var payment = await db.Set<SupplierPayment>().Include(p => p.Allocations)
-                              .SingleOrDefaultAsync(p => p.Id == id && p.CompanyId == tenant.RequireCompanyId(), token)
-                          ?? throw new NotFoundException("Supplier payment", id);
+            var payment = await FindAsync(id, token);
             if (payment.Status != DocumentStatus.Posted)
                 throw new ConflictException("pur.not_posted", "This payment is already reversed.", "تم عكس هذه الدفعة مسبقاً.");
-            await posting.ReverseAsync(SourceType, payment.Id, r.Date, Guard.Required(r.Reason, "reason"), token);
+            var reason = Guard.Required(r.Reason, "reason");
+            if (payment.PdcStatus == PdcStatus.Cleared) await posting.ReverseAsync(ClearSourceType, payment.Id, r.Date, reason, token);
+            await posting.ReverseAsync(SourceType, payment.Id, r.Date, reason, token);
             var ids = payment.Allocations.Select(a => a.SupplierInvoiceId).ToList();
             var invoices = await db.Set<SupplierInvoice>().Where(i => ids.Contains(i.Id)).ToDictionaryAsync(i => i.Id, token);
             foreach (var a in payment.Allocations)
@@ -536,4 +577,8 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
             await db.SaveChangesAsync(token);
             return payment;
         }, ct);
+
+    private async Task<SupplierPayment> FindAsync(Guid id, CancellationToken ct) =>
+        await db.Set<SupplierPayment>().Include(p => p.Allocations).SingleOrDefaultAsync(p => p.Id == id && p.CompanyId == tenant.RequireCompanyId(), ct)
+        ?? throw new NotFoundException("Supplier payment", id);
 }

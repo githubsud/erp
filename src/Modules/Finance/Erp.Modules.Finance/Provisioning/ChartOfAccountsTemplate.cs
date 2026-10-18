@@ -120,6 +120,7 @@ internal static class ChartOfAccountsTemplate
         (AccountRoles.GoodsReceivedNotInvoiced, "2125"),
         (AccountRoles.AccountsPayable, "2110"),
         (AccountRoles.WithholdingTaxPayable, "2170"),
+        (AccountRoles.PdcPayable, "2120"),
         (AccountRoles.LandedCostClearing, "1190"),
         (AccountRoles.PurchaseExpense, "5360"),
         (AccountRoles.AccountsReceivable, "1130"),

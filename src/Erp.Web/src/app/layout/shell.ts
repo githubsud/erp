@@ -82,7 +82,8 @@ const NAV: NavGroup[] = [
       { icon: 'account_tree', label: 'nav.accounts', link: '/finance/accounts', permission: 'fin.accounts:read' },
       { icon: 'balance', label: 'nav.trialBalance', link: '/finance/trial-balance', permission: 'fin.reports:read' },
       { icon: 'receipt_long', label: 'nav.journal', link: '/finance/journal', permission: 'fin.journal:read' },
-      { icon: 'start', label: 'nav.openingBalances', link: '/finance/opening-balances', permission: 'fin.journal:post' }
+      { icon: 'start', label: 'nav.openingBalances', link: '/finance/opening-balances', permission: 'fin.journal:post' },
+      { icon: 'event_available', label: 'nav.fiscalYears', link: '/finance/years', permission: 'fin.accounts:read' }
     ]
   },
   {

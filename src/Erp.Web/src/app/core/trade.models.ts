@@ -358,6 +358,10 @@ export interface SupplierPayment {
   currency: string;
   exchangeRate: number;
   fxDifference: number;
+  chequeNo: string | null;
+  chequeDate: string | null;
+  pdcStatus: 'Issued' | 'Cleared' | null;
+  pdcClearedDate: string | null;
 }
 
 export interface PurchaseSettings {

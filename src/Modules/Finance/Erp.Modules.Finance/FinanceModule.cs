@@ -25,6 +25,8 @@ public sealed class FinanceModule : IModule
         services.AddScoped<IFinanceQueries, FinanceQueries>();
         services.AddScoped<FinanceReports>();
         services.AddScoped<FinancialStatements>();
+        services.AddScoped<CashFlowReport>();
+        services.AddScoped<YearEndService>();
         services.AddScoped<StatementsPdf>();
         services.AddScoped<BankReconciliationService>();
         services.AddScoped<JournalVoucherService>();

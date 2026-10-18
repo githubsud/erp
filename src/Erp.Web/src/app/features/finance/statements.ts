@@ -2,7 +2,8 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { toIso, todayIso } from '../../core/dates';
-import { BalanceSheet, FinanceApi, ProfitAndLoss, StatementSection } from '../../core/finance.api';
+import { BalanceSheet, CashFlow, FinanceApi, ProfitAndLoss, StatementSection } from '../../core/finance.api';
+import { CostCenter } from '../../core/finance.api';
 import { NotifyService } from '../../core/notify.service';
 import { SHARED } from '../../shared/shared';
 
@@ -40,6 +41,15 @@ function shiftYear(iso: string, years: number): string {
               <mat-option value="lastYear">{{ 'fs.compare.lastYear' | t }}</mat-option>
             </mat-select>
           </mat-form-field>
+          @if (costCenters().length) {
+            <mat-form-field>
+              <mat-label>{{ 'fs.costCenter' | t }}</mat-label>
+              <mat-select [formControl]="costCenter">
+                <mat-option value="">{{ 'fs.allCostCenters' | t }}</mat-option>
+                @for (cc of costCenters(); track cc.id) { <mat-option [value]="cc.id"><span class="ltr">{{ cc.code }}</span> · {{ cc | bi }}</mat-option> }
+              </mat-select>
+            </mat-form-field>
+          }
           <button mat-flat-button (click)="loadPl()">{{ 'finance.run' | t }}</button>
           <button mat-stroked-button (click)="plPdf()"><mat-icon>picture_as_pdf</mat-icon> PDF</button>
         </div>
@@ -60,6 +70,30 @@ function shiftYear(iso: string, years: number): string {
                 {{ 'fs.grossMargin' | t }} <b class="ltr">{{ pct(r.grossProfit, r.revenue) }}</b> · {{ 'fs.netMargin' | t }} <b class="ltr">{{ pct(r.netProfit, r.revenue) }}</b>
               </div>
             }
+          </mat-card>
+        }
+      </mat-tab>
+
+      <mat-tab [label]="'fs.cf' | t">
+        <div class="toolbar-row tab-body">
+          <mat-form-field><mat-label>{{ 'app.from' | t }}</mat-label><input matInput type="date" [formControl]="from" /></mat-form-field>
+          <mat-form-field><mat-label>{{ 'app.to' | t }}</mat-label><input matInput type="date" [formControl]="to" /></mat-form-field>
+          <button mat-flat-button (click)="loadCf()">{{ 'finance.run' | t }}</button>
+        </div>
+        @if (cf(); as r) {
+          <mat-card appearance="outlined" class="statement">
+            @for (s of r.sections; track s.kind) {
+              <div class="row section-title"><span>{{ 'fs.cf.' + s.kind | t }}</span></div>
+              @for (l of s.lines; track l.code + l.nameEn) {
+                <div class="row"><span>@if (l.code) { <span class="ltr secondary">{{ l.code }}</span> } {{ l.code ? (l | bi) : ('fs.cf.netProfit' | t) }}</span>
+                  <span class="num ltr">{{ l.amount | money }}</span></div>
+              }
+              <div class="row total"><span>{{ 'fs.cf.total.' + s.kind | t }}</span><span class="num ltr">{{ s.total | money }}</span></div>
+            }
+            <div class="row total strong"><span>{{ 'fs.cf.netChange' | t }}</span><span class="num ltr">{{ r.netChange | money }}</span></div>
+            <div class="row"><span>{{ 'fs.cf.opening' | t }}</span><span class="num ltr">{{ r.openingCash | money }}</span></div>
+            <div class="row total"><span>{{ 'fs.cf.closing' | t }}</span><span class="num ltr">{{ r.closingCash | money }}</span></div>
+            @if (!r.reconciles) { <div class="error-panel">{{ 'fs.cf.mismatch' | t }}</div> }
           </mat-card>
         }
       </mat-tab>
@@ -134,6 +168,9 @@ export class StatementsPage {
   protected readonly asOf = new FormControl(todayIso(), { nonNullable: true });
   protected readonly bsCompare = new FormControl(false, { nonNullable: true });
   protected readonly pl = signal<ProfitAndLoss | null>(null);
+  protected readonly cf = signal<CashFlow | null>(null);
+  protected readonly costCenters = signal<CostCenter[]>([]);
+  protected readonly costCenter = new FormControl('', { nonNullable: true });
   protected readonly bs = signal<BalanceSheet | null>(null);
   protected readonly plTop = computed(() => this.pl()?.sections.filter((s) => s.kind === 'income' || s.kind === 'cost_of_sales') ?? []);
   protected readonly plExpenses = computed(() => this.pl()?.sections.filter((s) => s.kind === 'expense') ?? []);
@@ -142,6 +179,12 @@ export class StatementsPage {
     this.applyPreset();
     this.loadPl();
     this.loadBs();
+    this.loadCf();
+    this.finance.costCenters().subscribe((c) => this.costCenters.set(c.filter((x) => x.isActive)));
+  }
+
+  protected loadCf(): void {
+    this.finance.cashFlow(this.from.value, this.to.value).subscribe({ next: (r) => this.cf.set(r), error: (e) => this.notify.error(e) });
   }
 
   protected bsKind(kind: StatementSection['kind']): StatementSection[] {
@@ -170,7 +213,7 @@ export class StatementsPage {
 
   protected loadPl(): void {
     const [cf, ct] = this.compareRange();
-    this.finance.profitAndLoss(this.from.value, this.to.value, cf, ct).subscribe({ next: (r) => this.pl.set(r), error: (e) => this.notify.error(e) });
+    this.finance.profitAndLoss(this.from.value, this.to.value, cf, ct, this.costCenter.value || null).subscribe({ next: (r) => this.pl.set(r), error: (e) => this.notify.error(e) });
   }
 
   protected plPdf(): void {

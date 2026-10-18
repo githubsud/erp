@@ -11,7 +11,7 @@ import { Account } from '../../core/models';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import { ChargeType, GoodsReceipt, LandedCost, Supplier, SupplierInvoice, SupplierPayment } from '../../core/trade.models';
-import { ReverseDialog, ReverseResult } from '../../shared/dialogs';
+import { ConfirmDialog, ReverseDialog, ReverseResult } from '../../shared/dialogs';
 import { SHARED } from '../../shared/shared';
 
 /** Withholding the supplier will suffer on a part payment (mirrors the server rule; the server is authoritative). */
@@ -55,6 +55,15 @@ function whtOn(invoice: SupplierInvoice, paying: number): number {
           <mat-form-field>
             <mat-label>{{ 'pay.reference' | t }}</mat-label>
             <input matInput formControlName="reference" dir="ltr" />
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ 'pdc.chequeNo' | t }}</mat-label>
+            <input matInput formControlName="chequeNo" dir="ltr" />
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ 'pdc.chequeDate' | t }}</mat-label>
+            <input matInput type="date" formControlName="chequeDate" />
+            <mat-hint>{{ 'pdc.hint' | t }}</mat-hint>
           </mat-form-field>
           @if (currency() !== 'QAR') {
             <mat-form-field>
@@ -132,11 +141,18 @@ function whtOn(invoice: SupplierInvoice, paying: number): number {
         </ng-container>
         <ng-container matColumnDef="status">
           <th mat-header-cell *matHeaderCellDef>{{ 'app.status' | t }}</th>
-          <td mat-cell *matCellDef="let p"><span class="chip" [class.ok]="p.status === 'Posted'">{{ 'doc.status.' + p.status | t }}</span></td>
+          <td mat-cell *matCellDef="let p"><span class="chip" [class.ok]="p.status === 'Posted'">{{ 'doc.status.' + p.status | t }}</span>
+            @if (p.pdcStatus && p.status === 'Posted') {
+              <div><span class="chip" [class.warn]="p.pdcStatus === 'Issued'" [class.ok]="p.pdcStatus === 'Cleared'">{{ 'pdc.status.' + p.pdcStatus | t }}</span>
+                <span class="secondary ltr">{{ p.chequeNo }} · {{ p.chequeDate | d }}</span></div>
+            }</td>
         </ng-container>
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef></th>
           <td mat-cell *matCellDef="let p">
+            @if (p.status === 'Posted' && p.pdcStatus === 'Issued' && auth.can('pur.payments:post')) {
+              <button mat-icon-button (click)="clear(p)" [matTooltip]="'pdc.clear' | t"><mat-icon>price_check</mat-icon></button>
+            }
             @if (p.status === 'Posted' && auth.can('pur.payments:post')) {
               <button mat-icon-button (click)="reverse(p)" [matTooltip]="'doc.reverse' | t"><mat-icon>undo</mat-icon></button>
             }
@@ -187,7 +203,9 @@ export class PaymentsPage implements OnInit {
     supplierId: ['', Validators.required],
     paymentAccountId: ['', Validators.required],
     date: [todayIso(), Validators.required],
-    reference: ['']
+    reference: [''],
+    chequeNo: [''],
+    chequeDate: ['']
   });
   protected readonly gross = computed(() => {
     this.version();
@@ -224,7 +242,7 @@ export class PaymentsPage implements OnInit {
   }
 
   protected open(): void {
-    this.form.patchValue({ supplierId: '', date: todayIso(), reference: '' });
+    this.form.patchValue({ supplierId: '', date: todayIso(), reference: '', chequeNo: '', chequeDate: '' });
     this.openInvoices.set([]);
     this.showForm.set(true);
   }
@@ -238,7 +256,9 @@ export class PaymentsPage implements OnInit {
       .filter((i) => Number(this.amounts[i.id].value) > 0)
       .map((i) => ({ supplierInvoiceId: i.id, amount: Number(this.amounts[i.id].value) }));
     this.busy.set(true);
-    this.trade.createPayment({ ...this.form.getRawValue(), allocations, exchangeRate: this.currency() === 'QAR' ? null : Number(this.rate.value) }).subscribe({
+    const v = this.form.getRawValue();
+    this.trade.createPayment({ ...v, chequeNo: v.chequeNo || null, chequeDate: v.chequeDate || null, allocations,
+      exchangeRate: this.currency() === 'QAR' ? null : Number(this.rate.value) }).subscribe({
       next: () => {
         this.busy.set(false);
         this.showForm.set(false);
@@ -250,6 +270,17 @@ export class PaymentsPage implements OnInit {
         this.notify.error(e);
       }
     });
+  }
+
+  /** The bank paid the cheque on (or after) its date. */
+  protected clear(p: SupplierPayment): void {
+    const today = todayIso();
+    const date = p.chequeDate && p.chequeDate > today ? p.chequeDate : today;
+    this.dialog
+      .open(ConfirmDialog, { data: { title: 'pdc.clear', message: 'pdc.clearConfirm' } })
+      .afterClosed()
+      .pipe(filter(Boolean), switchMap(() => this.trade.clearPayment(p.id, date)))
+      .subscribe({ next: () => this.load(), error: (e) => this.notify.error(e) });
   }
 
   protected reverse(p: SupplierPayment): void {

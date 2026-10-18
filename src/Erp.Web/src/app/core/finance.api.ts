@@ -156,14 +156,33 @@ export interface ImportResult {
 }
 
 /** Finance endpoints added for statements, vouchers, opening balances and bank reconciliation. */
+export interface CashFlowLine {
+  code: string;
+  nameEn: string;
+  nameAr: string;
+  amount: number;
+}
+
+export interface CashFlow {
+  from: string;
+  to: string;
+  netProfit: number;
+  sections: { kind: 'operating' | 'investing' | 'financing'; lines: CashFlowLine[]; total: number }[];
+  netChange: number;
+  openingCash: number;
+  closingCash: number;
+  reconciles: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class FinanceApi {
   private readonly api = inject(ApiService);
   private readonly http = inject(HttpClient);
   private readonly config = inject(ConfigService);
 
-  profitAndLoss = (from: string, to: string, compareFrom?: string | null, compareTo?: string | null) =>
-    this.api.get<ProfitAndLoss>('finance/reports/profit-and-loss', { from, to, compareFrom, compareTo });
+  cashFlow = (from: string, to: string) => this.api.get<CashFlow>('finance/reports/cash-flow', { from, to });
+  profitAndLoss = (from: string, to: string, compareFrom?: string | null, compareTo?: string | null, costCenterId?: string | null) =>
+    this.api.get<ProfitAndLoss>('finance/reports/profit-and-loss', { from, to, compareFrom, compareTo, costCenterId });
   profitAndLossPdf = (from: string, to: string, compareFrom?: string | null, compareTo?: string | null) =>
     this.api.download('finance/reports/profit-and-loss.pdf', { from, to, compareFrom, compareTo }, 'income_statement.pdf');
   balanceSheet = (asOf: string, compareAsOf?: string | null) => this.api.get<BalanceSheet>('finance/reports/balance-sheet', { asOf, compareAsOf });

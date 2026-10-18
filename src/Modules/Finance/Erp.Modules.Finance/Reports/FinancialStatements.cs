@@ -27,7 +27,9 @@ public sealed record BalanceSheet(DateOnly AsOf, DateOnly? CompareAsOf, IReadOnl
 /// </summary>
 internal sealed class FinancialStatements(ErpDbContext db, ITenantContext tenant)
 {
-    public async Task<ProfitAndLoss> ProfitAndLossAsync(DateOnly from, DateOnly to, DateOnly? compareFrom, DateOnly? compareTo, CancellationToken ct)
+    /// <summary>With <paramref name="costCenterId"/> only lines tagged with that cost centre count (a cost-centre P&amp;L).</summary>
+    public async Task<ProfitAndLoss> ProfitAndLossAsync(DateOnly from, DateOnly to, DateOnly? compareFrom, DateOnly? compareTo, CancellationToken ct,
+        Guid? costCenterId = null)
     {
         Range(from, to);
         if ((compareFrom is null) != (compareTo is null))
@@ -35,8 +37,8 @@ internal sealed class FinancialStatements(ErpDbContext db, ITenantContext tenant
         if (compareFrom is { } cf && compareTo is { } ctTo) Range(cf, ctTo);
 
         var chart = await ChartAsync(ct);
-        var current = await MovementsAsync(from, to, ct);
-        var compare = compareFrom is { } a && compareTo is { } b ? await MovementsAsync(a, b, ct) : null;
+        var current = await MovementsAsync(from, to, ct, costCenterId);
+        var compare = compareFrom is { } a && compareTo is { } b ? await MovementsAsync(a, b, ct, costCenterId) : null;
         var sections = Sections(chart, current, compare, acc => acc.IsProfitAndLoss);
 
         decimal Sum(Func<StatementSection, bool> which, bool comparing) =>
@@ -93,13 +95,14 @@ internal sealed class FinancialStatements(ErpDbContext db, ITenantContext tenant
         await db.Set<Account>().AsNoTracking().Where(a => a.CompanyId == tenant.RequireCompanyId()).ToDictionaryAsync(a => a.Id, ct);
 
     /// <summary>Debit − credit per account for postings between two dates (inclusive).</summary>
-    private async Task<Dictionary<Guid, decimal>> MovementsAsync(DateOnly from, DateOnly to, CancellationToken ct)
+    private async Task<Dictionary<Guid, decimal>> MovementsAsync(DateOnly from, DateOnly to, CancellationToken ct, Guid? costCenterId = null)
     {
         var companyId = tenant.RequireCompanyId();
         var (periodStart, periodEnd) = (from, to);
         return await (from l in db.Set<JournalLine>().AsNoTracking()
                       join e in db.Set<JournalEntry>() on l.JournalEntryId equals e.Id
                       where e.CompanyId == companyId && e.PostingDate >= periodStart && e.PostingDate <= periodEnd
+                            && (costCenterId == null || l.CostCenterId == costCenterId)
                       group l by l.AccountId into g
                       select new { g.Key, Net = g.Sum(x => x.DebitBase - x.CreditBase) }).ToDictionaryAsync(x => x.Key, x => x.Net, ct);
     }

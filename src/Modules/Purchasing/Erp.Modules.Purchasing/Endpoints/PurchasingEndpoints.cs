@@ -62,7 +62,11 @@ public sealed record PaymentAllocationDto(Guid SupplierInvoiceId, string Invoice
 
 public sealed record PaymentDto(Guid Id, string PaymentNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr, DateOnly PaymentDate,
     Guid PaymentAccountId, string? Reference, decimal GrossAmount, decimal WhtAmount, decimal NetAmount, string Status, Guid? JournalEntryId,
-    IReadOnlyList<PaymentAllocationDto> Allocations, string Currency, decimal ExchangeRate, decimal FxDifference);
+    IReadOnlyList<PaymentAllocationDto> Allocations, string Currency, decimal ExchangeRate, decimal FxDifference, string? ChequeNo = null,
+    DateOnly? ChequeDate = null, string? PdcStatus = null, DateOnly? PdcClearedDate = null);
+
+public sealed record PdcIssuedRow(Guid PaymentId, string PaymentNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr, string ChequeNo,
+    DateOnly ChequeDate, decimal Amount, int DaysToMaturity);
 
 public sealed record GrniRow(Guid GoodsReceiptId, string GrnNo, DateOnly ReceiptDate, string SupplierNameEn, string SupplierNameAr, string Sku,
     decimal QuantityNotInvoiced, decimal UnitCost, decimal Value);
@@ -218,6 +222,12 @@ internal static class PurchasingEndpoints
             .RequirePermission(PurchasingPermissions.SuppliersRead);
         g.MapPost("/payments", async (PaymentRequest r, SupplierPaymentService s, ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
             (await PaymentsAsync(db, t, (await s.CreateAsync(r, ct)).Id, null, ct)).Single()).RequirePermission(PurchasingPermissions.PaymentsPost);
+        g.MapPost("/payments/{id:guid}/clear", async (Guid id, PdcClearRequest r, SupplierPaymentService s, ErpDbContext db, ITenantContext t,
+            CancellationToken ct) =>
+        {
+            await s.ClearAsync(id, r, ct);
+            return (await PaymentsAsync(db, t, id, null, ct)).Single();
+        }).RequirePermission(PurchasingPermissions.PaymentsPost);
         g.MapPost("/payments/{id:guid}/reverse", async (Guid id, ReverseRequest r, SupplierPaymentService s, ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
         {
             await s.ReverseAsync(id, r, ct);
@@ -227,6 +237,7 @@ internal static class PurchasingEndpoints
         g.MapGet("/reports/grni", GrniAsync).RequirePermission(PurchasingPermissions.ReportsRead);
         g.MapGet("/reports/aging", AgingAsync).RequirePermission(PurchasingPermissions.ReportsRead);
         g.MapGet("/reports/wht", WhtAsync).RequirePermission(PurchasingPermissions.ReportsRead);
+        g.MapGet("/reports/pdc-issued", PdcIssuedAsync).RequirePermission(PurchasingPermissions.ReportsRead);
     }
 
     private static void MapOrderAction(RouteGroupBuilder g, string action, Func<PurchaseOrderService, Guid, CancellationToken, Task<PurchaseOrder>> run,
@@ -333,6 +344,18 @@ internal static class PurchasingEndpoints
                 .OrderBy(a => a.Sku).ToList())).ToList();
     }
 
+    /// <summary>Cheques issued and not yet cleared, by maturity; the total equals the PDC payable account.</summary>
+    private static async Task<List<PdcIssuedRow>> PdcIssuedAsync(ErpDbContext db, ITenantContext t, IClock clock, CancellationToken ct)
+    {
+        var list = await db.Set<SupplierPayment>().AsNoTracking()
+            .Where(p => p.CompanyId == t.RequireCompanyId() && p.Status == DocumentStatus.Posted && p.PdcStatus == PdcStatus.Issued)
+            .OrderBy(p => p.ChequeDate).ToListAsync(ct);
+        var suppliers = await SuppliersAsync(db, list.Select(p => p.SupplierId), ct);
+        var today = clock.Today;
+        return list.Select(p => new PdcIssuedRow(p.Id, p.PaymentNo, p.SupplierId, suppliers[p.SupplierId].NameEn, suppliers[p.SupplierId].NameAr, p.ChequeNo!,
+            p.ChequeDate!.Value, PurchasingRules.ToBase(p.NetAmount, p.ExchangeRate), p.ChequeDate.Value.DayNumber - today.DayNumber)).ToList();
+    }
+
     private static async Task<List<PaymentDto>> PaymentsAsync(ErpDbContext db, ITenantContext t, Guid? id, Guid? supplierId, CancellationToken ct)
     {
         var q = db.Set<SupplierPayment>().AsNoTracking().Include(p => p.Allocations).Where(p => p.CompanyId == t.RequireCompanyId());
@@ -346,7 +369,8 @@ internal static class PurchasingEndpoints
         return list.Select(p => new PaymentDto(p.Id, p.PaymentNo, p.SupplierId, suppliers[p.SupplierId].NameEn, suppliers[p.SupplierId].NameAr, p.PaymentDate,
             p.PaymentAccountId, p.Reference, p.GrossAmount, p.WhtAmount, p.NetAmount, p.Status.ToString(), p.JournalEntryId,
             p.Allocations.Select(a => new PaymentAllocationDto(a.SupplierInvoiceId, invoices[a.SupplierInvoiceId].InvoiceNo,
-                invoices[a.SupplierInvoiceId].SupplierRef, a.Amount, a.WhtAmount)).ToList(), p.Currency, p.ExchangeRate, p.FxDifference)).ToList();
+                invoices[a.SupplierInvoiceId].SupplierRef, a.Amount, a.WhtAmount)).ToList(), p.Currency, p.ExchangeRate, p.FxDifference,
+            p.ChequeNo, p.ChequeDate, p.PdcStatus?.ToString(), p.PdcClearedDate)).ToList();
     }
 
     /// <summary>Received but not yet invoiced, at receipt cost, next to the GRNI account balance.</summary>

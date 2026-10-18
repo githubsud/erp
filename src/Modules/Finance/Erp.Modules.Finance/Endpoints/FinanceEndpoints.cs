@@ -48,6 +48,12 @@ internal static class FinanceEndpoints
 
         g.MapGet("/fiscal-years", ListFiscalYears).RequirePermission(FinancePermissions.AccountsRead);
         g.MapPost("/fiscal-years", CreateFiscalYear).RequirePermission(FinancePermissions.PeriodsManage);
+        g.MapGet("/fiscal-years/{id:guid}/close-checklist", (Guid id, YearEndService s, CancellationToken ct) => s.ChecklistAsync(id, ct))
+            .RequirePermission(FinancePermissions.PeriodsManage);
+        g.MapPost("/fiscal-years/{id:guid}/close", async (Guid id, YearEndService s, CancellationToken ct) => ToDto(await s.CloseAsync(id, ct)))
+            .RequirePermission(FinancePermissions.PeriodsManage);
+        g.MapPost("/fiscal-years/{id:guid}/reopen", async (Guid id, YearEndService s, CancellationToken ct) => ToDto(await s.ReopenAsync(id, ct)))
+            .RequirePermission(FinancePermissions.PeriodsManage);
         g.MapPost("/periods/{id:guid}/close", (Guid id, ErpDbContext db, CancellationToken ct) => SetPeriodStatus(id, FiscalStatus.Closed, db, ct))
             .RequirePermission(FinancePermissions.PeriodsManage);
         g.MapPost("/periods/{id:guid}/reopen", (Guid id, ErpDbContext db, CancellationToken ct) => SetPeriodStatus(id, FiscalStatus.Open, db, ct))
@@ -70,7 +76,10 @@ internal static class FinanceEndpoints
         g.MapGet("/reports/account-ledger", (Guid accountId, DateOnly from, DateOnly to, FinanceReports r, CancellationToken ct) =>
             r.AccountLedgerAsync(accountId, from, to, ct)).RequirePermission(FinancePermissions.ReportsRead);
         g.MapGet("/reports/profit-and-loss", (DateOnly from, DateOnly to, FinancialStatements s, CancellationToken ct, DateOnly? compareFrom = null,
-            DateOnly? compareTo = null) => s.ProfitAndLossAsync(from, to, compareFrom, compareTo, ct)).RequirePermission(FinancePermissions.ReportsRead);
+            DateOnly? compareTo = null, Guid? costCenterId = null) => s.ProfitAndLossAsync(from, to, compareFrom, compareTo, ct, costCenterId))
+            .RequirePermission(FinancePermissions.ReportsRead);
+        g.MapGet("/reports/cash-flow", (DateOnly from, DateOnly to, CashFlowReport r, CancellationToken ct) => r.BuildAsync(from, to, ct))
+            .RequirePermission(FinancePermissions.ReportsRead);
         g.MapGet("/reports/profit-and-loss.pdf", async (DateOnly from, DateOnly to, StatementsPdf pdf, CancellationToken ct, DateOnly? compareFrom = null,
             DateOnly? compareTo = null) =>
         {

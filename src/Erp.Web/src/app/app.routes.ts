@@ -327,6 +327,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/finance/bank').then((m) => m.BankStatementPage)
       },
       {
+        path: 'finance/years',
+        canActivate: [permissionGuard('fin.accounts:read')],
+        loadComponent: () => import('./features/finance/years').then((m) => m.FiscalYearsPage)
+      },
+      {
         path: 'finance/journal',
         canActivate: [permissionGuard('fin.journal:read')],
         loadComponent: () => import('./features/finance/journal').then((m) => m.JournalPage)

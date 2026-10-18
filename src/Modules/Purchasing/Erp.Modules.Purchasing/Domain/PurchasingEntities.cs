@@ -90,6 +90,8 @@ public sealed class PurchaseOrderLine : TenantEntity
 
 public enum DocumentStatus { Posted, Reversed }
 
+public enum PdcStatus { Issued, Cleared }
+
 public sealed class GoodsReceipt : TenantEntity
 {
     public Guid CompanyId { get; init; }
@@ -242,6 +244,12 @@ public sealed class SupplierPayment : TenantEntity
     public decimal NetAmount { get; set; }
     public DocumentStatus Status { get; set; } = DocumentStatus.Posted;
     public Guid? JournalEntryId { get; set; }
+
+    /// <summary>A post-dated cheque credits PDC payable until it clears; <see cref="PaymentAccountId"/> is the bank it is drawn on.</summary>
+    public string? ChequeNo { get; init; }
+    public DateOnly? ChequeDate { get; init; }
+    public PdcStatus? PdcStatus { get; set; }
+    public DateOnly? PdcClearedDate { get; set; }
     public List<SupplierPaymentAllocation> Allocations { get; init; } = [];
 }
 
