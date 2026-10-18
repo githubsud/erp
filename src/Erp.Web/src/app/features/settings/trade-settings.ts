@@ -22,13 +22,10 @@ type MasterKind = 'warehouses' | 'groups' | 'uoms';
         <div class="section-title">{{ 'nav.orders' | t }}</div>
         <form [formGroup]="purchase" class="form-grid" (ngSubmit)="savePurchase()">
           <mat-form-field>
-            <mat-label>{{ 'tset.threshold' | t }}</mat-label>
-            <input matInput type="number" min="0" formControlName="approvalThreshold" dir="ltr" />
-          </mat-form-field>
-          <mat-form-field>
             <mat-label>{{ 'tset.tolerance' | t }}</mat-label>
             <input matInput type="number" min="0" formControlName="priceTolerancePercent" dir="ltr" />
           </mat-form-field>
+          <p class="secondary">{{ 'tset.approvalsMoved' | t }} <a routerLink="/settings/approvals">{{ 'nav.approvalRules' | t }}</a></p>
           @if (canManage) {
             <div class="actions"><button mat-flat-button [disabled]="purchase.invalid">{{ 'app.save' | t }}</button></div>
           }
@@ -132,7 +129,6 @@ export class TradeSettingsPage {
   };
   protected readonly negative = new FormControl(false, { nonNullable: true });
   protected readonly purchase = this.fb.group({
-    approvalThreshold: [10000, [Validators.required, Validators.min(0)]],
     priceTolerancePercent: [2, [Validators.required, Validators.min(0)]]
   });
 
@@ -160,7 +156,7 @@ export class TradeSettingsPage {
   protected savePurchase(): void {
     const v = this.purchase.getRawValue();
     this.trade
-      .savePurchaseSettings({ approvalThreshold: Number(v.approvalThreshold), priceTolerancePercent: Number(v.priceTolerancePercent) })
+      .savePurchaseSettings({ priceTolerancePercent: Number(v.priceTolerancePercent) })
       .subscribe({ next: () => this.notify.success(), error: (e) => this.notify.error(e) });
   }
 

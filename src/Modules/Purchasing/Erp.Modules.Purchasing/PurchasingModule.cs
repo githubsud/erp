@@ -17,6 +17,9 @@ public sealed class PurchasingModule : IModule
     {
         services.AddScoped<SupplierService>();
         services.AddScoped<PurchaseOrderService>();
+        services.AddScoped<IApprovalDocument, PurchaseOrderApproval>();
+        services.AddScoped<PurchaseRequestService>();
+        services.AddScoped<IApprovalDocument, PurchaseRequestApproval>();
         services.AddScoped<GoodsReceiptService>();
         services.AddScoped<SupplierInvoiceService>();
         services.AddScoped<LandedCostService>();
@@ -27,5 +30,9 @@ public sealed class PurchasingModule : IModule
         services.AddSingleton<IPermissionProvider, PurchasingPermissionProvider>();
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder app) => PurchasingEndpoints.Map(app);
+    public void MapEndpoints(IEndpointRouteBuilder app)
+    {
+        PurchasingEndpoints.Map(app);
+        PurchaseRequestEndpoints.Map(app);
+    }
 }

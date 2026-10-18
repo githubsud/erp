@@ -9,6 +9,7 @@ import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import { CURRENCIES, GoodsReceipt, Item, ItemUnit, Master, OrderStatus, PurchaseOrder, Supplier } from '../../core/trade.models';
+import { ApprovalDecisionDialog, ApprovalTrail } from '../../shared/approvals';
 import { ConfirmDialog, ReverseDialog, ReverseResult } from '../../shared/dialogs';
 import { SHARED } from '../../shared/shared';
 
@@ -176,7 +177,6 @@ type OrderLineGroup = FormGroup<{
       <div class="actions bar">
         <button mat-button type="button" (click)="addLine()"><mat-icon>add</mat-icon> {{ 'doc.addLine' | t }}</button>
         <span class="spacer"></span>
-        @if (threshold() !== null) { <span class="secondary">{{ 'po.approvalHint' | t: { n: threshold()! } }}</span> }
         <button mat-stroked-button (click)="save(false)" [disabled]="invalid() || busy()">{{ 'po.saveDraft' | t }}</button>
         <button mat-flat-button (click)="save(true)" [disabled]="invalid() || busy()"><mat-icon>send</mat-icon> {{ 'po.submit' | t }}</button>
       </div>
@@ -197,7 +197,6 @@ export class OrderFormPage implements OnInit {
   protected readonly suppliers = signal<Supplier[]>([]);
   protected readonly warehouses = signal<Master[]>([]);
   protected readonly items = signal<Item[]>([]);
-  protected readonly threshold = signal<number | null>(null);
   protected readonly busy = signal(false);
   protected readonly currencies = CURRENCIES;
   private readonly itemUnits = signal(new Map<string, ItemUnit[]>());
@@ -233,7 +232,6 @@ export class OrderFormPage implements OnInit {
       if (!this.form.value.warehouseId) this.form.patchValue({ warehouseId: w.find((x) => x.isActive)?.id ?? '' });
     });
     this.trade.items({ active: true, pageSize: 500 }).subscribe((r) => this.items.set(r.items));
-    this.trade.purchaseSettings().subscribe((s) => this.threshold.set(s.approvalThreshold));
     const id = this.id();
     if (id) {
       this.trade.order(id).subscribe((o) => {
@@ -400,7 +398,7 @@ export class ReceiveDialog {
 
 @Component({
   selector: 'app-order-detail',
-  imports: [...SHARED],
+  imports: [...SHARED, ApprovalTrail],
   template: `
     @if (order(); as o) {
       <div class="page-header">
@@ -414,8 +412,8 @@ export class ReceiveDialog {
           <button mat-flat-button (click)="act('submit')" [disabled]="busy()"><mat-icon>send</mat-icon> {{ 'po.submit' | t }}</button>
         }
         @if (o.status === 'PendingApproval' && auth.can('pur.orders:approve')) {
-          <button mat-flat-button (click)="act('approve')" [disabled]="busy()"><mat-icon>verified</mat-icon> {{ 'po.approve' | t }}</button>
-          <button mat-stroked-button (click)="act('reject')" [disabled]="busy()">{{ 'po.reject' | t }}</button>
+          <button mat-flat-button (click)="decide(true)" [disabled]="busy()"><mat-icon>verified</mat-icon> {{ 'po.approve' | t }}</button>
+          <button mat-stroked-button (click)="decide(false)" [disabled]="busy()">{{ 'po.reject' | t }}</button>
         }
         @if ((o.status === 'Approved' || o.status === 'PartiallyReceived') && hasOpenStock() && auth.can('pur.receipts:post')) {
           <button mat-flat-button (click)="receive(o)" [disabled]="busy()"><mat-icon>move_to_inbox</mat-icon> {{ 'po.receive' | t }}</button>
@@ -442,6 +440,7 @@ export class ReceiveDialog {
         @if (o.currency !== 'QAR') { <span>{{ 'fx.rateShort' | t }}: <b class="ltr">{{ o.exchangeRate }}</b></span> }
       </div>
       @if (o.notes) { <p class="secondary">{{ o.notes }}</p> }
+      <app-approval-trail docType="purchase_order" [docId]="o.id" [version]="trailVersion()" />
 
       @if (o.gtaNotificationDue) {
         <mat-card appearance="outlined" class="form-card gta" [class.done]="!!o.gtaNotificationRef">
@@ -559,6 +558,7 @@ export class OrderDetailPage implements OnInit {
   protected readonly warehouses = signal<Master[]>([]);
   protected readonly busy = signal(false);
   protected readonly gtaRef = new FormControl('', { nonNullable: true });
+  protected readonly trailVersion = signal(0);
   protected readonly chip = (s: OrderStatus) => `chip ${orderChip(s)}`;
   protected readonly hasOpenStock = computed(() => !!this.order()?.lines.some((l) => l.itemType === 'Stock' && l.quantityReceived < l.quantity));
 
@@ -572,13 +572,22 @@ export class OrderDetailPage implements OnInit {
     return w ? `${w.code}` : '';
   }
 
-  protected act(action: 'submit' | 'approve' | 'reject' | 'cancel' | 'close', confirm = false): void {
+  protected decide(approve: boolean): void {
+    this.dialog
+      .open(ApprovalDecisionDialog, { data: { approve } })
+      .afterClosed()
+      .pipe(filter((c): c is string => c !== undefined))
+      .subscribe((comment) => this.act(approve ? 'approve' : 'reject', false, comment || null));
+  }
+
+  protected act(action: 'submit' | 'approve' | 'reject' | 'cancel' | 'close', confirm = false, comment: string | null = null): void {
     const run = () => {
       this.busy.set(true);
-      this.trade.orderAction(this.id(), action).subscribe({
+      this.trade.orderAction(this.id(), action, comment).subscribe({
         next: (o) => {
           this.busy.set(false);
           this.order.set(o);
+          this.trailVersion.update((v) => v + 1);
           this.notify.success();
         },
         error: (e) => {

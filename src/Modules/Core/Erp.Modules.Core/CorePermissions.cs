@@ -11,6 +11,7 @@ public static class CorePermissions
     public const string UsersManage = "core.users:manage";
     public const string RolesManage = "core.roles:manage";
     public const string AuditRead = "core.audit:read";
+    public const string ApprovalsManage = "core.approvals:manage";
 }
 
 internal sealed class CorePermissionProvider : IPermissionProvider
@@ -22,7 +23,8 @@ internal sealed class CorePermissionProvider : IPermissionProvider
         new(CorePermissions.UsersRead, "View users", "عرض المستخدمين", GeneralManager, Auditor),
         new(CorePermissions.UsersManage, "Manage users", "إدارة المستخدمين", GeneralManager),
         new(CorePermissions.RolesManage, "Manage roles and permissions", "إدارة الأدوار والصلاحيات"),
-        new(CorePermissions.AuditRead, "View audit trail", "عرض سجل التدقيق", GeneralManager, Accountant, Auditor)
+        new(CorePermissions.AuditRead, "View audit trail", "عرض سجل التدقيق", GeneralManager, Accountant, Auditor),
+        new(CorePermissions.ApprovalsManage, "Set approval rules", "إعداد قواعد الاعتماد", GeneralManager)
     ];
 }
 

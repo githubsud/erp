@@ -7,6 +7,7 @@ public static class PurchasingPermissions
 {
     public const string SuppliersRead = "pur.suppliers:read";
     public const string SuppliersManage = "pur.suppliers:manage";
+    public const string RequestsManage = "pur.requests:manage";
     public const string OrdersManage = "pur.orders:manage";
     public const string OrdersApprove = "pur.orders:approve";
     public const string ReceiptsPost = "pur.receipts:post";
@@ -24,6 +25,7 @@ internal sealed class PurchasingPermissionProvider : IPermissionProvider
         new(PurchasingPermissions.SuppliersRead, "View suppliers and purchasing documents", "عرض الموردين ومستندات المشتريات",
             Purchaser, Storekeeper, Accountant, GeneralManager, Auditor),
         new(PurchasingPermissions.SuppliersManage, "Create and edit suppliers", "إضافة وتعديل الموردين", Purchaser, Accountant),
+        new(PurchasingPermissions.RequestsManage, "Raise purchase requests", "تقديم طلبات الشراء", Purchaser, Storekeeper, GeneralManager, HrManager, Accountant),
         new(PurchasingPermissions.OrdersManage, "Create and submit purchase orders", "إنشاء وإرسال أوامر الشراء", Purchaser),
         new(PurchasingPermissions.OrdersApprove, "Approve purchase orders", "اعتماد أوامر الشراء", GeneralManager),
         new(PurchasingPermissions.ReceiptsPost, "Receive goods", "استلام البضاعة", Storekeeper, Purchaser),

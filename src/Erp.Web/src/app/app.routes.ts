@@ -21,6 +21,17 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.DashboardPage) },
+      { path: 'approvals', loadComponent: () => import('./features/approvals/approvals').then((m) => m.ApprovalsPage) },
+      {
+        path: 'settings/approvals',
+        canActivate: [permissionGuard('core.approvals:manage')],
+        loadComponent: () => import('./features/approvals/approvals').then((m) => m.ApprovalRulesPage)
+      },
+      {
+        path: 'purchasing/requests',
+        canActivate: [permissionGuard('pur.requests:manage')],
+        loadComponent: () => import('./features/purchasing/requests').then((m) => m.PurchaseRequestsPage)
+      },
       {
         path: 'employees',
         canActivate: [permissionGuard('hr.employees:read')],

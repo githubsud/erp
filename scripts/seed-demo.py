@@ -8,6 +8,7 @@ Records are left in different states (draft / pending / posted / paid / reversed
     python scripts/seed-demo.py --sales-only        # add the sales scenario to an already seeded company
     python scripts/seed-demo.py --finance-only      # add opening balances and a bank statement to reconcile
     python scripts/seed-demo.py --ess-only          # give employee E003 a self-service sign-in
+    python scripts/seed-demo.py --approvals-only    # a purchase request and a purchase order waiting for the GM
 
 The company is provisioned if it does not exist yet. Run it once per company: business keys (employee numbers,
 SKUs, supplier codes) are unique, so a second run stops at the first duplicate.
@@ -27,6 +28,7 @@ p.add_argument("--api", default="http://localhost:5080")
 p.add_argument("--company", default="demo")
 p.add_argument("--sales-only", action="store_true", help="only add customers, quotations, orders, invoices and receipts")
 p.add_argument("--finance-only", action="store_true", help="only add opening balances and a bank statement to reconcile")
+p.add_argument("--approvals-only", action="store_true", help="only add a purchase request and an order waiting for approval")
 p.add_argument("--ess-only", action="store_true", help="only give employee E003 a self-service sign-in")
 args = p.parse_args()
 API = args.api.rstrip("/")
@@ -232,6 +234,17 @@ def seed_finance():
     print(f"  {result['lines']} lines imported, {result['autoMatched']} matched automatically")
 
 
+def as_user(email, action):
+    """Runs an action signed in as another demo user (approvals need someone other than the submitter)."""
+    global token
+    own = token
+    token = call("POST", "/api/auth/login", {"tenantCode": args.company, "email": email, "password": PASSWORD}, auth=False)["accessToken"]
+    try:
+        return action()
+    finally:
+        token = own
+
+
 def seed_ess():
     """Employee self-service: E003 signs in with the employee number, chooses the demo password and asks for leave."""
     global token
@@ -247,6 +260,34 @@ def seed_ess():
     token = staff_token
     print(f"  Sign in as employee: company '{args.company}', username {access['username']} / {PASSWORD} (phone layout at /me)")
 
+
+def seed_approvals():
+    """The storekeeper asks for tiles (approved straight away, ready to order) and the buyer's large order waits in the GM's inbox."""
+    step("Approvals: purchase request from the store, large order waiting for the General Manager")
+    warehouse = next(w["id"] for w in get("/api/inventory/warehouses") if w["code"] == "MAIN")
+    skus = {i["sku"]: i["id"] for i in get("/api/inventory/items?pageSize=500")["items"]}
+    suppliers = {x["code"]: x["id"] for x in get("/api/purchasing/suppliers")}
+
+    def raise_request():
+        pr = post("/api/purchasing/requests", {"requestDate": "2026-10-17", "requiredDate": "2026-10-25", "warehouseId": warehouse,
+                                               "notes": "Low stock for the Lusail showroom order",
+                                               "lines": [{"itemId": skus["TIL-6060"], "quantity": 300, "estimatedPrice": 42}]})
+        return post(f"/api/purchasing/requests/{pr['id']}/submit")
+    as_user("store@demo.qa", raise_request)
+
+    def big_order():
+        po = post("/api/purchasing/orders", {"supplierId": suppliers["QSTEEL"], "orderDate": "2026-10-18", "warehouseId": warehouse,
+                                             "notes": "Steel for the Al Wakra villa second phase",
+                                             "lines": [{"itemId": skus["STL-16"], "quantity": 20, "unitPrice": 2550}]})
+        return post(f"/api/purchasing/orders/{po['id']}/submit")
+    po = as_user("buyer@demo.qa", big_order)
+    print(f"  {po['poNo']} ({po['total']:,.2f} QAR) waits for gm@demo.qa in Approvals")
+
+
+if args.approvals_only:
+    seed_approvals()
+    print(f"\n✓ Approval examples added to '{args.company}'.")
+    sys.exit(0)
 
 if args.ess_only:
     seed_ess()
@@ -514,7 +555,7 @@ post("/api/purchasing/payments", {"supplierId": sup["DBM"], "date": "2026-10-10"
 step("PO 2 - rebar from Qatar Steel: above approval threshold, approved, received, invoice held for price variance")
 po = order("QSTEEL", "2026-10-06", YARD, [("STL-10", 10, 2600), ("STL-16", 10, 2550)], notes="For Al Wakra villa project")
 post(f"/api/purchasing/orders/{po['id']}/submit")
-post(f"/api/purchasing/orders/{po['id']}/approve")
+as_user("gm@demo.qa", lambda: post(f"/api/purchasing/orders/{po['id']}/approve", {"comment": "Within the project budget"}))
 grn = receive(po, "2026-10-08", [10, 10], "QS-DN-44120")
 invoice("QSTEEL", "QST/26/0918", "2026-10-09", [
     {"lineType": "Goods", "goodsReceiptLineId": grn["lines"][0]["id"], "quantity": 10, "unitPrice": 2700},
@@ -559,6 +600,7 @@ put(f"/api/inventory/counts/{count['id']}/lines", [{"itemId": i, "countedQuantit
 seed_sales()
 seed_finance()
 seed_ess()
+seed_approvals()
 
 print(f"\n✓ Done. Sign in at http://localhost:4200 with company '{args.company}', owner@demo.qa / {PASSWORD}")
 print("  Other users (same password): hr@ payroll@ accounts@ store@ buyer@ gm@ sales@ demo.qa")

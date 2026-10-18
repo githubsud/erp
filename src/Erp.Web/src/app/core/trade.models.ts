@@ -360,7 +360,6 @@ export interface SupplierPayment {
 }
 
 export interface PurchaseSettings {
-  approvalThreshold: number;
   priceTolerancePercent: number;
 }
 

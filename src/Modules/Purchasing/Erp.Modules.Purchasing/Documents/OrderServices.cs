@@ -12,7 +12,7 @@ public sealed record SupplierRequest(string Code, string? NameEn, string? NameAr
     string? TaxCardNo, string? CrNo, string? Email, string? Phone, int PaymentTermsDays = 30, WhtCategory DefaultWhtCategory = WhtCategory.None,
     bool IsActive = true, string? Currency = null);
 
-public sealed record PurchaseSettingsRequest(decimal ApprovalThreshold, decimal PriceTolerancePercent);
+public sealed record PurchaseSettingsRequest(decimal PriceTolerancePercent);
 
 /// <summary>Quantity and price are in <see cref="UomId"/> when given (an alternative unit of the item), otherwise in its base unit.</summary>
 public sealed record OrderLineRequest(Guid ItemId, string? Description, decimal Quantity, decimal UnitPrice, WhtCategory? WhtCategory = null, Guid? UomId = null);
@@ -65,7 +65,6 @@ internal sealed class SupplierService(ErpDbContext db, ITenantContext tenant)
     public async Task<PurchaseSettings> SaveSettingsAsync(PurchaseSettingsRequest r, CancellationToken ct)
     {
         var settings = await db.Set<PurchaseSettings>().SingleAsync(s => s.CompanyId == tenant.RequireCompanyId(), ct);
-        settings.ApprovalThreshold = Guard.NonNegative(r.ApprovalThreshold, "approvalThreshold");
         settings.PriceTolerancePercent = Guard.NonNegative(r.PriceTolerancePercent, "priceTolerancePercent");
         await db.SaveChangesAsync(ct);
         return settings;
@@ -74,8 +73,9 @@ internal sealed class SupplierService(ErpDbContext db, ITenantContext tenant)
     internal static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-/// <summary>Purchase orders: draft → submitted (auto-approved under the threshold, otherwise pending approval) → received → closed.</summary>
-internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenant, INumberingService numbering, IInventoryQueries inventory, IClock clock)
+/// <summary>Purchase orders: draft → submitted (approved straight away unless an approval rule applies to the amount) → received → closed.</summary>
+internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenant, INumberingService numbering, IInventoryQueries inventory, IClock clock,
+    IApprovalService approvals)
 {
     public const string SourceType = "purchase_order";
 
@@ -158,28 +158,45 @@ internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenan
             var order = await FindAsync(id, token);
             if (order.Status != PurchaseOrderStatus.Draft)
                 throw new ConflictException("pur.po_not_draft", "Only draft orders can be submitted.", "يمكن إرسال أوامر الشراء المسودة فقط.");
-            var settings = await db.Set<PurchaseSettings>().AsNoTracking().SingleAsync(s => s.CompanyId == order.CompanyId, token);
             order.SubmittedAt = clock.UtcNow;
-            order.RequiresApproval = order.Total >= settings.ApprovalThreshold;
+            var supplier = await db.Set<Supplier>().AsNoTracking().SingleAsync(s => s.Id == order.SupplierId, token);
+            var outcome = await approvals.SubmitAsync(new ApprovalSubmission(SourceType, order.Id, order.PoNo, Money.Round(order.Total * order.ExchangeRate),
+                $"{supplier.NameEn} · {order.Currency} {order.Total:N2}", $"{supplier.NameAr} · {order.Currency} {order.Total:N2}"), token);
+            order.RequiresApproval = outcome == ApprovalOutcome.Pending;
             if (order.RequiresApproval) order.Status = PurchaseOrderStatus.PendingApproval;
             else await ApproveCoreAsync(order, token);
             await db.SaveChangesAsync(token);
             return order;
         }, ct);
 
-    public Task<PurchaseOrder> ApproveAsync(Guid id, CancellationToken ct) =>
+    /// <summary>Decides the current approval step from the order screen (same checks as the approvals inbox).</summary>
+    public Task<PurchaseOrder> DecideAsync(Guid id, bool approve, string? comment, CancellationToken ct) =>
         db.InTransactionAsync(async token =>
         {
             var order = await FindAsync(id, token);
             if (order.Status != PurchaseOrderStatus.PendingApproval)
                 throw new ConflictException("pur.po_not_pending", "This order is not waiting for approval.", "أمر الشراء ليس بانتظار الاعتماد.");
-            await ApproveCoreAsync(order, token);
-            await db.SaveChangesAsync(token);
-            return order;
+            await approvals.DecideAsync(SourceType, id, approve, comment, token);
+            return await FindAsync(id, token);
         }, ct);
 
-    public Task<PurchaseOrder> RejectAsync(Guid id, CancellationToken ct) => TransitionAsync(id, PurchaseOrderStatus.Draft, ct,
-        PurchaseOrderStatus.PendingApproval);
+    /// <summary>Called by the approval workflow when the last step is approved.</summary>
+    internal async Task OnApprovedAsync(Guid id, CancellationToken ct)
+    {
+        var order = await FindAsync(id, ct);
+        if (order.Status != PurchaseOrderStatus.PendingApproval) return;
+        await ApproveCoreAsync(order, ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>A rejected order goes back to draft for the buyer to change and resubmit.</summary>
+    internal async Task OnRejectedAsync(Guid id, CancellationToken ct)
+    {
+        var order = await FindAsync(id, ct);
+        if (order.Status != PurchaseOrderStatus.PendingApproval) return;
+        order.Status = PurchaseOrderStatus.Draft;
+        await db.SaveChangesAsync(ct);
+    }
 
     public Task<PurchaseOrder> CancelAsync(Guid id, CancellationToken ct) =>
         db.InTransactionAsync(async token =>
@@ -188,6 +205,7 @@ internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenan
             if (order.Lines.Any(l => l.QuantityReceived > 0 || l.QuantityInvoiced > 0))
                 throw new ConflictException("pur.po_has_activity", "Orders with receipts or invoices cannot be cancelled; close them instead.",
                     "لا يمكن إلغاء أمر شراء عليه استلامات أو فواتير؛ قم بإغلاقه بدلاً من ذلك.");
+            await approvals.WithdrawAsync(SourceType, id, token);
             return await TransitionAsync(id, PurchaseOrderStatus.Cancelled, token,
                 PurchaseOrderStatus.Draft, PurchaseOrderStatus.PendingApproval, PurchaseOrderStatus.Approved);
         }, ct);
@@ -351,4 +369,15 @@ internal sealed class GoodsReceiptService(ErpDbContext db, ITenantContext tenant
             await db.SaveChangesAsync(token);
             return receipt;
         }, ct);
+}
+
+/// <summary>Purchase orders in the shared approval workflow.</summary>
+internal sealed class PurchaseOrderApproval(PurchaseOrderService orders) : IApprovalDocument
+{
+    public string DocType => PurchaseOrderService.SourceType;
+    public string NameEn => "Purchase order";
+    public string NameAr => "أمر شراء";
+    public IReadOnlyList<ApprovalStepRule> DefaultSteps => [new(10_000m, DefaultRoles.GeneralManager)];
+    public Task OnApprovedAsync(Guid docId, CancellationToken ct) => orders.OnApprovedAsync(docId, ct);
+    public Task OnRejectedAsync(Guid docId, string? comment, CancellationToken ct) => orders.OnRejectedAsync(docId, ct);
 }

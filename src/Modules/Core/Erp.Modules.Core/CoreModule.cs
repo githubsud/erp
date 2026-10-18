@@ -1,3 +1,4 @@
+using Erp.Modules.Core.Approvals;
 using Erp.Infrastructure.Web;
 using Erp.Modules.Core.Auth;
 using Erp.Modules.Core.Domain;
@@ -28,8 +29,15 @@ public sealed class CoreModule : IModule
         services.AddScoped<ICompanyProfileProvider, CompanyProfileProvider>();
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IUserAccounts, UserAccounts>();
+        services.AddScoped<ApprovalService>();
+        services.AddScoped<IApprovalService>(sp => sp.GetRequiredService<ApprovalService>());
+        services.AddScoped<ITenantProvisioner, ApprovalProvisioner>();
         services.AddSingleton<IPermissionProvider, CorePermissionProvider>();
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder app) => CoreEndpoints.Map(app);
+    public void MapEndpoints(IEndpointRouteBuilder app)
+    {
+        CoreEndpoints.Map(app);
+        ApprovalEndpoints.Map(app);
+    }
 }

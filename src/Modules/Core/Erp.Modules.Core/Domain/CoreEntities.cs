@@ -40,6 +40,9 @@ public sealed class Company : TenantEntity
     public string? Phone { get; set; }
     public string? Email { get; set; }
     public string BaseCurrency { get; init; } = Money.BaseCurrency;
+
+    /// <summary>Segregation of duties: when false nobody approves a document they submitted themselves.</summary>
+    public bool AllowSelfApproval { get; set; }
     public uint Version { get; private set; }
 }
 

@@ -56,7 +56,8 @@ export class TradeApi {
   order = (id: string) => this.api.get<PurchaseOrder>(`purchasing/orders/${id}`);
   saveOrder = (id: string | null, body: unknown) =>
     id ? this.api.put<PurchaseOrder>(`purchasing/orders/${id}`, body) : this.api.post<PurchaseOrder>('purchasing/orders', body);
-  orderAction = (id: string, action: 'submit' | 'approve' | 'reject' | 'cancel' | 'close') => this.api.post<PurchaseOrder>(`purchasing/orders/${id}/${action}`);
+  orderAction = (id: string, action: 'submit' | 'approve' | 'reject' | 'cancel' | 'close', comment?: string | null) =>
+    this.api.post<PurchaseOrder>(`purchasing/orders/${id}/${action}`, { comment: comment ?? null });
   setGtaNotification = (id: string, reference: string) => this.api.put<PurchaseOrder>(`purchasing/orders/${id}/gta-notification`, { reference });
   receipts = (params: { purchaseOrderId?: string; supplierId?: string } = {}) => this.api.get<GoodsReceipt[]>('purchasing/receipts', params);
   createReceipt = (body: unknown) => this.api.post<GoodsReceipt>('purchasing/receipts', body);

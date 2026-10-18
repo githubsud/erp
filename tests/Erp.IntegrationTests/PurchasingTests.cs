@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Erp.IntegrationTests.Infrastructure;
 
@@ -16,14 +17,14 @@ public sealed class PurchasingTests(ErpFixture fixture)
     public sealed record Invoice(Guid Id, string InvoiceNo, string Status, string MatchStatus, decimal Total, decimal WhtAmount, decimal OpenAmount);
     public sealed record Payment(Guid Id, string PaymentNo, decimal GrossAmount, decimal WhtAmount, decimal NetAmount, string Status);
 
-    private static async Task<Guid> SupplierAsync(HttpClient c, string code, bool resident = true, string defaultWht = "None") =>
+    internal static async Task<Guid> SupplierAsync(HttpClient c, string code, bool resident = true, string defaultWht = "None") =>
         (await c.PostAsync<JsonElement>("/api/purchasing/suppliers", new
         {
             code, nameEn = $"Supplier {code}", nameAr = "مورد", country = resident ? "QA" : "GB", isResident = resident,
             hasPermanentEstablishment = false, paymentTermsDays = 30, defaultWhtCategory = defaultWht
         })).GetProperty("id").GetGuid();
 
-    private static async Task<Order> OrderAsync(HttpClient c, Guid supplier, Guid warehouse, params (Guid Item, decimal Qty, decimal Price)[] lines)
+    internal static async Task<Order> OrderAsync(HttpClient c, Guid supplier, Guid warehouse, params (Guid Item, decimal Qty, decimal Price)[] lines)
     {
         var order = await c.PostAsync<Order>("/api/purchasing/orders", new
         {
@@ -60,7 +61,9 @@ public sealed class PurchasingTests(ErpFixture fixture)
         var supplier = await SupplierAsync(c, "S-LOCAL");
         var bank = (await c.GetAsync<List<FinanceTests.Account>>("/api/finance/accounts")).Single(a => a.Code == "1120").Id;
 
-        // Under the 10,000 threshold an order is approved on submission; above it, it waits for approval.
+        // Under the default 10,000 rule an order is approved on submission; above it, it waits for approval.
+        // A one-person company lets the owner approve their own orders.
+        (await c.PutAsJsonAsync("/api/approvals/settings", new { allowSelfApproval = true }, ErpFixture.Json)).EnsureSuccessStatusCode();
         var po = await OrderAsync(c, supplier, main, (pipe, 10m, 100m));
         po.Status.ShouldBe("Approved");
         var big = await OrderAsync(c, supplier, main, (pipe, 200m, 100m));
@@ -166,6 +169,7 @@ public sealed class PurchasingTests(ErpFixture fixture)
         var bank = (await c.GetAsync<List<FinanceTests.Account>>("/api/finance/accounts")).Single(a => a.Code == "1120").Id;
 
         // The contract with a non-resident must be notified to the GTA within 30 days of approval.
+        (await c.PutAsJsonAsync("/api/approvals/settings", new { allowSelfApproval = true }, ErpFixture.Json)).EnsureSuccessStatusCode();
         var po = await OrderAsync(c, foreign, main, (consulting, 1m, 10_000m));
         po = await c.PostAsync<Order>($"/api/purchasing/orders/{po.Id}/approve", new { });
         po.GtaNotificationDue.ShouldNotBeNull();

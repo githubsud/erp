@@ -23,7 +23,12 @@ interface NavGroup {
 }
 
 const NAV: NavGroup[] = [
-  { items: [{ icon: 'space_dashboard', label: 'nav.dashboard', link: '/dashboard' }] },
+  {
+    items: [
+      { icon: 'space_dashboard', label: 'nav.dashboard', link: '/dashboard' },
+      { icon: 'approval', label: 'nav.approvals', link: '/approvals' }
+    ]
+  },
   {
     label: 'nav.payroll',
     items: [
@@ -54,6 +59,7 @@ const NAV: NavGroup[] = [
     label: 'nav.trade',
     items: [
       { icon: 'factory', label: 'nav.suppliers', link: '/purchasing/suppliers', permission: 'pur.suppliers:read' },
+      { icon: 'playlist_add', label: 'nav.purchaseRequests', link: '/purchasing/requests', permission: 'pur.requests:manage' },
       { icon: 'shopping_cart', label: 'nav.orders', link: '/purchasing/orders', permission: 'pur.suppliers:read' },
       { icon: 'request_quote', label: 'nav.invoices', link: '/purchasing/invoices', permission: 'pur.suppliers:read' },
       { icon: 'price_check', label: 'nav.supplierPayments', link: '/purchasing/payments', permission: 'pur.suppliers:read' },
@@ -83,6 +89,7 @@ const NAV: NavGroup[] = [
     items: [
       { icon: 'tune', label: 'nav.hrSettings', link: '/settings/payroll', permission: 'hr.payroll:read' },
       { icon: 'inventory_2', label: 'nav.tradeSettings', link: '/settings/trade', permission: 'inv.items:read' },
+      { icon: 'rule', label: 'nav.approvalRules', link: '/settings/approvals', permission: 'core.approvals:manage' },
       { icon: 'apartment', label: 'nav.company', link: '/settings/company' },
       { icon: 'shield_lock', label: 'nav.security', link: '/settings/security' },
       { icon: 'group', label: 'nav.users', link: '/settings/users', permission: 'core.users:read' }

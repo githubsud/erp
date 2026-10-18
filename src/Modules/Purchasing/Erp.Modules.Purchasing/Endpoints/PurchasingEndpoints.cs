@@ -17,7 +17,8 @@ public sealed record SupplierDto(Guid Id, string Code, string NameEn, string Nam
     bool SubjectToWht, string? TaxCardNo, string? CrNo, string? Email, string? Phone, int PaymentTermsDays, string DefaultWhtCategory, bool IsActive,
     string Currency);
 
-public sealed record PurchaseSettingsDto(decimal ApprovalThreshold, decimal PriceTolerancePercent);
+public sealed record PurchaseSettingsDto(decimal PriceTolerancePercent);
+public sealed record DecisionRequest(string? Comment);
 
 public sealed record OrderLineDto(Guid Id, int LineNo, Guid ItemId, string Sku, string NameEn, string NameAr, string ItemType, string UomCode,
     string? Description, decimal Quantity, decimal UnitPrice, decimal Amount, decimal QuantityReceived, decimal QuantityInvoiced, string WhtCategory,
@@ -90,12 +91,12 @@ internal static class PurchasingEndpoints
         g.MapGet("/settings", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
         {
             var s = await db.Set<PurchaseSettings>().AsNoTracking().SingleAsync(x => x.CompanyId == t.RequireCompanyId(), ct);
-            return new PurchaseSettingsDto(s.ApprovalThreshold, s.PriceTolerancePercent);
+            return new PurchaseSettingsDto(s.PriceTolerancePercent);
         }).RequirePermission(PurchasingPermissions.SuppliersRead);
         g.MapPut("/settings", async (PurchaseSettingsRequest r, SupplierService s, CancellationToken ct) =>
         {
             var x = await s.SaveSettingsAsync(r, ct);
-            return new PurchaseSettingsDto(x.ApprovalThreshold, x.PriceTolerancePercent);
+            return new PurchaseSettingsDto(x.PriceTolerancePercent);
         }).RequirePermission(PurchasingPermissions.SettingsManage);
 
         g.MapGet("/suppliers", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct, string? search = null) =>
@@ -128,8 +129,12 @@ internal static class PurchasingEndpoints
         g.MapPut("/orders/{id:guid}", async (Guid id, OrderRequest r, PurchaseOrderService s, ErpDbContext db, ITenantContext t, IInventoryQueries inv,
             CancellationToken ct) => await OrderAsync(db, t, inv, (await s.UpdateAsync(id, r, ct)).Id, ct)).RequirePermission(PurchasingPermissions.OrdersManage);
         MapOrderAction(g, "submit", (s, id, ct) => s.SubmitAsync(id, ct), PurchasingPermissions.OrdersManage);
-        MapOrderAction(g, "approve", (s, id, ct) => s.ApproveAsync(id, ct), PurchasingPermissions.OrdersApprove);
-        MapOrderAction(g, "reject", (s, id, ct) => s.RejectAsync(id, ct), PurchasingPermissions.OrdersApprove);
+        g.MapPost("/orders/{id:guid}/approve", async (Guid id, DecisionRequest? r, PurchaseOrderService s, ErpDbContext db, ITenantContext t,
+            IInventoryQueries inv, CancellationToken ct) => await OrderAsync(db, t, inv, (await s.DecideAsync(id, true, r?.Comment, ct)).Id, ct))
+            .RequirePermission(PurchasingPermissions.OrdersApprove);
+        g.MapPost("/orders/{id:guid}/reject", async (Guid id, DecisionRequest? r, PurchaseOrderService s, ErpDbContext db, ITenantContext t,
+            IInventoryQueries inv, CancellationToken ct) => await OrderAsync(db, t, inv, (await s.DecideAsync(id, false, r?.Comment, ct)).Id, ct))
+            .RequirePermission(PurchasingPermissions.OrdersApprove);
         MapOrderAction(g, "cancel", (s, id, ct) => s.CancelAsync(id, ct), PurchasingPermissions.OrdersManage);
         MapOrderAction(g, "close", (s, id, ct) => s.CloseAsync(id, ct), PurchasingPermissions.OrdersManage);
         g.MapPut("/orders/{id:guid}/gta-notification", async (Guid id, GtaNotificationRequest r, PurchaseOrderService s, ErpDbContext db, ITenantContext t,
