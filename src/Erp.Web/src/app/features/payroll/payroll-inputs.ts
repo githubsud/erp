@@ -80,7 +80,7 @@ import { currentMonth } from './payroll-list';
         </ng-container>
         <ng-container matColumnDef="notes">
           <th mat-header-cell *matHeaderCellDef>{{ 'app.notes' | t }}</th>
-          <td mat-cell *matCellDef="let i">{{ i.notes }}</td>
+          <td mat-cell *matCellDef="let i">@if (i.source === 'Attendance') { <span class="chip info">{{ 'nav.attendance' | t }}</span> } {{ i.notes }}</td>
         </ng-container>
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef></th>

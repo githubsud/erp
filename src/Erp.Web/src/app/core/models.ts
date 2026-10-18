@@ -201,6 +201,29 @@ export interface PayrollInput {
   hours: number | null;
   amount: number | null;
   notes: string | null;
+  source: 'Manual' | 'Attendance';
+}
+
+export interface AttendanceSummary {
+  employeeId: string;
+  empNo: string;
+  nameEn: string;
+  nameAr: string;
+  days: number;
+  worked: number;
+  normal: number;
+  night: number;
+  restDay: number;
+  holiday: number;
+}
+
+export interface AttendanceImportResult {
+  dryRun: boolean;
+  committed: boolean;
+  totalRows: number;
+  validRows: number;
+  rows: { row: number; empNo: string | null; name: string | null; ok: boolean; errors: string[] }[];
+  employees: AttendanceSummary[];
 }
 
 export type PayrollStatus = 'Draft' | 'Calculated' | 'Approved' | 'Posted' | 'Paid' | 'Reversed';

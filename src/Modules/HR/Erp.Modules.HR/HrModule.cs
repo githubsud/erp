@@ -31,6 +31,7 @@ public sealed class HrModule : IModule
         services.AddScoped<FinalSettlementService>();
         services.AddScoped<AdvanceService>();
         services.AddScoped<EmployeeImportService>();
+        services.AddScoped<AttendanceImportService>();
         services.AddScoped<IOutboxHandler, DocumentExpiryEmailHandler>();
         services.AddScoped<IOutboxHandler, PayrollPostedEmailHandler>();
         services.AddScoped<IOutboxHandler, WpsDeadlineMissedEmailHandler>();

@@ -247,6 +247,23 @@ public sealed class PayrollInput : TenantEntity
     public decimal? Hours { get; init; }
     public decimal? Amount { get; init; }
     public string? Notes { get; init; }
+    public InputSource Source { get; init; } = InputSource.Manual;
+}
+
+public enum InputSource { Manual, Attendance }
+
+public sealed class AttendanceDay : TenantEntity
+{
+    public Guid EmployeeId { get; init; }
+    public DateOnly WorkDate { get; init; }
+    public TimeOnly TimeIn { get; init; }
+    public TimeOnly TimeOut { get; init; }
+    public bool IsHoliday { get; init; }
+    public decimal WorkedHours { get; init; }
+    public decimal NormalOvertime { get; init; }
+    public decimal NightOvertime { get; init; }
+    public decimal RestDayOvertime { get; init; }
+    public decimal HolidayOvertime { get; init; }
 }
 
 public sealed class PayrollRun : TenantEntity

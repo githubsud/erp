@@ -19,7 +19,7 @@ public sealed class SettlementTests(ErpFixture fixture)
         decimal GratuityProvision, decimal LeaveBalanceDays, decimal UnpaidSalaryDays, decimal TotalEarnings, decimal TotalDeductions,
         decimal NetPayable, IReadOnlyList<Line> Lines);
 
-    private static async Task<Guid> HireWithContractAsync(HttpClient c, string empNo, DateOnly joining, string qid, string account,
+    internal static async Task<Guid> HireWithContractAsync(HttpClient c, string empNo, DateOnly joining, string qid, string account,
         decimal? annualAirTicket = null, string? email = null)
     {
         var e = await c.PostAsync<PayrollTests.Employee>("/api/hr/employees", new

@@ -52,7 +52,7 @@ public sealed record CompanyDocumentDto(Guid Id, string DocType, string NameEn, 
     DateOnly? ExpiryDate, Guid? ResponsibleUserId, string? Notes);
 public sealed record LeaveDto(Guid Id, Guid EmployeeId, string LeaveTypeCode, DateOnly FromDate, DateOnly ToDate, decimal Days, string Status, string? Reason);
 public sealed record PayrollInputDto(Guid Id, Guid EmployeeId, int Year, int Month, string ComponentCode, string? OvertimeType,
-    decimal? Hours, decimal? Amount, string? Notes);
+    decimal? Hours, decimal? Amount, string? Notes, string Source);
 
 public sealed record PayrollRunDto(Guid Id, string RunNo, int Year, int Month, DateOnly PeriodStart, DateOnly PeriodEnd, DateOnly DueDate,
     DateOnly WpsDeadline, string Status, int EmployeeCount, decimal TotalGross, decimal TotalDeductions, decimal TotalNet,
@@ -109,6 +109,19 @@ internal static class HrEndpoints
             await using var stream = file.OpenReadStream();
             return await importer.ImportAsync(stream, dryRun, ct);
         }).RequirePermission(HrPermissions.EmployeesManage).DisableAntiforgery();
+
+        g.MapGet("/imports/attendance/template", () => Results.File(AttendanceImportService.Template(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "attendance_import_template.xlsx"))
+            .RequirePermission(HrPermissions.PayrollPrepare);
+        g.MapPost("/imports/attendance", async (IFormFile file, AttendanceImportService importer, CancellationToken ct, bool dryRun = true) =>
+        {
+            if (file.Length > 20 * 1024 * 1024)
+                throw new BusinessRuleException("import.too_large", "The file is larger than 20 MB.", "حجم الملف أكبر من 20 ميغابايت.");
+            await using var stream = file.OpenReadStream();
+            return await importer.ImportAsync(stream, file.FileName, dryRun, ct);
+        }).RequirePermission(HrPermissions.PayrollPrepare).DisableAntiforgery();
+        g.MapGet("/attendance", (int year, int month, AttendanceImportService s, CancellationToken ct) => s.MonthSummaryAsync(year, month, ct))
+            .RequirePermission(HrPermissions.PayrollRead);
 
         g.MapGet("/employees/{id:guid}/contracts", ListContracts).RequirePermission(HrPermissions.SensitiveView);
         g.MapPost("/employees/{id:guid}/contracts", async (Guid id, ContractRequest r, ContractService s, ErpDbContext db, CancellationToken ct) =>
@@ -393,7 +406,7 @@ internal static class HrEndpoints
                 join c in db.Set<PayComponent>() on i.PayComponentId equals c.Id
                 where i.Year == year && i.Month == month
                 select new { i, c.Code }).ToListAsync(ct))
-        .Select(x => new PayrollInputDto(x.i.Id, x.i.EmployeeId, x.i.Year, x.i.Month, x.Code, x.i.OvertimeType?.ToString(), x.i.Hours, x.i.Amount, x.i.Notes))
+        .Select(x => new PayrollInputDto(x.i.Id, x.i.EmployeeId, x.i.Year, x.i.Month, x.Code, x.i.OvertimeType?.ToString(), x.i.Hours, x.i.Amount, x.i.Notes, x.i.Source.ToString()))
         .ToList();
 
     private static async Task<List<PayrollRunDto>> ListRuns(ErpDbContext db, ITenantContext t, CancellationToken ct) =>

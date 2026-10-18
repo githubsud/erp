@@ -30,6 +30,7 @@ const NAV: NavGroup[] = [
       { icon: 'badge', label: 'nav.employees', link: '/employees', permission: 'hr.employees:read' },
       { icon: 'payments', label: 'nav.payroll', link: '/payroll', permission: 'hr.payroll:read' },
       { icon: 'more_time', label: 'nav.payrollInputs', link: '/payroll-inputs', permission: 'hr.payroll:read' },
+      { icon: 'fingerprint', label: 'nav.attendance', link: '/attendance', permission: 'hr.payroll:read' },
       { icon: 'beach_access', label: 'nav.leave', link: '/leave', permission: 'hr.employees:read' },
       { icon: 'event_busy', label: 'nav.documents', link: '/documents', permission: 'hr.employees:read' },
       { icon: 'handshake', label: 'nav.settlements', link: '/settlements', permission: 'hr.payroll:read' },

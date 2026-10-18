@@ -93,6 +93,16 @@ internal sealed class PayrollInputConfiguration : IEntityTypeConfiguration<Payro
     }
 }
 
+internal sealed class AttendanceDayConfiguration : IEntityTypeConfiguration<AttendanceDay>
+{
+    public void Configure(EntityTypeBuilder<AttendanceDay> b)
+    {
+        b.ToTable("attendance_day", "hr");
+        foreach (var p in new[] { "WorkedHours", "NormalOvertime", "NightOvertime", "RestDayOvertime", "HolidayOvertime" })
+            b.Property<decimal>(p).HasPrecision(9, 2);
+    }
+}
+
 internal sealed class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRun>
 {
     public void Configure(EntityTypeBuilder<PayrollRun> b)

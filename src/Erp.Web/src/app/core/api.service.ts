@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { ConfigService } from './config.service';
 import {
-  Account, Advance, AppUser, Company, CompanyDocument, Contract, Department, EmailPayslipsResult, Employee, EmployeeDocument, EmployeeRequest,
+  Account, Advance, AttendanceSummary, AppUser, Company, CompanyDocument, Contract, Department, EmailPayslipsResult, Employee, EmployeeDocument, EmployeeRequest,
   ExpiringDocument, GratuityRow, HrSettings, JournalEntryDetail, JournalEntrySummary, LeaveBalance, LeaveRequest, LeaveType,
   Paged, PayComponent, PayrollInput, PayrollRun, PayrollRunDetail, Payslip, Role, Settlement, TrialBalance, WpsFile
 } from './models';
@@ -111,6 +111,7 @@ export class ApiService {
     this.post<PayrollRun>(`hr/payroll-runs/${id}/mark-paid`, { paymentAccountId, paymentDate });
   reversePayroll = (id: string, date: string, reason: string) => this.post<PayrollRun>(`hr/payroll-runs/${id}/reverse`, { date, reason });
   payslip = (runId: string, payslipId: string) => this.get<Payslip>(`hr/payroll-runs/${runId}/payslips/${payslipId}`);
+  attendance = (year: number, month: number) => this.get<AttendanceSummary[]>('hr/attendance', { year, month });
   emailPayslips = (runId: string, resend = false) =>
     this.post<EmailPayslipsResult>(`hr/payroll-runs/${runId}/email-payslips${resend ? '?resend=true' : ''}`);
   wpsFiles = (runId: string) => this.get<WpsFile[]>(`hr/payroll-runs/${runId}/wps-files`);
