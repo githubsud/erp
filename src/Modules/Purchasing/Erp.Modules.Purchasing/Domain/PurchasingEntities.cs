@@ -1,0 +1,223 @@
+using Erp.SharedKernel.Domain;
+
+namespace Erp.Modules.Purchasing.Domain;
+
+public sealed class PurchaseSettings : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+
+    /// <summary>Orders at or above this total (QAR) need approval before goods can be received.</summary>
+    public decimal ApprovalThreshold { get; set; } = 10_000m;
+
+    /// <summary>Invoice unit price above the receipt cost by more than this percentage puts the invoice on hold.</summary>
+    public decimal PriceTolerancePercent { get; set; } = 2m;
+}
+
+/// <summary>Withholding tax categories for payments to non-residents without a permanent establishment (Income Tax Law 24/2018).</summary>
+public enum WhtCategory { None, Royalties, TechnicalFees, Interest, Commissions, Brokerage, DirectorFees, AttendanceFees, OtherServices }
+
+public sealed class Supplier : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public required string Code { get; set; }
+    public required string NameEn { get; set; }
+    public required string NameAr { get; set; }
+    public string Country { get; set; } = "QA";
+    public bool IsResident { get; set; } = true;
+    public bool HasPermanentEstablishment { get; set; }
+    public string? TaxCardNo { get; set; }
+    public string? CrNo { get; set; }
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public int PaymentTermsDays { get; set; } = 30;
+    public WhtCategory DefaultWhtCategory { get; set; } = WhtCategory.None;
+    public bool IsActive { get; set; } = true;
+    public uint Version { get; set; }
+
+    /// <summary>Non-residents without a PE in Qatar suffer withholding tax on service-type payments.</summary>
+    public bool SubjectToWht => !IsResident && !HasPermanentEstablishment;
+}
+
+public enum PurchaseOrderStatus { Draft, PendingApproval, Approved, PartiallyReceived, Received, Closed, Cancelled }
+
+public sealed class PurchaseOrder : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public required string PoNo { get; init; }
+    public Guid SupplierId { get; set; }
+    public DateOnly OrderDate { get; set; }
+    public DateOnly? ExpectedDate { get; set; }
+    public Guid WarehouseId { get; set; }
+    public PurchaseOrderStatus Status { get; set; } = PurchaseOrderStatus.Draft;
+    public decimal Total { get; set; }
+    public string? Notes { get; set; }
+    public bool RequiresApproval { get; set; }
+    public DateTimeOffset? SubmittedAt { get; set; }
+    public Guid? ApprovedBy { get; set; }
+    public DateTimeOffset? ApprovedAt { get; set; }
+
+    /// <summary>Contracts with non-residents must be notified to the GTA within 30 days.</summary>
+    public DateOnly? GtaNotificationDue { get; set; }
+    public string? GtaNotificationRef { get; set; }
+    public uint Version { get; set; }
+    public List<PurchaseOrderLine> Lines { get; init; } = [];
+}
+
+public sealed class PurchaseOrderLine : TenantEntity
+{
+    public Guid PurchaseOrderId { get; init; }
+    public int LineNo { get; init; }
+    public Guid ItemId { get; init; }
+    public string? Description { get; init; }
+    public decimal Quantity { get; init; }
+    public decimal UnitPrice { get; init; }
+    public decimal Amount { get; init; }
+    public decimal QuantityReceived { get; set; }
+    public decimal QuantityInvoiced { get; set; }
+    public WhtCategory WhtCategory { get; init; }
+}
+
+public enum DocumentStatus { Posted, Reversed }
+
+public sealed class GoodsReceipt : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public required string GrnNo { get; init; }
+    public Guid PurchaseOrderId { get; init; }
+    public Guid SupplierId { get; init; }
+    public Guid WarehouseId { get; init; }
+    public DateOnly ReceiptDate { get; init; }
+    public string? SupplierDeliveryNote { get; init; }
+    public DocumentStatus Status { get; set; } = DocumentStatus.Posted;
+    public decimal TotalValue { get; set; }
+    public Guid? JournalEntryId { get; set; }
+    public List<GoodsReceiptLine> Lines { get; init; } = [];
+}
+
+public sealed class GoodsReceiptLine : TenantEntity
+{
+    public Guid GoodsReceiptId { get; init; }
+    public int LineNo { get; init; }
+    public Guid PurchaseOrderLineId { get; init; }
+    public Guid ItemId { get; init; }
+    public decimal Quantity { get; init; }
+    public decimal UnitCost { get; init; }
+    public decimal Value { get; set; }
+    public decimal QuantityInvoiced { get; set; }
+}
+
+public enum InvoiceStatus { Draft, Posted, PartiallyPaid, Paid, Reversed }
+
+public enum MatchStatus { NotApplicable, Matched, Variance, Approved }
+
+public enum InvoiceLineType { Goods, Service, LandedCost }
+
+public sealed class SupplierInvoice : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public required string InvoiceNo { get; init; }
+    public Guid SupplierId { get; init; }
+    public required string SupplierRef { get; init; }
+    public DateOnly InvoiceDate { get; init; }
+    public DateOnly DueDate { get; init; }
+    public Guid? PurchaseOrderId { get; init; }
+    public decimal Total { get; set; }
+    public decimal WhtAmount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal WhtWithheld { get; set; }
+    public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
+    public MatchStatus MatchStatus { get; set; } = MatchStatus.NotApplicable;
+    public Guid? VarianceApprovedBy { get; set; }
+    public string? Notes { get; init; }
+    public Guid? JournalEntryId { get; set; }
+    public uint Version { get; set; }
+    public List<SupplierInvoiceLine> Lines { get; init; } = [];
+
+    public decimal OpenAmount => Total - PaidAmount;
+}
+
+public sealed class SupplierInvoiceLine : TenantEntity
+{
+    public Guid SupplierInvoiceId { get; init; }
+    public int LineNo { get; init; }
+    public InvoiceLineType LineType { get; init; }
+    public Guid? GoodsReceiptLineId { get; init; }
+    public Guid? PurchaseOrderLineId { get; init; }
+    public Guid? ItemId { get; init; }
+    public string? Description { get; init; }
+    public decimal Quantity { get; init; }
+    public decimal UnitPrice { get; init; }
+    public decimal Amount { get; init; }
+
+    /// <summary>Goods lines: the receipt unit cost the invoice is matched against.</summary>
+    public decimal? ReceiptUnitCost { get; init; }
+
+    /// <summary>Goods lines: amount − quantity × receipt cost.</summary>
+    public decimal Variance { get; init; }
+    public WhtCategory WhtCategory { get; init; }
+    public decimal WhtRate { get; init; }
+    public decimal WhtAmount { get; init; }
+}
+
+public enum AllocationMethod { Value, Quantity }
+
+public enum ChargeType { Freight, Clearing, CustomsDuty, Insurance, Other }
+
+public sealed class LandedCostVoucher : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public required string VoucherNo { get; init; }
+    public DateOnly VoucherDate { get; init; }
+    public AllocationMethod Method { get; init; }
+    public DocumentStatus Status { get; set; } = DocumentStatus.Posted;
+    public decimal TotalAmount { get; set; }
+    public string? Notes { get; init; }
+    public Guid? JournalEntryId { get; set; }
+    public List<LandedCostCharge> Charges { get; init; } = [];
+    public List<LandedCostAllocation> Allocations { get; init; } = [];
+}
+
+public sealed class LandedCostCharge : TenantEntity
+{
+    public Guid LandedCostVoucherId { get; init; }
+    public int LineNo { get; init; }
+    public ChargeType ChargeType { get; init; }
+    public string? Description { get; init; }
+    public decimal Amount { get; init; }
+    public Guid? SupplierInvoiceId { get; init; }
+}
+
+public sealed class LandedCostAllocation : TenantEntity
+{
+    public Guid LandedCostVoucherId { get; init; }
+    public Guid GoodsReceiptLineId { get; init; }
+    public Guid ItemId { get; init; }
+    public decimal Basis { get; init; }
+    public decimal Amount { get; init; }
+    public decimal ToInventory { get; set; }
+    public decimal ToCostOfSales { get; set; }
+}
+
+public sealed class SupplierPayment : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public required string PaymentNo { get; init; }
+    public Guid SupplierId { get; init; }
+    public DateOnly PaymentDate { get; init; }
+    public Guid PaymentAccountId { get; init; }
+    public string? Reference { get; init; }
+    public decimal GrossAmount { get; set; }
+    public decimal WhtAmount { get; set; }
+    public decimal NetAmount { get; set; }
+    public DocumentStatus Status { get; set; } = DocumentStatus.Posted;
+    public Guid? JournalEntryId { get; set; }
+    public List<SupplierPaymentAllocation> Allocations { get; init; } = [];
+}
+
+public sealed class SupplierPaymentAllocation : TenantEntity
+{
+    public Guid SupplierPaymentId { get; init; }
+    public Guid SupplierInvoiceId { get; init; }
+    public decimal Amount { get; init; }
+    public decimal WhtAmount { get; init; }
+}

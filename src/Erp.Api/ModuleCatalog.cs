@@ -3,6 +3,7 @@ using Erp.Modules.Core;
 using Erp.Modules.Finance;
 using Erp.Modules.HR;
 using Erp.Modules.Inventory;
+using Erp.Modules.Purchasing;
 
 namespace Erp.Api;
 
@@ -14,6 +15,7 @@ public static class ModuleCatalog
         new CoreModule(),
         new FinanceModule(),
         new HrModule(),
-        new InventoryModule()
+        new InventoryModule(),
+        new PurchasingModule()
     ];
 }
