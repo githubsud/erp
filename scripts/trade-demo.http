@@ -1,0 +1,133 @@
+### Qatar SME ERP — procure-to-pay demo (purchasing + inventory)
+### Run top to bottom after steps 1–2 of demo.http (the company must exist). Requires the API on http://localhost:5080.
+
+@api = http://localhost:5080
+@company = demo-trading
+@today = 2026-10-18
+
+### 1. Log in
+# @name login
+POST {{api}}/api/auth/login
+Content-Type: application/json
+
+{ "tenantCode": "{{company}}", "email": "owner@demo.qa", "password": "Demo-Password-2026" }
+
+###
+@token = {{login.response.body.accessToken}}
+
+### 2. Defaults created for every company: MAIN warehouse, GEN item group, units
+# @name warehouses
+GET {{api}}/api/inventory/warehouses
+Authorization: Bearer {{token}}
+
+###
+# @name groups
+GET {{api}}/api/inventory/item-groups
+Authorization: Bearer {{token}}
+
+###
+# @name uoms
+GET {{api}}/api/inventory/uoms
+Authorization: Bearer {{token}}
+
+### 3. A stock item
+# @name cement
+POST {{api}}/api/inventory/items
+Authorization: Bearer {{token}}
+Content-Type: application/json; charset=utf-8
+
+{
+  "sku": "CEM-50", "nameEn": "Cement bag 50 kg", "nameAr": "كيس أسمنت 50 كغ", "itemType": "Stock",
+  "itemGroupId": "{{groups.response.body.$[0].id}}", "uomId": "{{uoms.response.body.$[0].id}}", "reorderLevel": 40, "purchasePrice": 18
+}
+
+### 4. Opening stock: 20 bags at 17.50 (Dr Inventory / Cr Opening Balance Equity)
+POST {{api}}/api/inventory/adjustments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "warehouseId": "{{warehouses.response.body.$[0].id}}", "date": "{{today}}", "reason": "Opening",
+  "lines": [{ "itemId": "{{cement.response.body.id}}", "quantity": 20, "unitCost": 17.5 }]
+}
+
+### 5. A local supplier
+# @name supplier
+POST {{api}}/api/purchasing/suppliers
+Authorization: Bearer {{token}}
+Content-Type: application/json; charset=utf-8
+
+{ "code": "DBM", "nameEn": "Doha Building Materials", "nameAr": "الدوحة لمواد البناء", "country": "QA", "isResident": true,
+  "hasPermanentEstablishment": false, "paymentTermsDays": 30 }
+
+### 6. Purchase order: 100 bags at 18.00 (under the approval threshold → approved on submit)
+# @name po
+POST {{api}}/api/purchasing/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "supplierId": "{{supplier.response.body.id}}", "orderDate": "{{today}}", "warehouseId": "{{warehouses.response.body.$[0].id}}",
+  "lines": [{ "itemId": "{{cement.response.body.id}}", "quantity": 100, "unitPrice": 18 }]
+}
+
+###
+POST {{api}}/api/purchasing/orders/{{po.response.body.id}}/submit
+Authorization: Bearer {{token}}
+
+### 7. Receive 60 bags (Dr Inventory 1,080 / Cr GRNI 1,080)
+# @name grn
+POST {{api}}/api/purchasing/receipts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "purchaseOrderId": "{{po.response.body.id}}", "receiptDate": "{{today}}",
+  "lines": [{ "purchaseOrderLineId": "{{po.response.body.lines[0].id}}", "quantity": 60 }]
+}
+
+### 8. Supplier invoice for the 60 bags at 18.20 (within the 2% tolerance → matched)
+# @name invoice
+POST {{api}}/api/purchasing/invoices
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "supplierId": "{{supplier.response.body.id}}", "supplierRef": "DBM-1001", "invoiceDate": "{{today}}",
+  "lines": [{ "lineType": "Goods", "goodsReceiptLineId": "{{grn.response.body.lines[0].id}}", "quantity": 60, "unitPrice": 18.2 }]
+}
+
+### 9. Post it: GRNI cleared, the 12.00 price difference raises the stock value, Cr Accounts Payable 1,092
+POST {{api}}/api/purchasing/invoices/{{invoice.response.body.id}}/post
+Authorization: Bearer {{token}}
+
+### 10. Pay it from the bank
+# @name accounts
+GET {{api}}/api/finance/accounts
+Authorization: Bearer {{token}}
+
+###
+POST {{api}}/api/purchasing/payments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "supplierId": "{{supplier.response.body.id}}", "date": "{{today}}", "paymentAccountId": "PUT-THE-1120-ACCOUNT-ID-HERE",
+  "reference": "CHQ-000123", "allocations": [{ "supplierInvoiceId": "{{invoice.response.body.id}}", "amount": 1092 }]
+}
+
+### 11. Reports: stock valuation equals the Inventory account; GRNI and aging reconcile to theirs
+GET {{api}}/api/inventory/reports/valuation?asOf={{today}}
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/api/purchasing/reports/grni
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/api/purchasing/reports/aging?asOf={{today}}
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/api/inventory/items/{{cement.response.body.id}}/ledger
+Authorization: Bearer {{token}}

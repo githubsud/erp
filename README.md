@@ -2,7 +2,8 @@
 
 Cloud ERP for Qatari SMEs, built **Payroll & HR first**: WPS salary files, monthly end-of-service gratuity
 accrual, QID/visa/company-document expiry tracking, on an accounting-grade, bilingual (Arabic/English),
-multi-tenant core.
+multi-tenant core. The **Trade bundle** adds purchasing (procure-to-pay with 3-way match, landed cost and
+withholding tax) and inventory (weighted-average cost that reconciles to the ledger).
 
 Design document: [docs/ERP-Blueprint-Qatar-SME.md](docs/ERP-Blueprint-Qatar-SME.md) · Engineering rules: [CLAUDE.md](CLAUDE.md)
 
@@ -19,7 +20,10 @@ Design document: [docs/ERP-Blueprint-Qatar-SME.md](docs/ERP-Blueprint-Qatar-SME.
 | Notifications | Bilingual emails (SMTP) for document expiry, posted payroll and missed WPS deadlines |
 | Advances | Salary advances/loans to employees, outstanding balance, recovery through payroll or settlement |
 | Web app | Angular 22, Arabic-first (RTL) with one-click switch to English, Material 3 design, works on phones; dashboard, employees (profile, contract, documents, leave, advances, final settlement), payroll runs with WPS/PDF downloads, overtime inputs, leave approvals, document expiry, gratuity report, chart of accounts, trial balance, journal, settings, users |
-| Payroll | Monthly runs: calculate → approve → post → WPS SIF file → mark paid (or reverse); proration on a 30-day basis, unpaid leave, sick leave in full/half/unpaid bands (art. 82), GRSIA social insurance for Qatari staff (employee 7% / employer 14%, configurable), overtime by type, bonuses/deductions with 50% cap, salary journal by component and cost centre, gratuity accrual with monthly true-up (GRSIA nationals excluded), gratuity liability report |
+| Payroll | Monthly runs: calculate → approve → post → WPS SIF file → mark paid (or reverse); proration on a 30-day basis, unpaid leave, sick leave in full/half/unpaid bands (art. 82), GRSIA social insurance for Qatari staff (employee 7% / employer 14%, configurable), overtime by type, bonuses/deductions with 50% cap, salary journal by component and cost centre, gratuity accrual with monthly true-up (GRSIA nationals excluded), leave salary and air ticket provisions, gratuity & provisions report, payslips emailed as PDF |
+| Attendance | Biometric import (.xlsx/.csv, daily in/out or raw punches) → normal, night (21:00–06:00), Friday and holiday overtime → payroll inputs, rebuilt on every import |
+| Purchasing | Suppliers (residency / PE flags), purchase orders with amount-based approval and GTA contract-notification tracking for non-residents, goods receipts (Dr Inventory / Cr GRNI), supplier invoices matched to receipts with a price tolerance (held for approval above it), price differences split between stock on hand and cost of sales, freight/customs via a landed cost clearing account allocated by value or quantity, payments across open invoices with 5%/7% WHT for non-residents; supplier aging, GRNI and WHT return reports that reconcile to their accounts |
+| Inventory | Items (stock/service), groups, units, warehouses, weighted-average cost per item per company with row locking (no overselling the last unit), opening stock and adjustments, warehouse transfers, stock counts with frozen quantities, stock ledger per item, stock on hand, reorder alerts, valuation that equals the Inventory account |
 
 ## Quick start
 
@@ -59,10 +63,11 @@ dotnet test                                   # backend
 cd src/Erp.Web && npx ng test --watch=false   # frontend
 ```
 
-- **Unit tests** — payroll, gratuity, IBAN/QID, SIF layout, architecture rules.
+- **Unit tests** — payroll, gratuity, IBAN/QID, SIF layout, attendance overtime split, landed cost allocation, WHT, architecture rules.
 - **Integration tests** — run against real PostgreSQL. They use `ERP_TEST_POSTGRES` (an owner connection string; each run creates and drops
   its own database) or `localhost:5433`, falling back to Testcontainers. They cover tenant isolation (API and RLS), ledger immutability,
-  balance-at-commit, closed periods, concurrent gapless numbering, full payroll cycle, reversal, masking and background jobs.
+  balance-at-commit, closed periods, concurrent gapless numbering, full payroll cycle, reversal, masking, background jobs, payslip email, attendance import, weighted-average costing with
+  concurrent issues, and procure-to-pay reconciled to the trial balance.
 
 ## Configuration
 

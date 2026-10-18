@@ -28,9 +28,10 @@ tests/Erp.IntegrationTests             real PostgreSQL; each test provisions its
 7. **Configurable, not hardcoded.** Legal rates (gratuity days, overtime multipliers, minimum wage, deduction cap, WPS deadline) live in settings tables.
 8. **Gapless numbering** via `INumberingService` inside the posting transaction; number only after validation passes.
 9. **Sensitive data** (QID, passport, IBAN): encrypted columns (`EncryptedStringConverter`), `[Sensitive]` (masked in audit), blind index for search, masked in API without `hr.sensitive:view`.
+10. **Stock moves only through `IStockService`** (Inventory.Contracts): it locks the item valuation row, applies weighted-average cost and writes the insert-only `inv.stock_movement`; callers post the returned values with `IPostingService` in the same transaction. Reversals mirror movements exactly, so stock valuation always equals the Inventory account.
 
 ## Database conventions (checked by `PlatformTests.Every_tenant_table_follows_the_schema_conventions`)
-- Hand-written SQL migrations: `Migrations/V####__name.sql` (once, global version order) and `R__name.sql` (re-run: grants). **Never edit an applied V-script** — add a new one. Version ranges: infra 0001–0009, core 0010–0099, finance 0100–0199, HR 0200–0299.
+- Hand-written SQL migrations: `Migrations/V####__name.sql` (once, global version order) and `R__name.sql` (re-run: grants). **Never edit an applied V-script** — add a new one. Version ranges: infra 0001–0009, core 0010–0099, finance 0100–0199, HR 0200–0299, inventory 0300–0399, purchasing 0400–0499.
 - Every tenant table: `id uuid PK`, `tenant_id`, `created_by`, `created_at`, `updated_by`, `updated_at`, `UNIQUE (tenant_id, id)`, then `SELECT core.enable_tenant_rls('schema','table');`
 - Foreign keys are composite `(tenant_id, x_id)` and **`DEFERRABLE INITIALLY DEFERRED`** (EF doesn't know cross-module insert order).
 - Business keys unique per tenant: `UNIQUE (tenant_id, company_id, code)`.
