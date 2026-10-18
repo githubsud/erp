@@ -29,6 +29,9 @@ body {
 
 // Numbers, codes, IBANs and QIDs read left-to-right even inside Arabic text.
 .ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+// Keep table cells and block elements in their own layout when they carry .ltr.
+td.ltr, th.ltr { display: table-cell; }
+div.ltr { display: block; }
 // On table cells keep table layout and the page's alignment; digits still render left-to-right.
 td.ltr, th.ltr { display: table-cell; direction: inherit; unicode-bidi: normal; }
 .num { font-variant-numeric: tabular-nums; text-align: end; white-space: nowrap; }
@@ -131,6 +134,12 @@ span.secondary, b + .secondary { margin-inline-start: 6px; }
   mat-form-field { width: 100%; }
   .mat-mdc-form-field-subscript-wrapper { display: none; }
   .narrow { width: 120px; }
+  .item-col { width: 34%; }
+  .mat-mdc-form-field-infix { width: auto; min-width: 0; }
   .total-row td { font-weight: 700; padding-block: 10px; }
 }
 .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; margin-block-end: 12px; }
+
+/* Links inside tables and fact rows follow the theme instead of the browser default. */
+.table-wrap a, .facts a, .statement a { color: var(--mat-sys-primary); text-decoration: none; }
+.table-wrap a:hover, .facts a:hover { text-decoration: underline; }

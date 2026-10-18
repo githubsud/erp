@@ -19,9 +19,10 @@ Design document: [docs/ERP-Blueprint-Qatar-SME.md](docs/ERP-Blueprint-Qatar-SME.
 | Onboarding | Excel import of employees with contracts and document expiries (bilingual template, validate first, all-or-nothing) |
 | Notifications | Bilingual emails (SMTP) for document expiry, posted payroll and missed WPS deadlines |
 | Advances | Salary advances/loans to employees, outstanding balance, recovery through payroll or settlement |
-| Web app | Angular 22, Arabic-first (RTL) with one-click switch to English, Material 3 design, works on phones; dashboard, employees (profile, contract, documents, leave, advances, final settlement), payroll runs with WPS/PDF downloads, overtime inputs, leave approvals, document expiry, gratuity report, chart of accounts, trial balance, journal, settings, users |
+| Web app | Angular 22, Arabic-first (RTL) with one-click switch to English, Material 3 design, works on phones; dashboard, employees (profile, contract, documents, leave, advances, final settlement), payroll runs with WPS/PDF downloads, overtime inputs, leave approvals, document expiry, gratuity report, customers, quotations, sales orders, deliveries, invoices, receipts & cheques, credit notes, sales reports, suppliers, purchase orders, supplier invoices, payments, landed costs, items, stock, counts, chart of accounts, trial balance, journal, settings, users |
 | Payroll | Monthly runs: calculate → approve → post → WPS SIF file → mark paid (or reverse); proration on a 30-day basis, unpaid leave, sick leave in full/half/unpaid bands (art. 82), GRSIA social insurance for Qatari staff (employee 7% / employer 14%, configurable), overtime by type, bonuses/deductions with 50% cap, salary journal by component and cost centre, gratuity accrual with monthly true-up (GRSIA nationals excluded), leave salary and air ticket provisions, gratuity & provisions report, payslips emailed as PDF |
 | Attendance | Biometric import (.xlsx/.csv, daily in/out or raw punches) → normal, night (21:00–06:00), Friday and holiday overtime → payroll inputs, rebuilt on every import |
+| Sales | Customers with credit limits (none / cash only / amount) and price lists, quotations converted to orders, credit check on confirmation (hold for a manager or warn), delivery notes issuing stock at average cost (Dr Cost of Sales / Cr Inventory), invoices from deliveries, order service lines or counter sales, line discounts, credit notes for returns (stock back at original cost) and allowances, receipts allocated to invoices including post-dated cheques (held, deposited, bounced); customer statement, aging, cheques-in-hand, delivered-not-invoiced and sales & margin reports that reconcile to their accounts; bilingual invoice, quotation, delivery note, credit note and statement PDFs |
 | Purchasing | Suppliers (residency / PE flags), purchase orders with amount-based approval and GTA contract-notification tracking for non-residents, goods receipts (Dr Inventory / Cr GRNI), supplier invoices matched to receipts with a price tolerance (held for approval above it), price differences split between stock on hand and cost of sales, freight/customs via a landed cost clearing account allocated by value or quantity, payments across open invoices with 5%/7% WHT for non-residents; supplier aging, GRNI and WHT return reports that reconcile to their accounts |
 | Inventory | Items (stock/service), groups, units, warehouses, weighted-average cost per item per company with row locking (no overselling the last unit), opening stock and adjustments, warehouse transfers, stock counts with frozen quantities, stock ledger per item, stock on hand, reorder alerts, valuation that equals the Inventory account |
 
@@ -44,6 +45,10 @@ npx ng serve            # http://localhost:4200 (proxies /api to :5080)
 
 Open **http://localhost:5080/scalar** for the interactive API, or run the requests in [scripts/demo.http](scripts/demo.http)
 (VS Code REST Client / Visual Studio / Rider) to provision a company, hire employees and run a full payroll month.
+
+To explore every module with realistic sample data, run `python scripts/seed-demo.py` (standard library only): it creates the
+company `demo` (owner@demo.qa / Demo-Password-2026) with employees, two payroll months, stock, purchases, sales, cheques and
+reports, leaving records in every state (draft, pending approval, posted, paid, reversed).
 
 ## Deployment
 

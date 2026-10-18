@@ -147,6 +147,100 @@ export const routes: Routes = [
         loadComponent: () => import('./features/purchasing/reports').then((m) => m.PurchasingReportsPage)
       },
       {
+        path: 'sales/customers',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/customers').then((m) => m.CustomersPage)
+      },
+      {
+        path: 'sales/customers/:id',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/customers').then((m) => m.CustomerDetailPage)
+      },
+      {
+        path: 'sales/price-lists',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/price-lists').then((m) => m.PriceListsPage)
+      },
+      {
+        path: 'sales/quotations',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/orders').then((m) => m.QuotationsPage)
+      },
+      {
+        path: 'sales/quotations/new',
+        canActivate: [permissionGuard('sal.orders:manage')],
+        data: { kind: 'quote' },
+        loadComponent: () => import('./features/sales/orders').then((m) => m.SalesDocFormPage)
+      },
+      {
+        path: 'sales/quotations/:id/edit',
+        canActivate: [permissionGuard('sal.orders:manage')],
+        data: { kind: 'quote' },
+        loadComponent: () => import('./features/sales/orders').then((m) => m.SalesDocFormPage)
+      },
+      {
+        path: 'sales/quotations/:id',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/orders').then((m) => m.QuotationDetailPage)
+      },
+      {
+        path: 'sales/orders',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/orders').then((m) => m.SalesOrdersPage)
+      },
+      {
+        path: 'sales/orders/new',
+        canActivate: [permissionGuard('sal.orders:manage')],
+        data: { kind: 'order' },
+        loadComponent: () => import('./features/sales/orders').then((m) => m.SalesDocFormPage)
+      },
+      {
+        path: 'sales/orders/:id/edit',
+        canActivate: [permissionGuard('sal.orders:manage')],
+        data: { kind: 'order' },
+        loadComponent: () => import('./features/sales/orders').then((m) => m.SalesDocFormPage)
+      },
+      {
+        path: 'sales/orders/:id',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/orders').then((m) => m.SalesOrderDetailPage)
+      },
+      {
+        path: 'sales/deliveries',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/orders').then((m) => m.DeliveriesPage)
+      },
+      {
+        path: 'sales/invoices',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/invoices').then((m) => m.SalesInvoicesPage)
+      },
+      {
+        path: 'sales/invoices/new',
+        canActivate: [permissionGuard('sal.invoices:post')],
+        loadComponent: () => import('./features/sales/invoices').then((m) => m.SalesInvoiceFormPage)
+      },
+      {
+        path: 'sales/invoices/:id',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/invoices').then((m) => m.SalesInvoiceDetailPage)
+      },
+      {
+        path: 'sales/credit-notes',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/receipts').then((m) => m.CreditNotesPage)
+      },
+      {
+        path: 'sales/receipts',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/receipts').then((m) => m.ReceiptsPage)
+      },
+      {
+        path: 'sales/reports',
+        canActivate: [permissionGuard('sal.reports:read')],
+        loadComponent: () => import('./features/sales/reports').then((m) => m.SalesReportsPage)
+      },
+      {
         path: 'settings/trade',
         canActivate: [permissionGuard('inv.items:read')],
         loadComponent: () => import('./features/settings/trade-settings').then((m) => m.TradeSettingsPage)

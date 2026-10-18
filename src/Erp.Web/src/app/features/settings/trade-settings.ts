@@ -3,6 +3,8 @@ import { FormBuilder, FormControl, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { NotifyService } from '../../core/notify.service';
+import { SalesApi } from '../../core/sales.api';
+import { CreditControl } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
 import { SHARED } from '../../shared/shared';
@@ -32,6 +34,27 @@ type MasterKind = 'warehouses' | 'groups' | 'uoms';
           }
         </form>
       </mat-card>
+      @if (canReadSales) {
+        <mat-card appearance="outlined" class="form-card">
+          <div class="section-title">{{ 'nav.sales' | t }}</div>
+          <form [formGroup]="salesForm" class="form-grid" (ngSubmit)="saveSales()">
+            <mat-form-field class="full">
+              <mat-label>{{ 'tset.creditControl' | t }}</mat-label>
+              <mat-select formControlName="creditControl">
+                @for (c of creditPolicies; track c) { <mat-option [value]="c">{{ 'tset.credit.' + c | t }}</mat-option> }
+              </mat-select>
+              <mat-hint>{{ 'tset.credit.' + salesForm.controls.creditControl.value + 'Hint' | t }}</mat-hint>
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>{{ 'tset.quoteValidity' | t }}</mat-label>
+              <input matInput type="number" min="1" max="365" formControlName="quotationValidityDays" dir="ltr" />
+            </mat-form-field>
+            @if (canManageSales) {
+              <div class="actions"><button mat-flat-button [disabled]="salesForm.invalid">{{ 'app.save' | t }}</button></div>
+            }
+          </form>
+        </mat-card>
+      }
       <mat-card appearance="outlined" class="form-card">
         <div class="section-title">{{ 'nav.stock' | t }}</div>
         <mat-slide-toggle [formControl]="negative" (change)="saveNegative()">{{ 'tset.negative' | t }}</mat-slide-toggle>
@@ -83,7 +106,15 @@ export class TradeSettingsPage {
   private readonly notify = inject(NotifyService);
   private readonly fb = inject(FormBuilder).nonNullable;
 
+  private readonly sales = inject(SalesApi);
   protected readonly canManage = this.auth.can('inv.settings:manage') || this.auth.can('pur.settings:manage');
+  protected readonly canReadSales = this.auth.can('sal.customers:read');
+  protected readonly canManageSales = this.auth.can('sal.settings:manage');
+  protected readonly creditPolicies: CreditControl[] = ['Block', 'Warn', 'None'];
+  protected readonly salesForm = this.fb.group({
+    creditControl: ['Block' as CreditControl, Validators.required],
+    quotationValidityDays: [30, [Validators.required, Validators.min(1), Validators.max(365)]]
+  });
   protected readonly sections: { kind: MasterKind; title: string }[] = [
     { kind: 'warehouses', title: 'tset.warehouses' },
     { kind: 'groups', title: 'tset.groups' },
@@ -115,6 +146,15 @@ export class TradeSettingsPage {
       this.negative.disable();
       this.purchase.disable();
     }
+    if (this.canReadSales) this.sales.settings().subscribe((s) => this.salesForm.patchValue(s));
+    if (!this.canManageSales) this.salesForm.disable();
+  }
+
+  protected saveSales(): void {
+    const v = this.salesForm.getRawValue();
+    this.sales
+      .saveSettings({ creditControl: v.creditControl, quotationValidityDays: Number(v.quotationValidityDays) })
+      .subscribe({ next: () => this.notify.success(), error: (e) => this.notify.error(e) });
   }
 
   protected savePurchase(): void {

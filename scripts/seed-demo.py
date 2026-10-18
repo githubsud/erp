@@ -5,6 +5,7 @@ Records are left in different states (draft / pending / posted / paid / reversed
 
     python scripts/seed-demo.py                     # API on http://localhost:5080, company "demo"
     python scripts/seed-demo.py --company acme --api http://localhost:5080
+    python scripts/seed-demo.py --sales-only        # add the sales scenario to an already seeded company
 
 The company is provisioned if it does not exist yet. Run it once per company: business keys (employee numbers,
 SKUs, supplier codes) are unique, so a second run stops at the first duplicate.
@@ -22,6 +23,7 @@ PLATFORM_KEY = "dev-platform-key"
 p = argparse.ArgumentParser()
 p.add_argument("--api", default="http://localhost:5080")
 p.add_argument("--company", default="demo")
+p.add_argument("--sales-only", action="store_true", help="only add customers, quotations, orders, invoices and receipts")
 args = p.parse_args()
 API = args.api.rstrip("/")
 token = None
@@ -81,6 +83,105 @@ except SystemExit:
         auth=False, headers={"X-Platform-Key": PLATFORM_KEY})
     login()
 
+
+def seed_sales():
+    """Customers, a price list, quotations, orders (one on credit hold), deliveries, invoices, a counter sale, a credit note
+    and receipts including a post-dated cheque in hand and a bounced one."""
+    accounts = {a["code"]: a["id"] for a in get("/api/finance/accounts")}
+    bank, cash = accounts["1120"], accounts["1110"]
+    wh = {w["code"]: w["id"] for w in get("/api/inventory/warehouses")}
+    items = {i["sku"]: i for i in get("/api/inventory/items?pageSize=500")["items"]}
+    if "SVC-DEL" not in items:
+        group = next(g["id"] for g in get("/api/inventory/item-groups") if g["code"] in ("SVC", "GEN"))
+        pcs = next(u["id"] for u in get("/api/inventory/uoms") if u["code"] == "PCS")
+        items["SVC-DEL"] = post("/api/inventory/items", {"sku": "SVC-DEL", "nameEn": "Delivery to site", "nameAr": "توصيل إلى الموقع",
+                                                         "itemType": "Service", "itemGroupId": group, "uomId": pcs, "salesPrice": 150})
+    it = {k: v["id"] for k, v in items.items()}
+
+    step("Sales: contractor price list and customers")
+    contractors = post("/api/sales/price-lists", {"code": "CONTR", "nameEn": "Contractors", "nameAr": "المقاولون", "isActive": True, "items": [
+        {"itemId": it["CEM-50"], "unitPrice": 20.5}, {"itemId": it["STL-16"], "unitPrice": 2800}, {"itemId": it["TIL-6060"], "unitPrice": 42}]})["id"]
+    cust = {}
+    for code, en, ar, limit, terms, pl, tin, cr, phone, addr_en, addr_ar in [
+        ("ALWAKRA", "Al Wakra Contracting WLL", "الوكرة للمقاولات ذ.م.م", 150000, 60, contractors, "5000887766", "77120", "+974 4466 1200",
+         "Industrial Area, Street 24, Doha", "المنطقة الصناعية، شارع 24، الدوحة"),
+        ("LUSAIL", "Lusail Interiors", "لوسيل للديكور", 40000, 30, None, "5000331122", "81234", "+974 4455 7788",
+         "Marina District, Lusail", "حي المارينا، لوسيل"),
+        ("DVD", "Doha Villas Development", "الدوحة لتطوير الفلل", 20000, 45, contractors, None, "90881", "+974 5512 3344",
+         "Al Thumama, Doha", "الثمامة، الدوحة"),
+        ("CASH", "Walk-in customer", "عميل نقدي", 0, 0, None, None, None, None, None, None),
+    ]:
+        cust[code] = post("/api/sales/customers", {"code": code, "nameEn": en, "nameAr": ar, "country": "QA", "creditLimit": limit,
+                                                   "paymentTermsDays": terms, "priceListId": pl, "taxCardNo": tin, "crNo": cr, "phone": phone,
+                                                   "addressEn": addr_en, "addressAr": addr_ar,
+                                                   "email": None if code == "CASH" else f"accounts@{code.lower()}.example"})["id"]
+
+    step("Sales: quotations (one open, one converted to an order)")
+    q = post("/api/sales/quotations", {"customerId": cust["LUSAIL"], "quoteDate": "2026-10-12", "notes": "Villa 14 fit-out, Lusail", "lines": [
+        {"itemId": it["TIL-6060"], "quantity": 300, "discountPercent": 5}, {"itemId": it["PNT-18W"], "quantity": 20},
+        {"itemId": it["SVC-DEL"], "quantity": 2}]})
+    post(f"/api/sales/quotations/{q['id']}/send")
+    q = post("/api/sales/quotations", {"customerId": cust["ALWAKRA"], "quoteDate": "2026-09-20", "validUntil": "2026-10-20", "lines": [
+        {"itemId": it["CEM-50"], "quantity": 200}, {"itemId": it["STL-16"], "quantity": 5, "discountPercent": 2},
+        {"itemId": it["SVC-DEL"], "quantity": 1}]})
+    post(f"/api/sales/quotations/{q['id']}/send")
+    so = post(f"/api/sales/quotations/{q['id']}/convert", {"warehouseId": wh["YARD"], "orderDate": "2026-09-22", "customerRef": "AWC-PO-5512"})
+
+    step("Sales: Al Wakra order confirmed, part delivered and invoiced; paid partly by transfer and by a post-dated cheque")
+    so = post(f"/api/sales/orders/{so['id']}/confirm")
+    by_sku = {l["sku"]: l for l in so["lines"]}
+    dn = post("/api/sales/deliveries", {"salesOrderId": so["id"], "deliveryDate": "2026-09-24", "vehicleNo": "TRK-4412", "lines": [
+        {"salesOrderLineId": by_sku["CEM-50"]["id"], "quantity": 120}, {"salesOrderLineId": by_sku["STL-16"]["id"], "quantity": 5}]})
+    inv = post(f"/api/sales/deliveries/{dn['id']}/invoice", {"invoiceDate": "2026-09-24"})
+    inv = post(f"/api/sales/invoices/{inv['id']}/post")
+    post("/api/sales/receipts", {"customerId": cust["ALWAKRA"], "date": "2026-10-05", "method": "BankTransfer", "depositAccountId": bank,
+                                 "reference": "QNB-TT-77812", "allocations": [{"salesInvoiceId": inv["id"], "amount": 5000}]})
+    post("/api/sales/receipts", {"customerId": cust["ALWAKRA"], "date": "2026-10-15", "method": "PostDatedCheque", "chequeNo": "001245",
+                                 "chequeDate": "2026-11-15", "chequeBank": "Commercial Bank", "allocations": [{"salesInvoiceId": inv["id"], "amount": 8000}]})
+
+    step("Sales: Doha Villas order over its credit limit (waiting for a manager)")
+    so = post("/api/sales/orders", {"customerId": cust["DVD"], "orderDate": "2026-10-16", "warehouseId": wh["MAIN"], "customerRef": "DVD-0091",
+                                    "lines": [{"itemId": it["TIL-6060"], "quantity": 500}, {"itemId": it["PNT-18W"], "quantity": 10}]})
+    post(f"/api/sales/orders/{so['id']}/confirm")
+
+    step("Sales: Lusail - invoiced in September (now overdue), allowance for broken tiles, bounced cheque")
+    so = post("/api/sales/orders", {"customerId": cust["LUSAIL"], "orderDate": "2026-09-01", "warehouseId": wh["MAIN"],
+                                    "lines": [{"itemId": it["TIL-6060"], "quantity": 100}, {"itemId": it["SVC-DEL"], "quantity": 1}]})
+    so = post(f"/api/sales/orders/{so['id']}/confirm")
+    tiles = next(l for l in so["lines"] if l["sku"] == "TIL-6060")
+    service = next(l for l in so["lines"] if l["sku"] == "SVC-DEL")
+    dn = post("/api/sales/deliveries", {"salesOrderId": so["id"], "deliveryDate": "2026-09-02",
+                                        "lines": [{"salesOrderLineId": tiles["id"], "quantity": 100}]})
+    inv = post("/api/sales/invoices", {"customerId": cust["LUSAIL"], "invoiceDate": "2026-09-02", "lines": [
+        {"deliveryNoteLineId": dn["lines"][0]["id"], "quantity": 100}, {"salesOrderLineId": service["id"], "quantity": 1}]})
+    inv = post(f"/api/sales/invoices/{inv['id']}/post")
+    post("/api/sales/credit-notes", {"salesInvoiceId": inv["id"], "date": "2026-09-05", "reason": "6 boxes broken on delivery", "lines": [
+        {"lineType": "Allowance", "description": "Broken tiles - price allowance", "quantity": 1, "unitPrice": 250}]})
+    r = post("/api/sales/receipts", {"customerId": cust["LUSAIL"], "date": "2026-09-20", "method": "PostDatedCheque", "chequeNo": "300871",
+                                     "chequeDate": "2026-10-01", "chequeBank": "Doha Bank", "allocations": [{"salesInvoiceId": inv["id"], "amount": 2000}]})
+    post(f"/api/sales/receipts/{r['id']}/deposit", {"date": "2026-10-01", "bankAccountId": bank})
+    post(f"/api/sales/receipts/{r['id']}/bounce", {"date": "2026-10-04", "reason": "Returned by bank - insufficient funds"})
+
+    step("Sales: Lusail paint and drills delivered, not yet invoiced")
+    so = post("/api/sales/orders", {"customerId": cust["LUSAIL"], "orderDate": "2026-10-14", "warehouseId": wh["MAIN"], "customerRef": "LI-2210",
+                                    "lines": [{"itemId": it["PNT-18W"], "quantity": 8}, {"itemId": it["DRL-18V"], "quantity": 2}]})
+    so = post(f"/api/sales/orders/{so['id']}/confirm")
+    post("/api/sales/deliveries", {"salesOrderId": so["id"], "deliveryDate": "2026-10-15", "lines": [
+        {"salesOrderLineId": l["id"], "quantity": l["quantity"]} for l in so["lines"]]})
+
+    step("Sales: counter sale to a walk-in customer, paid in cash")
+    inv = post("/api/sales/invoices", {"customerId": cust["CASH"], "invoiceDate": "2026-10-17", "warehouseId": wh["YARD"], "lines": [
+        {"itemId": it["CEM-50"], "quantity": 10}, {"itemId": it["SVC-DEL"], "quantity": 1, "unitPrice": 100}]})
+    inv = post(f"/api/sales/invoices/{inv['id']}/post")
+    post("/api/sales/receipts", {"customerId": cust["CASH"], "date": "2026-10-17", "method": "Cash", "depositAccountId": cash,
+                                 "allocations": [{"salesInvoiceId": inv["id"], "amount": inv["total"]}]})
+
+
+if args.sales_only:
+    seed_sales()
+    print(f"\n✓ Sales sample data added to '{args.company}'.")
+    sys.exit(0)
+
 if get("/api/hr/employees")["total"]:
     sys.exit("This company already has employees - seed a fresh company instead (use --company <new-code>).")
 
@@ -100,6 +201,7 @@ for email, en, ar, role in [
     ("store@demo.qa", "Ramesh Kumar", "راميش كومار", "storekeeper"),
     ("buyer@demo.qa", "Khalid Nasser", "خالد ناصر", "purchaser"),
     ("gm@demo.qa", "Mohammed Al-Kuwari", "محمد الكواري", "general_manager"),
+    ("sales@demo.qa", "Ahmed Hassan", "أحمد حسن", "salesperson"),
 ]:
     post("/api/core/users", {"email": email, "displayNameEn": en, "displayNameAr": ar, "password": PASSWORD,
                              "preferredLanguage": "ar", "roles": [role]})
@@ -373,5 +475,7 @@ count = post("/api/inventory/counts", {"warehouseId": MAIN, "date": "2026-10-17"
 counted = {item["CEM-50"]: 59, item["TIL-6060"]: 1398, item["DRL-18V"]: 10}
 put(f"/api/inventory/counts/{count['id']}/lines", [{"itemId": i, "countedQuantity": q} for i, q in counted.items()])
 
+seed_sales()
+
 print(f"\n✓ Done. Sign in at http://localhost:4200 with company '{args.company}', owner@demo.qa / {PASSWORD}")
-print("  Other users (same password): hr@ payroll@ accounts@ store@ buyer@ gm@ demo.qa")
+print("  Other users (same password): hr@ payroll@ accounts@ store@ buyer@ gm@ sales@ demo.qa")

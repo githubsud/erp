@@ -38,9 +38,22 @@ const NAV: NavGroup[] = [
     ]
   },
   {
+    label: 'nav.sales',
+    items: [
+      { icon: 'storefront', label: 'nav.customers', link: '/sales/customers', permission: 'sal.customers:read' },
+      { icon: 'request_page', label: 'nav.quotations', link: '/sales/quotations', permission: 'sal.customers:read' },
+      { icon: 'shopping_bag', label: 'nav.salesOrders', link: '/sales/orders', permission: 'sal.customers:read' },
+      { icon: 'local_shipping', label: 'nav.deliveries', link: '/sales/deliveries', permission: 'sal.customers:read' },
+      { icon: 'receipt', label: 'nav.salesInvoices', link: '/sales/invoices', permission: 'sal.customers:read' },
+      { icon: 'payments', label: 'nav.receipts', link: '/sales/receipts', permission: 'sal.customers:read' },
+      { icon: 'assignment_return', label: 'nav.creditNotes', link: '/sales/credit-notes', permission: 'sal.customers:read' },
+      { icon: 'insights', label: 'nav.salesReports', link: '/sales/reports', permission: 'sal.reports:read' }
+    ]
+  },
+  {
     label: 'nav.trade',
     items: [
-      { icon: 'local_shipping', label: 'nav.suppliers', link: '/purchasing/suppliers', permission: 'pur.suppliers:read' },
+      { icon: 'factory', label: 'nav.suppliers', link: '/purchasing/suppliers', permission: 'pur.suppliers:read' },
       { icon: 'shopping_cart', label: 'nav.orders', link: '/purchasing/orders', permission: 'pur.suppliers:read' },
       { icon: 'request_quote', label: 'nav.invoices', link: '/purchasing/invoices', permission: 'pur.suppliers:read' },
       { icon: 'price_check', label: 'nav.supplierPayments', link: '/purchasing/payments', permission: 'pur.suppliers:read' },
