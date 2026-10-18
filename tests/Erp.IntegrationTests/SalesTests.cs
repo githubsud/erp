@@ -224,4 +224,54 @@ public sealed class SalesTests(ErpFixture fixture)
         order.Status.ShouldBe("Confirmed");
         order.CreditWarning.ShouldNotBeNull();
     }
+
+    [Fact]
+    public async Task Alternative_units_convert_to_base_units_on_orders_and_quotations()
+    {
+        var t = await fixture.CreateTenantAsync();
+        var c = t.Client;
+        var (main, _, _) = await InventoryTests.DefaultsAsync(c);
+        var bag = await PricedItemAsync(c, "BAG", "Stock", 20m);
+        var pallet = (await c.PostAsync<InventoryTests.Master>("/api/inventory/uoms", new { code = "PLT", nameEn = "Pallet", nameAr = "منصة" })).Id;
+        var box = (await c.PostAsync<InventoryTests.Master>("/api/inventory/uoms", new { code = "BOXX", nameEn = "Box", nameAr = "صندوق" })).Id;
+        var units = await c.PutAsync<JsonElement>($"/api/inventory/items/{bag}/units", new[] { new { uomId = pallet, factor = 40m } });
+        units.GetArrayLength().ShouldBe(2);   // base unit + pallet
+
+        // Bought by the pallet: 2 pallets at 600 = 80 bags at 15.
+        var supplier = (await c.PostAsync<JsonElement>("/api/purchasing/suppliers", new
+        {
+            code = "S-CEM", nameEn = "Cement works", country = "QA", isResident = true, hasPermanentEstablishment = false
+        })).GetProperty("id").GetGuid();
+        var po = await c.PostAsync<JsonElement>("/api/purchasing/orders", new
+        {
+            supplierId = supplier, orderDate = Today, warehouseId = main,
+            lines = new[] { new { itemId = bag, quantity = 2m, unitPrice = 600m, uomId = pallet } }
+        });
+        var poLine = po.GetProperty("lines")[0];
+        poLine.GetProperty("quantity").GetDecimal().ShouldBe(80m);
+        poLine.GetProperty("unitPrice").GetDecimal().ShouldBe(15m);
+        poLine.GetProperty("orderUomCode").GetString().ShouldBe("PLT");
+        po.GetProperty("total").GetDecimal().ShouldBe(1_200m);
+
+        // Quoted by the pallet at the item's price scaled to the unit (20 × 40 = 800), and the order keeps the unit.
+        var customer = await CustomerAsync(c, "C-UNIT", null);
+        var quote = await c.PostAsync<JsonElement>("/api/sales/quotations", new
+        {
+            customerId = customer, quoteDate = Today, lines = new[] { new { itemId = bag, quantity = 3m, uomId = pallet } }
+        });
+        var qLine = quote.GetProperty("lines")[0];
+        qLine.GetProperty("uomPrice").GetDecimal().ShouldBe(800m);
+        qLine.GetProperty("quantity").GetDecimal().ShouldBe(120m);
+        quote.GetProperty("total").GetDecimal().ShouldBe(2_400m);
+        var order = await c.PostAsync<JsonElement>($"/api/sales/quotations/{quote.GetProperty("id").GetGuid()}/convert", new { warehouseId = main });
+        order.GetProperty("lines")[0].GetProperty("uomQuantity").GetDecimal().ShouldBe(3m);
+        order.GetProperty("lines")[0].GetProperty("quantity").GetDecimal().ShouldBe(120m);
+        order.GetProperty("total").GetDecimal().ShouldBe(2_400m);
+
+        // A unit that is not set up for the item is refused.
+        (await c.PostJsonAsync("/api/sales/quotations", new
+        {
+            customerId = customer, quoteDate = Today, lines = new[] { new { itemId = bag, quantity = 1m, uomId = box } }
+        })).StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
 }

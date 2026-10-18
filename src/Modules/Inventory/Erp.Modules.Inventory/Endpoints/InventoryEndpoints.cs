@@ -106,6 +106,13 @@ internal static class InventoryEndpoints
             return await ItemsQuery(db, t, q => q.Where(x => x.Id == id)).SingleAsync(ct);
         }).RequirePermission(InventoryPermissions.ItemsManage);
         g.MapGet("/items/{id:guid}/ledger", ItemLedgerAsync).RequirePermission(InventoryPermissions.ItemsRead);
+        g.MapGet("/items/{id:guid}/units", (Guid id, IInventoryQueries q, CancellationToken ct) => q.GetUnitsAsync([id], ct))
+            .RequirePermission(InventoryPermissions.ItemsRead);
+        g.MapPut("/items/{id:guid}/units", async (Guid id, List<ItemUnitRequest> r, InventoryMasterService s, IInventoryQueries q, CancellationToken ct) =>
+        {
+            await s.SaveUnitsAsync(id, r, ct);
+            return await q.GetUnitsAsync([id], ct);
+        }).RequirePermission(InventoryPermissions.ItemsManage);
 
         g.MapGet("/stock", StockAsync).RequirePermission(InventoryPermissions.ItemsRead);
         g.MapGet("/reports/valuation", ValuationAsync).RequirePermission(InventoryPermissions.ReportsRead);

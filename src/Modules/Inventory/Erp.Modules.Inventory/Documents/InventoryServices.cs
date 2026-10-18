@@ -28,8 +28,30 @@ public sealed record CountRequest(Guid WarehouseId, DateOnly Date, string? Notes
 public sealed record CountEntry(Guid ItemId, decimal? CountedQuantity);
 
 /// <summary>Units, item groups, warehouses and items.</summary>
+public sealed record ItemUnitRequest(Guid UomId, decimal Factor);
+
 internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext tenant)
 {
+    /// <summary>Replaces an item's alternative units. The base unit is implied; each unit appears once.</summary>
+    public Task SaveUnitsAsync(Guid itemId, IReadOnlyList<ItemUnitRequest> units, CancellationToken ct) =>
+        db.InTransactionAsync(async token =>
+        {
+            var item = await db.Set<Item>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == itemId && i.CompanyId == tenant.RequireCompanyId(), token)
+                       ?? throw new NotFoundException("Item", itemId);
+            if (units.Any(u => u.UomId == item.UomId))
+                throw new BusinessRuleException("inv.unit_base", "The base unit is already part of the item.", "الوحدة الأساسية جزء من الصنف بالفعل.");
+            if (units.Select(u => u.UomId).Distinct().Count() != units.Count || units.Any(u => u.Factor <= 0))
+                throw new BusinessRuleException("inv.unit_factor", "List each unit once with a positive number of base units.",
+                    "أدخل كل وحدة مرة واحدة مع عدد موجب من الوحدات الأساسية.");
+            var ids = units.Select(u => u.UomId).ToList();
+            var known = await db.Set<Uom>().Where(u => ids.Contains(u.Id) && u.CompanyId == item.CompanyId).CountAsync(token);
+            if (known != ids.Count) throw new NotFoundException("Unit", string.Join(',', ids));
+            db.RemoveRange(await db.Set<ItemUnit>().Where(u => u.ItemId == itemId).ToListAsync(token));
+            await db.SaveChangesAsync(token);
+            foreach (var u in units) db.Add(new ItemUnit { ItemId = itemId, UomId = u.UomId, Factor = Math.Round(u.Factor, 6, MidpointRounding.AwayFromZero) });
+            await db.SaveChangesAsync(token);
+        }, ct);
+
     public async Task<Uom> CreateUomAsync(MasterRequest r, CancellationToken ct)
     {
         var (en, ar) = Bilingual.Require(r.NameEn, r.NameAr);

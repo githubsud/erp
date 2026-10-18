@@ -40,6 +40,9 @@ internal sealed class PurchaseOrderLineConfiguration : IEntityTypeConfiguration<
     {
         b.ToTable("purchase_order_line", "pur");
         b.Property(x => x.Quantity).AsQuantity();
+        b.Property(x => x.UomFactor).AsQuantity();
+        b.Property(x => x.UomQuantity).AsQuantity();
+        b.Property(x => x.UomPrice).AsQuantity();
         b.Property(x => x.UnitPrice).AsQuantity();
         b.Property(x => x.QuantityReceived).AsQuantity();
         b.Property(x => x.QuantityInvoiced).AsQuantity();

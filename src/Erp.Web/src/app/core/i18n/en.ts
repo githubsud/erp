@@ -923,7 +923,11 @@ export const en = {
   'fx.invoiceRateHint': 'The rate on the invoice date; the difference to the receipt is a price variance',
   'fx.paymentRateHint': 'The rate on the payment date; the difference is an exchange gain or loss',
   'fx.mixed': 'Pay invoices in different currencies separately.',
-  'fx.difference': 'Exchange difference'
+  'fx.difference': 'Exchange difference',
+  'units.title': 'Units',
+  'units.hint': 'Stock is kept in {base}. Add the units you also buy or sell in, e.g. a pallet holding 40.',
+  'units.unit': 'Unit',
+  'units.factor': 'How many {base} in one'
 } as const;
 
 export type TranslationKey = keyof typeof en;

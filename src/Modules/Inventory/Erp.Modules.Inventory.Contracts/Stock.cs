@@ -6,6 +6,9 @@ public enum ItemType { Stock, Service }
 public sealed record ItemInfo(Guid Id, string Sku, string NameEn, string NameAr, ItemType Type, Guid ItemGroupId, string UomCode, bool IsActive,
     decimal? SalesPrice = null);
 
+/// <summary>A unit an item can be bought or sold in, and how many base units one of it holds (the base unit itself has factor 1).</summary>
+public sealed record ItemUnitInfo(Guid ItemId, Guid UomId, string UomCode, decimal Factor, bool IsBase);
+
 public sealed record WarehouseInfo(Guid Id, string Code, string NameEn, string NameAr, bool IsActive);
 
 /// <summary>
@@ -49,4 +52,23 @@ public interface IInventoryQueries
 
     /// <summary>Quantity on hand for the company (all warehouses).</summary>
     Task<decimal> GetQuantityOnHandAsync(Guid itemId, CancellationToken ct = default);
+
+    /// <summary>The base unit and the alternative units of each item.</summary>
+    Task<IReadOnlyList<ItemUnitInfo>> GetUnitsAsync(IEnumerable<Guid> itemIds, CancellationToken ct = default);
+}
+
+public static class ItemUnits
+{
+    /// <summary>
+    /// Base units per one of <paramref name="uomId"/> for an item (1 when no unit or the base unit is given). An unknown unit is
+    /// refused with the module's error code prefix.
+    /// </summary>
+    public static (Guid? UomId, decimal Factor) Resolve(IReadOnlyList<ItemUnitInfo> units, ItemInfo item, Guid? uomId, string errorPrefix)
+    {
+        if (uomId is null) return (null, 1m);
+        var unit = units.FirstOrDefault(u => u.ItemId == item.Id && u.UomId == uomId)
+                   ?? throw new Erp.SharedKernel.Domain.BusinessRuleException($"{errorPrefix}.unit", $"That unit is not set up for {item.Sku}.",
+                       $"هذه الوحدة غير معرفة للصنف {item.Sku}.");
+        return unit.IsBase ? (null, 1m) : (unit.UomId, unit.Factor);
+    }
 }

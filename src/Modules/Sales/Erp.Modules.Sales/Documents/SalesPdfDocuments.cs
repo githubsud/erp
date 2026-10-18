@@ -198,8 +198,11 @@ internal sealed class SalesPdfDocuments(ErpDbContext db, ITenantContext tenant, 
     private async Task<List<PrintLine>> PricedLinesAsync<T>(IReadOnlyList<T> source, CancellationToken ct) where T : IPricedLine
     {
         var items = await inventory.GetItemsAsync(source.Select(l => l.ItemId), ct);
+        var units = await inventory.GetUnitsAsync(source.Where(l => l.UomId != null).Select(l => l.ItemId), ct);
+        // Print in the unit the customer was quoted in.
         return source.Select(l => new PrintLine(items[l.ItemId].Sku, items[l.ItemId].NameEn, items[l.ItemId].NameAr,
-            (l as QuotationLine)?.Description ?? (l as SalesOrderLine)?.Description, items[l.ItemId].UomCode, l.Quantity, l.UnitPrice, l.DiscountPercent,
+            (l as QuotationLine)?.Description ?? (l as SalesOrderLine)?.Description,
+            units.FirstOrDefault(u => u.UomId == l.UomId)?.UomCode ?? items[l.ItemId].UomCode, l.UomQuantity, l.UomPrice, l.DiscountPercent,
             l.Amount)).ToList();
     }
 

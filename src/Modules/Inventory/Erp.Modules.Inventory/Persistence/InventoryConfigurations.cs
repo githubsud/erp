@@ -122,3 +122,12 @@ internal sealed class StockCountLineConfiguration : IEntityTypeConfiguration<Sto
         b.Property(x => x.CountedQuantity).AsQuantity();
     }
 }
+
+internal sealed class ItemUnitConfiguration : IEntityTypeConfiguration<ItemUnit>
+{
+    public void Configure(EntityTypeBuilder<ItemUnit> b)
+    {
+        b.ToTable("item_unit", "inv");
+        b.Property(x => x.Factor).AsQuantity();
+    }
+}

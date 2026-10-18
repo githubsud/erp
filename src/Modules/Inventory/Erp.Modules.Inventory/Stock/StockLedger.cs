@@ -223,4 +223,19 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
 
     public Task<decimal> GetQuantityOnHandAsync(Guid itemId, CancellationToken ct = default) =>
         db.Set<ItemValuation>().Where(v => v.ItemId == itemId).Select(v => v.Quantity).SingleOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<ItemUnitInfo>> GetUnitsAsync(IEnumerable<Guid> itemIds, CancellationToken ct = default)
+    {
+        var list = itemIds.Distinct().ToList();
+        var companyId = tenant.RequireCompanyId();
+        var baseUnits = await (from i in db.Set<Item>().AsNoTracking()
+                               join u in db.Set<Uom>() on i.UomId equals u.Id
+                               where list.Contains(i.Id) && i.CompanyId == companyId
+                               select new ItemUnitInfo(i.Id, u.Id, u.Code, 1m, true)).ToListAsync(ct);
+        var alternatives = await (from x in db.Set<ItemUnit>().AsNoTracking()
+                                  join u in db.Set<Uom>() on x.UomId equals u.Id
+                                  where list.Contains(x.ItemId)
+                                  select new ItemUnitInfo(x.ItemId, u.Id, u.Code, x.Factor, false)).ToListAsync(ct);
+        return [.. baseUnits, .. alternatives];
+    }
 }

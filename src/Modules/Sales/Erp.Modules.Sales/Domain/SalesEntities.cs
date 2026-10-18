@@ -60,6 +60,12 @@ public interface IPricedLine
     decimal UnitPrice { get; }
     decimal DiscountPercent { get; }
     decimal Amount { get; }
+
+    /// <summary>The unit the line was entered in (null: the base unit), base units per it, and the quantity and price as entered.</summary>
+    Guid? UomId { get; }
+    decimal UomFactor { get; }
+    decimal UomQuantity { get; }
+    decimal UomPrice { get; }
 }
 
 public enum QuotationStatus { Draft, Sent, Accepted, Rejected }
@@ -88,6 +94,10 @@ public sealed class QuotationLine : TenantEntity, IPricedLine
     public decimal UnitPrice { get; init; }
     public decimal DiscountPercent { get; init; }
     public decimal Amount { get; init; }
+    public Guid? UomId { get; init; }
+    public decimal UomFactor { get; init; } = 1m;
+    public decimal UomQuantity { get; init; }
+    public decimal UomPrice { get; init; }
 }
 
 public enum SalesOrderStatus { Draft, CreditHold, Confirmed, PartiallyDelivered, Delivered, Closed, Cancelled }
@@ -127,6 +137,10 @@ public sealed class SalesOrderLine : TenantEntity, IPricedLine
     public decimal Amount { get; init; }
     public decimal QuantityDelivered { get; set; }
     public decimal QuantityInvoiced { get; set; }
+    public Guid? UomId { get; init; }
+    public decimal UomFactor { get; init; } = 1m;
+    public decimal UomQuantity { get; init; }
+    public decimal UomPrice { get; init; }
 }
 
 public enum DocumentStatus { Posted, Reversed }

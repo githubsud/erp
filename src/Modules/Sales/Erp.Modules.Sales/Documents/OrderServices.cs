@@ -8,8 +8,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Erp.Modules.Sales.Documents;
 
-/// <summary>A sales line. Without a unit price the customer's price (price list, then item sales price) is used.</summary>
-public sealed record SalesLineRequest(Guid ItemId, string? Description, decimal Quantity, decimal? UnitPrice = null, decimal DiscountPercent = 0);
+/// <summary>
+/// A sales line, in <see cref="UomId"/> when given (an alternative unit of the item) or its base unit. Without a unit price the
+/// customer's price (price list, then item sales price) is used, scaled to the unit.
+/// </summary>
+public sealed record SalesLineRequest(Guid ItemId, string? Description, decimal Quantity, decimal? UnitPrice = null, decimal DiscountPercent = 0,
+    Guid? UomId = null);
 
 public sealed record QuotationRequest(Guid CustomerId, DateOnly QuoteDate, DateOnly? ValidUntil, string? Notes, IReadOnlyList<SalesLineRequest> Lines);
 
@@ -23,7 +27,9 @@ public sealed record DeliveryLineRequest(Guid SalesOrderLineId, decimal Quantity
 public sealed record DeliveryRequest(Guid SalesOrderId, DateOnly DeliveryDate, Guid? WarehouseId, string? DeliveryAddress, string? VehicleNo, string? Notes,
     IReadOnlyList<DeliveryLineRequest> Lines);
 
-internal sealed record PricedLine(Guid ItemId, string? Description, decimal Quantity, decimal UnitPrice, decimal DiscountPercent, decimal Amount);
+/// <summary>Quantity and unit price in the base unit; the entered unit, factor, quantity and price alongside.</summary>
+internal sealed record PricedLine(Guid ItemId, string? Description, decimal Quantity, decimal UnitPrice, decimal DiscountPercent, decimal Amount,
+    Guid? UomId, decimal UomFactor, decimal UomQuantity, decimal UomPrice);
 
 internal static class SalesLines
 {
@@ -35,15 +41,17 @@ internal static class SalesLines
             throw new BusinessRuleException("sal.no_lines", "Add at least one line.", "أضف سطراً واحداً على الأقل.");
         var ids = lines.Select(l => l.ItemId).Distinct().ToList();
         var items = await inventory.GetItemsAsync(ids, ct);
+        var units = await inventory.GetUnitsAsync(ids, ct);
         var prices = lines.Any(l => l.UnitPrice is null) ? await customers.PricesAsync(customerId, ids, ct) : new Dictionary<Guid, decimal?>();
         return lines.Select(l =>
         {
             if (!items.TryGetValue(l.ItemId, out var item) || !item.IsActive) throw new NotFoundException("Item", l.ItemId);
-            var price = l.UnitPrice ?? prices.GetValueOrDefault(l.ItemId)
+            var (uomId, factor) = ItemUnits.Resolve(units, item, l.UomId, "sal");
+            var price = l.UnitPrice ?? prices.GetValueOrDefault(l.ItemId) * factor
                         ?? throw new BusinessRuleException("sal.price_missing", $"Enter a price for {item.Sku}: it has no sales price.",
                             $"أدخل سعراً للصنف {item.Sku}: لا يوجد له سعر بيع.");
-            return new PricedLine(item.Id, CustomerService.Clean(l.Description), l.Quantity, price, l.DiscountPercent,
-                SalesRules.LineAmount(l.Quantity, price, l.DiscountPercent));
+            return new PricedLine(item.Id, CustomerService.Clean(l.Description), l.Quantity * factor, Math.Round(price / factor, 6, MidpointRounding.AwayFromZero),
+                l.DiscountPercent, SalesRules.LineAmount(l.Quantity, price, l.DiscountPercent), uomId, factor, l.Quantity, price);
         }).ToList();
     }
 }
@@ -95,7 +103,7 @@ internal sealed class QuotationService(ErpDbContext db, ITenantContext tenant, I
             var line = new QuotationLine
             {
                 QuotationId = quote.Id, LineNo = ++lineNo, ItemId = l.ItemId, Description = l.Description, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
-                DiscountPercent = l.DiscountPercent, Amount = l.Amount
+                DiscountPercent = l.DiscountPercent, Amount = l.Amount, UomId = l.UomId, UomFactor = l.UomFactor, UomQuantity = l.UomQuantity, UomPrice = l.UomPrice
             };
             quote.Lines.Add(line);
             db.Add(line);
@@ -120,7 +128,8 @@ internal sealed class QuotationService(ErpDbContext db, ITenantContext tenant, I
                 throw new BusinessRuleException("sal.quote_expired", $"The quotation expired on {quote.ValidUntil:dd/MM/yyyy}; extend its validity first.",
                     $"انتهت صلاحية عرض السعر في {quote.ValidUntil:dd/MM/yyyy}؛ مدد صلاحيته أولاً.");
             var order = await orders.CreateAsync(new SalesOrderRequest(quote.CustomerId, orderDate, r.ExpectedDate, r.WarehouseId, r.CustomerRef, quote.Notes,
-                quote.Lines.OrderBy(l => l.LineNo).Select(l => new SalesLineRequest(l.ItemId, l.Description, l.Quantity, l.UnitPrice, l.DiscountPercent)).ToList()),
+                quote.Lines.OrderBy(l => l.LineNo)
+                    .Select(l => new SalesLineRequest(l.ItemId, l.Description, l.UomQuantity, l.UomPrice, l.DiscountPercent, l.UomId)).ToList()),
                 token);
             order.QuotationId = quote.Id;
             quote.Status = QuotationStatus.Accepted;
@@ -205,7 +214,7 @@ internal sealed class SalesOrderService(ErpDbContext db, ITenantContext tenant, 
             var line = new SalesOrderLine
             {
                 SalesOrderId = order.Id, LineNo = ++lineNo, ItemId = l.ItemId, Description = l.Description, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
-                DiscountPercent = l.DiscountPercent, Amount = l.Amount
+                DiscountPercent = l.DiscountPercent, Amount = l.Amount, UomId = l.UomId, UomFactor = l.UomFactor, UomQuantity = l.UomQuantity, UomPrice = l.UomPrice
             };
             order.Lines.Add(line);
             db.Add(line);

@@ -11,7 +11,7 @@ import { NotifyService } from '../../core/notify.service';
 import { SalesApi } from '../../core/sales.api';
 import { Customer, DeliveryNote, Quotation, QuotationStatus, SalesInvoice, SalesOrder, SalesOrderStatus } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
-import { Item, Master } from '../../core/trade.models';
+import { Item, ItemUnit, Master } from '../../core/trade.models';
 import { ConfirmDialog, ReverseDialog, ReverseResult } from '../../shared/dialogs';
 import { SHARED } from '../../shared/shared';
 
@@ -167,6 +167,7 @@ export class SalesOrdersPage {
 
 type SalesLineGroup = FormGroup<{
   itemId: FormControl<string>;
+  uomId: FormControl<string | null>;
   description: FormControl<string>;
   quantity: FormControl<number | null>;
   unitPrice: FormControl<number | null>;
@@ -230,7 +231,8 @@ type SalesLineGroup = FormGroup<{
 
       <table class="line-editor">
         <thead>
-          <tr><th class="item-col">{{ 'po.item' | t }}</th><th>{{ 'po.description' | t }}</th><th class="narrow">{{ 'po.qty' | t }}</th><th class="narrow">{{ 'po.price' | t }}</th>
+          <tr><th class="item-col">{{ 'po.item' | t }}</th><th>{{ 'po.description' | t }}</th><th class="narrow">{{ 'units.unit' | t }}</th>
+            <th class="narrow">{{ 'po.qty' | t }}</th><th class="narrow">{{ 'po.price' | t }}</th>
             <th class="narrow">{{ 'so.discount' | t }}</th><th class="narrow num">{{ 'po.amount' | t }}</th><th></th></tr>
         </thead>
         <tbody>
@@ -238,7 +240,7 @@ type SalesLineGroup = FormGroup<{
             <tr [formGroup]="line">
               <td>
                 <mat-form-field>
-                  <mat-select formControlName="itemId" (selectionChange)="priceLine(line)">
+                  <mat-select formControlName="itemId" (selectionChange)="itemChanged(line)">
                     @for (it of items(); track it.id) { <mat-option [value]="it.id"><span class="ltr">{{ it.sku }}</span> · {{ it | bi }}</mat-option> }
                   </mat-select>
                 </mat-form-field>
@@ -250,6 +252,9 @@ type SalesLineGroup = FormGroup<{
                 }
               </td>
               <td><mat-form-field><input matInput formControlName="description" /></mat-form-field></td>
+              <td class="narrow"><mat-form-field><mat-select formControlName="uomId" (selectionChange)="priceLine(line)">
+                @for (u of unitsOf(line.controls.itemId.value); track u.uomId) { <mat-option [value]="u.isBase ? null : u.uomId">{{ u.uomCode }}</mat-option> }
+              </mat-select></mat-form-field></td>
               <td class="narrow"><mat-form-field><input matInput type="number" min="0" formControlName="quantity" dir="ltr" /></mat-form-field></td>
               <td class="narrow"><mat-form-field><input matInput type="number" min="0" formControlName="unitPrice" dir="ltr" /></mat-form-field></td>
               <td class="narrow"><mat-form-field><input matInput type="number" min="0" max="100" formControlName="discountPercent" dir="ltr" /></mat-form-field></td>
@@ -257,7 +262,7 @@ type SalesLineGroup = FormGroup<{
               <td><button mat-icon-button type="button" (click)="lines.removeAt(i)" [disabled]="lines.length === 1"><mat-icon>delete</mat-icon></button></td>
             </tr>
           }
-          <tr class="total-row"><td colspan="5">{{ 'po.total' | t }}</td><td class="num ltr">{{ total() | money }}</td><td></td></tr>
+          <tr class="total-row"><td colspan="6">{{ 'po.total' | t }}</td><td class="num ltr">{{ total() | money }}</td><td></td></tr>
         </tbody>
       </table>
       <div class="actions bar">
@@ -300,6 +305,7 @@ export class SalesDocFormPage implements OnInit {
     notes: ['']
   });
   protected readonly lines = new FormArray<SalesLineGroup>([]);
+  private readonly itemUnits = signal(new Map<string, ItemUnit[]>());
   private readonly version = signal(0);
   private readonly customerId = signal('');
   protected readonly selectedCustomer = computed(() => this.customers().find((c) => c.id === this.customerId()) ?? null);
@@ -338,7 +344,10 @@ export class SalesDocFormPage implements OnInit {
     if (!id) return this.addLine();
     const load: Observable<Quotation | SalesOrder> = this.kind() === 'quote' ? this.sales.quotation(id) : this.sales.order(id);
     load.subscribe((d) => {
-      for (const l of d.lines) this.addLine(l.itemId, l.description ?? '', l.quantity, l.unitPrice, l.discountPercent);
+      for (const l of d.lines) {
+        this.loadUnits(l.itemId);
+        this.addLine(l.itemId, l.description ?? '', l.uomQuantity, l.uomPrice, l.discountPercent, l.uomId);
+      }
       if ('quoteNo' in d) this.form.patchValue({ customerId: d.customerId, date: d.quoteDate, validUntil: d.validUntil, notes: d.notes ?? '' }, { emitEvent: false });
       else
         this.form.patchValue({ customerId: d.customerId, date: d.orderDate, warehouseId: d.warehouseId, expectedDate: d.expectedDate ?? '',
@@ -360,10 +369,32 @@ export class SalesDocFormPage implements OnInit {
     return this.form.invalid || this.lines.invalid || this.lines.length === 0;
   }
 
-  protected addLine(itemId = '', description = '', quantity: number | null = 1, unitPrice: number | null = null, discount: number | null = 0): void {
+  protected unitsOf(itemId: string): ItemUnit[] {
+    return this.itemUnits().get(itemId) ?? [];
+  }
+
+  protected itemChanged(line: SalesLineGroup): void {
+    line.controls.uomId.setValue(null);
+    this.loadUnits(line.controls.itemId.value);
+    this.priceLine(line);
+  }
+
+  private loadUnits(itemId: string): void {
+    if (!itemId || this.itemUnits().has(itemId)) return;
+    this.trade.units(itemId).subscribe((u) => this.itemUnits.update((m) => new Map(m).set(itemId, u)));
+  }
+
+  /** Base units per the line's unit. */
+  private factor(line: SalesLineGroup): number {
+    return this.unitsOf(line.controls.itemId.value).find((u) => !u.isBase && u.uomId === line.controls.uomId.value)?.factor ?? 1;
+  }
+
+  protected addLine(itemId = '', description = '', quantity: number | null = 1, unitPrice: number | null = null, discount: number | null = 0,
+    uomId: string | null = null): void {
     this.lines.push(
       this.fb.group({
         itemId: this.fb.control(itemId, Validators.required),
+        uomId: this.fb.control<string | null>(uomId),
         description: this.fb.control(description),
         quantity: this.fb.control<number | null>(quantity, [Validators.required, Validators.min(0.000001)]),
         unitPrice: this.fb.control<number | null>(unitPrice, [Validators.required, Validators.min(0)]),
@@ -377,7 +408,7 @@ export class SalesDocFormPage implements OnInit {
     const itemId = line.controls.itemId.value;
     if (!itemId) return;
     this.sales.prices(this.customerId() || null, [itemId]).subscribe(([p]) => {
-      if (p?.unitPrice !== null && p?.unitPrice !== undefined) line.controls.unitPrice.setValue(p.unitPrice);
+      if (p?.unitPrice !== null && p?.unitPrice !== undefined) line.controls.unitPrice.setValue(Math.round(p.unitPrice * this.factor(line) * 1000000) / 1000000);
     });
   }
 
@@ -385,7 +416,7 @@ export class SalesDocFormPage implements OnInit {
     const v = this.form.getRawValue();
     const lines = this.lines.getRawValue().map((l) => ({
       itemId: l.itemId, description: l.description || null, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice),
-      discountPercent: Number(l.discountPercent) || 0
+      discountPercent: Number(l.discountPercent) || 0, uomId: l.uomId
     }));
     const quote = this.kind() === 'quote';
     const body = quote
@@ -414,7 +445,7 @@ export class SalesDocFormPage implements OnInit {
     this.sales.prices(this.customerId(), ids).subscribe((prices) => {
       for (const l of this.lines.controls) {
         const p = prices.find((x) => x.itemId === l.controls.itemId.value);
-        if (p?.unitPrice !== null && p?.unitPrice !== undefined) l.controls.unitPrice.setValue(p.unitPrice);
+        if (p?.unitPrice !== null && p?.unitPrice !== undefined) l.controls.unitPrice.setValue(Math.round(p.unitPrice * this.factor(l) * 1000000) / 1000000);
       }
     });
   }
@@ -513,11 +544,13 @@ export class ConvertDialog {
           </ng-container>
           <ng-container matColumnDef="qty">
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.qty' | t }}</th>
-            <td mat-cell *matCellDef="let l" class="num ltr">{{ l.quantity }} <span class="secondary">{{ l.uomCode }}</span></td>
+            <td mat-cell *matCellDef="let l" class="num ltr">
+              @if (l.uomId) { {{ l.uomQuantity }} <span class="secondary">{{ l.orderUomCode }}</span><div class="secondary">= {{ l.quantity }} {{ l.uomCode }}</div> }
+              @else { {{ l.quantity }} <span class="secondary">{{ l.uomCode }}</span> }</td>
           </ng-container>
           <ng-container matColumnDef="price">
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.price' | t }}</th>
-            <td mat-cell *matCellDef="let l" class="num ltr">{{ l.unitPrice | money }}</td>
+            <td mat-cell *matCellDef="let l" class="num ltr">{{ l.uomPrice | money }}@if (l.uomId) { <span class="secondary"> / {{ l.orderUomCode }}</span> }</td>
           </ng-container>
           <ng-container matColumnDef="discount">
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'so.discount' | t }}</th>
@@ -738,11 +771,14 @@ export class DeliverDialog {
           </ng-container>
           <ng-container matColumnDef="qty">
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.qty' | t }}</th>
-            <td mat-cell *matCellDef="let l" class="num ltr">{{ l.quantity }} <span class="secondary">{{ l.uomCode }}</span></td>
+            <td mat-cell *matCellDef="let l" class="num ltr">
+              @if (l.uomId) { {{ l.uomQuantity }} <span class="secondary">{{ l.orderUomCode }}</span><div class="secondary">= {{ l.quantity }} {{ l.uomCode }}</div> }
+              @else { {{ l.quantity }} <span class="secondary">{{ l.uomCode }}</span> }</td>
           </ng-container>
           <ng-container matColumnDef="price">
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.price' | t }}</th>
-            <td mat-cell *matCellDef="let l" class="num ltr">{{ l.unitPrice | money }}@if (l.discountPercent) { <div class="secondary">−{{ l.discountPercent }}%</div> }</td>
+            <td mat-cell *matCellDef="let l" class="num ltr">{{ l.uomPrice | money }}@if (l.uomId) { <span class="secondary"> / {{ l.orderUomCode }}</span> }
+              @if (l.discountPercent) { <div class="secondary">−{{ l.discountPercent }}%</div> }</td>
           </ng-container>
           <ng-container matColumnDef="amount">
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.amount' | t }}</th>

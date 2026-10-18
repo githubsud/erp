@@ -14,7 +14,8 @@ public sealed record SupplierRequest(string Code, string? NameEn, string? NameAr
 
 public sealed record PurchaseSettingsRequest(decimal ApprovalThreshold, decimal PriceTolerancePercent);
 
-public sealed record OrderLineRequest(Guid ItemId, string? Description, decimal Quantity, decimal UnitPrice, WhtCategory? WhtCategory = null);
+/// <summary>Quantity and price are in <see cref="UomId"/> when given (an alternative unit of the item), otherwise in its base unit.</summary>
+public sealed record OrderLineRequest(Guid ItemId, string? Description, decimal Quantity, decimal UnitPrice, WhtCategory? WhtCategory = null, Guid? UomId = null);
 
 public sealed record OrderRequest(Guid SupplierId, DateOnly OrderDate, DateOnly? ExpectedDate, Guid WarehouseId, string? Notes,
     IReadOnlyList<OrderLineRequest> Lines, string? Currency = null, decimal? ExchangeRate = null);
@@ -114,6 +115,7 @@ internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenan
         if (r.Lines is not { Count: > 0 })
             throw new BusinessRuleException("pur.no_lines", "Add at least one line.", "أضف سطراً واحداً على الأقل.");
         var items = await inventory.GetItemsAsync(r.Lines.Select(l => l.ItemId), ct);
+        var units = await inventory.GetUnitsAsync(r.Lines.Select(l => l.ItemId), ct);
 
         order.SupplierId = supplier.Id;
         order.Currency = PurchasingRules.CurrencyCode(r.Currency ?? supplier.Currency);
@@ -128,14 +130,19 @@ internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenan
             if (!items.TryGetValue(l.ItemId, out var item) || !item.IsActive) throw new NotFoundException("Item", l.ItemId);
             if (l.Quantity <= 0 || l.UnitPrice < 0)
                 throw new BusinessRuleException("pur.line_values", "Quantities must be positive and prices not negative.", "يجب أن تكون الكميات موجبة والأسعار غير سالبة.");
+            var (uomId, factor) = ItemUnits.Resolve(units, item, l.UomId, "pur");
             var line = new PurchaseOrderLine
             {
                 PurchaseOrderId = order.Id,
                 LineNo = ++lineNo,
                 ItemId = item.Id,
                 Description = SupplierService.Clean(l.Description),
-                Quantity = l.Quantity,
-                UnitPrice = l.UnitPrice,
+                Quantity = l.Quantity * factor,
+                UnitPrice = Math.Round(l.UnitPrice / factor, 6, MidpointRounding.AwayFromZero),
+                UomId = uomId,
+                UomFactor = factor,
+                UomQuantity = l.Quantity,
+                UomPrice = l.UnitPrice,
                 Amount = Money.Round(l.Quantity * l.UnitPrice),
                 WhtCategory = l.WhtCategory ?? (item.Type == ItemType.Service ? supplier.DefaultWhtCategory : WhtCategory.None)
             };

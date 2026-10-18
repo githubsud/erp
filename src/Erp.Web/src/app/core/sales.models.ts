@@ -76,6 +76,11 @@ export interface SalesLine {
   amount: number;
   quantityDelivered: number;
   quantityInvoiced: number;
+  uomId: string | null;
+  orderUomCode: string | null;
+  uomFactor: number;
+  uomQuantity: number;
+  uomPrice: number;
 }
 
 export interface Quotation {

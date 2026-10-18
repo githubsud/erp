@@ -52,6 +52,9 @@ internal sealed class QuotationLineConfiguration : IEntityTypeConfiguration<Quot
     {
         b.ToTable("quotation_line", "sal");
         b.Property(x => x.Quantity).AsQuantity();
+        b.Property(x => x.UomFactor).AsQuantity();
+        b.Property(x => x.UomQuantity).AsQuantity();
+        b.Property(x => x.UomPrice).AsQuantity();
         b.Property(x => x.UnitPrice).AsQuantity();
         b.Property(x => x.DiscountPercent).HasPrecision(9, 4);
     }
@@ -73,6 +76,9 @@ internal sealed class SalesOrderLineConfiguration : IEntityTypeConfiguration<Sal
     {
         b.ToTable("sales_order_line", "sal");
         b.Property(x => x.Quantity).AsQuantity();
+        b.Property(x => x.UomFactor).AsQuantity();
+        b.Property(x => x.UomQuantity).AsQuantity();
+        b.Property(x => x.UomPrice).AsQuantity();
         b.Property(x => x.UnitPrice).AsQuantity();
         b.Property(x => x.DiscountPercent).HasPrecision(9, 4);
         b.Property(x => x.QuantityDelivered).AsQuantity();

@@ -56,6 +56,14 @@ public sealed class Item : TenantEntity
     public uint Version { get; set; }
 }
 
+/// <summary>An alternative unit of an item: one of <see cref="UomId"/> holds <see cref="Factor"/> base units.</summary>
+public sealed class ItemUnit : TenantEntity
+{
+    public Guid ItemId { get; init; }
+    public Guid UomId { get; init; }
+    public decimal Factor { get; set; }
+}
+
 /// <summary>Running quantity and value of an item across the company (weighted-average cost).</summary>
 public sealed class ItemValuation : TenantEntity, INotAudited
 {

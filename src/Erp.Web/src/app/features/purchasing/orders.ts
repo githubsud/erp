@@ -8,7 +8,7 @@ import { AuthService } from '../../core/auth.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
-import { CURRENCIES, GoodsReceipt, Item, Master, OrderStatus, PurchaseOrder, Supplier } from '../../core/trade.models';
+import { CURRENCIES, GoodsReceipt, Item, ItemUnit, Master, OrderStatus, PurchaseOrder, Supplier } from '../../core/trade.models';
 import { ConfirmDialog, ReverseDialog, ReverseResult } from '../../shared/dialogs';
 import { SHARED } from '../../shared/shared';
 
@@ -88,6 +88,7 @@ export class OrdersPage {
 
 type OrderLineGroup = FormGroup<{
   itemId: FormControl<string>;
+  uomId: FormControl<string | null>;
   description: FormControl<string>;
   quantity: FormControl<number | null>;
   unitPrice: FormControl<number | null>;
@@ -144,7 +145,8 @@ type OrderLineGroup = FormGroup<{
 
       <table class="line-editor">
         <thead>
-          <tr><th class="item-col">{{ 'po.item' | t }}</th><th>{{ 'po.description' | t }}</th><th class="narrow">{{ 'po.qty' | t }}</th><th class="narrow">{{ 'po.price' | t }}</th>
+          <tr><th class="item-col">{{ 'po.item' | t }}</th><th>{{ 'po.description' | t }}</th><th class="narrow">{{ 'units.unit' | t }}</th>
+            <th class="narrow">{{ 'po.qty' | t }}</th><th class="narrow">{{ 'po.price' | t }}</th>
             <th class="narrow num">{{ 'po.amount' | t }}</th><th></th></tr>
         </thead>
         <tbody>
@@ -158,13 +160,16 @@ type OrderLineGroup = FormGroup<{
                 </mat-form-field>
               </td>
               <td><mat-form-field><input matInput formControlName="description" /></mat-form-field></td>
+              <td class="narrow"><mat-form-field><mat-select formControlName="uomId" (selectionChange)="unitChanged(line)">
+                @for (u of unitsOf(line.controls.itemId.value); track u.uomId) { <mat-option [value]="u.isBase ? null : u.uomId">{{ u.uomCode }}</mat-option> }
+              </mat-select></mat-form-field></td>
               <td class="narrow"><mat-form-field><input matInput type="number" min="0" formControlName="quantity" dir="ltr" /></mat-form-field></td>
               <td class="narrow"><mat-form-field><input matInput type="number" min="0" formControlName="unitPrice" dir="ltr" /></mat-form-field></td>
               <td class="num ltr">{{ amount(line) | money }}</td>
               <td><button mat-icon-button type="button" (click)="lines.removeAt(i)" [disabled]="lines.length === 1"><mat-icon>delete</mat-icon></button></td>
             </tr>
           }
-          <tr class="total-row"><td colspan="4">{{ 'po.total' | t }} <span class="secondary">{{ form.controls.currency.value }}</span></td>
+          <tr class="total-row"><td colspan="5">{{ 'po.total' | t }} <span class="secondary">{{ form.controls.currency.value }}</span></td>
             <td class="num ltr">{{ total() | money }}</td><td></td></tr>
         </tbody>
       </table>
@@ -195,6 +200,7 @@ export class OrderFormPage implements OnInit {
   protected readonly threshold = signal<number | null>(null);
   protected readonly busy = signal(false);
   protected readonly currencies = CURRENCIES;
+  private readonly itemUnits = signal(new Map<string, ItemUnit[]>());
   protected readonly form = this.fb.group({
     currency: ['QAR'],
     exchangeRate: [null as number | null],
@@ -233,7 +239,10 @@ export class OrderFormPage implements OnInit {
       this.trade.order(id).subscribe((o) => {
         this.form.patchValue({ supplierId: o.supplierId, warehouseId: o.warehouseId, orderDate: o.orderDate, expectedDate: o.expectedDate ?? '',
           notes: o.notes ?? '', currency: o.currency, exchangeRate: o.currency === 'QAR' ? null : o.exchangeRate });
-        for (const l of o.lines) this.addLine(l.itemId, l.description ?? '', l.quantity, l.unitPrice);
+        for (const l of o.lines) {
+          this.loadUnits(l.itemId);
+          this.addLine(l.itemId, l.description ?? '', l.uomQuantity, l.uomPrice, l.uomId);
+        }
       });
     } else {
       this.addLine();
@@ -250,10 +259,27 @@ export class OrderFormPage implements OnInit {
     return this.form.invalid || this.lines.invalid || this.lines.length === 0 || (v.currency !== 'QAR' && !(Number(v.exchangeRate) > 0));
   }
 
-  protected addLine(itemId = '', description = '', quantity: number | null = null, unitPrice: number | null = null): void {
+  protected unitsOf(itemId: string): ItemUnit[] {
+    return this.itemUnits().get(itemId) ?? [];
+  }
+
+  /** Prices follow the unit: a pallet of 40 costs 40 times the bag price. */
+  protected unitChanged(line: OrderLineGroup): void {
+    const item = this.items().find((i) => i.id === line.controls.itemId.value);
+    const unit = this.unitsOf(line.controls.itemId.value).find((u) => (u.isBase ? null : u.uomId) === line.controls.uomId.value);
+    if (item?.purchasePrice && unit) line.controls.unitPrice.setValue(Math.round(item.purchasePrice * unit.factor * 1000000) / 1000000);
+  }
+
+  private loadUnits(itemId: string): void {
+    if (!itemId || this.itemUnits().has(itemId)) return;
+    this.trade.units(itemId).subscribe((u) => this.itemUnits.update((m) => new Map(m).set(itemId, u)));
+  }
+
+  protected addLine(itemId = '', description = '', quantity: number | null = null, unitPrice: number | null = null, uomId: string | null = null): void {
     this.lines.push(
       this.fb.group({
         itemId: this.fb.control(itemId, Validators.required),
+        uomId: this.fb.control<string | null>(uomId),
         description: this.fb.control(description),
         quantity: this.fb.control<number | null>(quantity, [Validators.required, Validators.min(0.000001)]),
         unitPrice: this.fb.control<number | null>(unitPrice, [Validators.required, Validators.min(0)])
@@ -262,6 +288,8 @@ export class OrderFormPage implements OnInit {
   }
 
   protected suggestPrice(line: OrderLineGroup): void {
+    line.controls.uomId.setValue(null);
+    this.loadUnits(line.controls.itemId.value);
     const item = this.items().find((i) => i.id === line.controls.itemId.value);
     if (item?.purchasePrice && line.controls.unitPrice.value === null) line.controls.unitPrice.setValue(item.purchasePrice);
   }
@@ -273,7 +301,7 @@ export class OrderFormPage implements OnInit {
       expectedDate: v.expectedDate || null,
       exchangeRate: v.currency === 'QAR' ? null : Number(v.exchangeRate),
       lines: this.lines.getRawValue().map((l) => ({
-        itemId: l.itemId, description: l.description || null, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice)
+        itemId: l.itemId, description: l.description || null, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice), uomId: l.uomId
       }))
     };
     this.busy.set(true);
@@ -442,7 +470,9 @@ export class ReceiveDialog {
           </ng-container>
           <ng-container matColumnDef="qty">
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.qty' | t }}</th>
-            <td mat-cell *matCellDef="let l" class="num ltr">{{ l.quantity }} <span class="secondary">{{ l.uomCode }}</span></td>
+            <td mat-cell *matCellDef="let l" class="num ltr">
+              @if (l.uomId) { {{ l.uomQuantity }} <span class="secondary">{{ l.orderUomCode }}</span><div class="secondary">= {{ l.quantity }} {{ l.uomCode }}</div> }
+              @else { {{ l.quantity }} <span class="secondary">{{ l.uomCode }}</span> }</td>
           </ng-container>
           <ng-container matColumnDef="price">
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.price' | t }}</th>

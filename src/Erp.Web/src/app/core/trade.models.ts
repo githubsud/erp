@@ -31,6 +31,15 @@ export interface Item {
   stockValue: number;
 }
 
+/** A unit an item is bought or sold in; one holds `factor` base units (the base unit has factor 1). */
+export interface ItemUnit {
+  itemId: string;
+  uomId: string;
+  uomCode: string;
+  factor: number;
+  isBase: boolean;
+}
+
 export interface StockRow {
   itemId: string;
   sku: string;
@@ -185,6 +194,11 @@ export interface OrderLine {
   quantityReceived: number;
   quantityInvoiced: number;
   whtCategory: WhtCategory;
+  uomId: string | null;
+  orderUomCode: string | null;
+  uomFactor: number;
+  uomQuantity: number;
+  uomPrice: number;
 }
 
 export interface PurchaseOrder {

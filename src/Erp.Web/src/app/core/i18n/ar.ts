@@ -925,5 +925,9 @@ export const ar: Record<TranslationKey, string> = {
   'fx.invoiceRateHint': 'سعر الصرف بتاريخ الفاتورة؛ الفرق عن الاستلام فرق سعر',
   'fx.paymentRateHint': 'سعر الصرف بتاريخ الدفع؛ الفرق ربح أو خسارة صرف',
   'fx.mixed': 'سدد الفواتير ذات العملات المختلفة بشكل منفصل.',
-  'fx.difference': 'فرق الصرف'
+  'fx.difference': 'فرق الصرف',
+  'units.title': 'الوحدات',
+  'units.hint': 'يُحفظ المخزون بوحدة {base}. أضف الوحدات التي تشتري أو تبيع بها أيضاً، مثل منصة تحتوي على 40.',
+  'units.unit': 'الوحدة',
+  'units.factor': 'كم {base} في الوحدة الواحدة'
 };

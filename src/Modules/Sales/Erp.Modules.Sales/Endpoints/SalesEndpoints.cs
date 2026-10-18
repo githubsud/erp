@@ -25,7 +25,8 @@ public sealed record PriceListDto(Guid Id, string Code, string NameEn, string Na
 public sealed record PriceDto(Guid ItemId, decimal? UnitPrice);
 
 public sealed record SalesLineDto(Guid Id, int LineNo, Guid ItemId, string Sku, string NameEn, string NameAr, string ItemType, string UomCode, string? Description,
-    decimal Quantity, decimal UnitPrice, decimal DiscountPercent, decimal Amount, decimal QuantityDelivered, decimal QuantityInvoiced);
+    decimal Quantity, decimal UnitPrice, decimal DiscountPercent, decimal Amount, decimal QuantityDelivered, decimal QuantityInvoiced, Guid? UomId,
+    string? OrderUomCode, decimal UomFactor, decimal UomQuantity, decimal UomPrice);
 
 public sealed record QuotationDto(Guid Id, string QuoteNo, Guid CustomerId, string CustomerCode, string CustomerNameEn, string CustomerNameAr, DateOnly QuoteDate,
     DateOnly ValidUntil, bool IsExpired, string Status, decimal Total, string? Notes, Guid? SalesOrderId, IReadOnlyList<SalesLineDto> Lines);
@@ -287,9 +288,19 @@ internal static class SalesEndpoints
     }
 
     private static SalesLineDto Line(IPricedLine l, Guid id, int lineNo, string? description, decimal delivered, decimal invoiced,
-        IReadOnlyDictionary<Guid, ItemInfo> items) =>
+        IReadOnlyDictionary<Guid, ItemInfo> items, IReadOnlyDictionary<Guid, string> uomCodes) =>
         new(id, lineNo, l.ItemId, items[l.ItemId].Sku, items[l.ItemId].NameEn, items[l.ItemId].NameAr, items[l.ItemId].Type.ToString(),
-            items[l.ItemId].UomCode, description, l.Quantity, l.UnitPrice, l.DiscountPercent, l.Amount, delivered, invoiced);
+            items[l.ItemId].UomCode, description, l.Quantity, l.UnitPrice, l.DiscountPercent, l.Amount, delivered, invoiced, l.UomId,
+            l.UomId is { } u ? uomCodes.GetValueOrDefault(u) : null, l.UomFactor, l.UomQuantity, l.UomPrice);
+
+    private static async Task<Dictionary<Guid, string>> UomCodesAsync(IInventoryQueries inv, IEnumerable<IPricedLine> lines, CancellationToken ct)
+    {
+        var withUnit = lines.Where(l => l.UomId != null).ToList();
+        if (withUnit.Count == 0) return [];
+        var ids = withUnit.Select(l => l.UomId!.Value).ToHashSet();
+        return (await inv.GetUnitsAsync(withUnit.Select(l => l.ItemId), ct)).Where(u => ids.Contains(u.UomId))
+            .GroupBy(u => u.UomId).ToDictionary(g => g.Key, g => g.First().UomCode);
+    }
 
     private static async Task<List<PriceListDto>> PriceListsAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, CancellationToken ct)
     {
@@ -315,10 +326,11 @@ internal static class SalesEndpoints
         var list = await q.OrderByDescending(x => x.QuoteDate).ThenByDescending(x => x.QuoteNo).Take(500).ToListAsync(ct);
         var customers = await CustomersAsync(db, list.Select(x => x.CustomerId), ct);
         var items = await inv.GetItemsAsync(list.SelectMany(x => x.Lines.Select(l => l.ItemId)), ct);
+        var codes = await UomCodesAsync(inv, list.SelectMany(x => x.Lines), ct);
         return list.Select(x => new QuotationDto(x.Id, x.QuoteNo, x.CustomerId, customers[x.CustomerId].Code, customers[x.CustomerId].NameEn,
             customers[x.CustomerId].NameAr, x.QuoteDate, x.ValidUntil,
             x.Status is QuotationStatus.Draft or QuotationStatus.Sent && x.ValidUntil < clock.Today, x.Status.ToString(), x.Total, x.Notes, x.SalesOrderId,
-            x.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, 0, 0, items)).ToList())).ToList();
+            x.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, 0, 0, items, codes)).ToList())).ToList();
     }
 
     private static async Task<SalesOrderDto> OrderAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid id, CancellationToken ct) =>
@@ -334,10 +346,12 @@ internal static class SalesEndpoints
         var orders = await q.OrderByDescending(o => o.OrderDate).ThenByDescending(o => o.SoNo).Take(500).ToListAsync(ct);
         var customers = await CustomersAsync(db, orders.Select(o => o.CustomerId), ct);
         var items = await inv.GetItemsAsync(orders.SelectMany(o => o.Lines.Select(l => l.ItemId)), ct);
+        var codes = await UomCodesAsync(inv, orders.SelectMany(o => o.Lines), ct);
         return orders.Select(o => new SalesOrderDto(o.Id, o.SoNo, o.CustomerId, customers[o.CustomerId].Code, customers[o.CustomerId].NameEn,
             customers[o.CustomerId].NameAr, o.OrderDate, o.ExpectedDate, o.WarehouseId, o.CustomerRef, o.QuotationId, o.Status.ToString(), o.Total, o.Notes,
             o.CreditWarning, o.CreditApprovedAt,
-            o.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, l.QuantityDelivered, l.QuantityInvoiced, items)).ToList())).ToList();
+            o.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, l.QuantityDelivered, l.QuantityInvoiced, items, codes)).ToList()))
+            .ToList();
     }
 
     private static async Task<List<DeliveryNoteDto>> DeliveriesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? orderId,

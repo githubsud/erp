@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { ApiService } from './api.service';
 import { Paged } from './models';
 import {
-  Adjustment, AgingReport, GoodsReceipt, GrniReport, Item, ItemLedger, LandedCost, Master, PurchaseOrder, PurchaseSettings, StockCount, StockRow,
+  Adjustment, AgingReport, ItemUnit, GoodsReceipt, GrniReport, Item, ItemLedger, LandedCost, Master, PurchaseOrder, PurchaseSettings, StockCount, StockRow,
   Supplier, SupplierInvoice, SupplierPayment, Transfer, ValuationReport, WhtReport, DebitNote
 } from './trade.models';
 
@@ -26,6 +26,8 @@ export class TradeApi {
     this.api.get<Paged<Item>>('inventory/items', params);
   item = (id: string) => this.api.get<Item>(`inventory/items/${id}`);
   saveItem = (id: string | null, body: unknown) => (id ? this.api.put<Item>(`inventory/items/${id}`, body) : this.api.post<Item>('inventory/items', body));
+  units = (id: string) => this.api.get<ItemUnit[]>(`inventory/items/${id}/units`);
+  saveUnits = (id: string, units: { uomId: string; factor: number }[]) => this.api.put<ItemUnit[]>(`inventory/items/${id}/units`, units);
   itemLedger = (id: string, from: string, to: string) => this.api.get<ItemLedger>(`inventory/items/${id}/ledger`, { from, to });
 
   // Stock

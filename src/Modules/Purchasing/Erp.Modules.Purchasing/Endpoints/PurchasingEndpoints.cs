@@ -20,7 +20,8 @@ public sealed record SupplierDto(Guid Id, string Code, string NameEn, string Nam
 public sealed record PurchaseSettingsDto(decimal ApprovalThreshold, decimal PriceTolerancePercent);
 
 public sealed record OrderLineDto(Guid Id, int LineNo, Guid ItemId, string Sku, string NameEn, string NameAr, string ItemType, string UomCode,
-    string? Description, decimal Quantity, decimal UnitPrice, decimal Amount, decimal QuantityReceived, decimal QuantityInvoiced, string WhtCategory);
+    string? Description, decimal Quantity, decimal UnitPrice, decimal Amount, decimal QuantityReceived, decimal QuantityInvoiced, string WhtCategory,
+    Guid? UomId, string? OrderUomCode, decimal UomFactor, decimal UomQuantity, decimal UomPrice);
 
 public sealed record OrderDto(Guid Id, string PoNo, Guid SupplierId, string SupplierCode, string SupplierNameEn, string SupplierNameAr, DateOnly OrderDate,
     DateOnly? ExpectedDate, Guid WarehouseId, string Status, decimal Total, string? Notes, bool RequiresApproval, DateTimeOffset? ApprovedAt,
@@ -244,12 +245,16 @@ internal static class PurchasingEndpoints
         var orders = await q.OrderByDescending(o => o.OrderDate).ThenByDescending(o => o.PoNo).Take(500).ToListAsync(ct);
         var suppliers = await SuppliersAsync(db, orders.Select(o => o.SupplierId), ct);
         var items = await inv.GetItemsAsync(orders.SelectMany(o => o.Lines.Select(l => l.ItemId)), ct);
+        var uomIds = orders.SelectMany(o => o.Lines.Where(l => l.UomId != null).Select(l => l.UomId!.Value)).Distinct().ToList();
+        var uomCodes = (await inv.GetUnitsAsync(orders.SelectMany(o => o.Lines.Where(l => l.UomId != null).Select(l => l.ItemId)), ct))
+            .Where(u => uomIds.Contains(u.UomId)).GroupBy(u => u.UomId).ToDictionary(g => g.Key, g => g.First().UomCode);
         return orders.Select(o => new OrderDto(o.Id, o.PoNo, o.SupplierId, suppliers[o.SupplierId].Code, suppliers[o.SupplierId].NameEn,
             suppliers[o.SupplierId].NameAr, o.OrderDate, o.ExpectedDate, o.WarehouseId, o.Status.ToString(), o.Total, o.Notes, o.RequiresApproval, o.ApprovedAt,
             o.GtaNotificationDue, o.GtaNotificationRef,
             o.Lines.OrderBy(l => l.LineNo).Select(l => new OrderLineDto(l.Id, l.LineNo, l.ItemId, items[l.ItemId].Sku, items[l.ItemId].NameEn,
                 items[l.ItemId].NameAr, items[l.ItemId].Type.ToString(), items[l.ItemId].UomCode, l.Description, l.Quantity, l.UnitPrice, l.Amount,
-                l.QuantityReceived, l.QuantityInvoiced, l.WhtCategory.ToString())).ToList(), o.Currency, o.ExchangeRate)).ToList();
+                l.QuantityReceived, l.QuantityInvoiced, l.WhtCategory.ToString(), l.UomId, l.UomId is { } u ? uomCodes.GetValueOrDefault(u) : null, l.UomFactor,
+                l.UomQuantity, l.UomPrice)).ToList(), o.Currency, o.ExchangeRate)).ToList();
     }
 
     private static async Task<List<ReceiptDto>> ReceiptsAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? orderId, Guid? supplierId, CancellationToken ct)
