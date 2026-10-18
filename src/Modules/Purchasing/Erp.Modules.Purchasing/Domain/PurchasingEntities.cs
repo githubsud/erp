@@ -30,6 +30,7 @@ public sealed class Supplier : TenantEntity
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public int PaymentTermsDays { get; set; } = 30;
+    public string Currency { get; set; } = "QAR";
     public WhtCategory DefaultWhtCategory { get; set; } = WhtCategory.None;
     public bool IsActive { get; set; } = true;
     public uint Version { get; set; }
@@ -48,6 +49,10 @@ public sealed class PurchaseOrder : TenantEntity
     public DateOnly OrderDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
     public Guid WarehouseId { get; set; }
+    public string Currency { get; set; } = "QAR";
+
+    /// <summary>QAR per unit of <see cref="Currency"/>; goods are received at this rate.</summary>
+    public decimal ExchangeRate { get; set; } = 1m;
     public PurchaseOrderStatus Status { get; set; } = PurchaseOrderStatus.Draft;
     public decimal Total { get; set; }
     public string? Notes { get; set; }
@@ -87,6 +92,7 @@ public sealed class GoodsReceipt : TenantEntity
     public Guid SupplierId { get; init; }
     public Guid WarehouseId { get; init; }
     public DateOnly ReceiptDate { get; init; }
+    public decimal ExchangeRate { get; init; } = 1m;
     public string? SupplierDeliveryNote { get; init; }
     public DocumentStatus Status { get; set; } = DocumentStatus.Posted;
     public decimal TotalValue { get; set; }
@@ -121,10 +127,17 @@ public sealed class SupplierInvoice : TenantEntity
     public DateOnly InvoiceDate { get; init; }
     public DateOnly DueDate { get; init; }
     public Guid? PurchaseOrderId { get; init; }
+    public string Currency { get; init; } = "QAR";
+    public decimal ExchangeRate { get; init; } = 1m;
+
+    /// <summary>Amounts in the invoice currency; the *Base amounts are what the ledger carries in QAR.</summary>
     public decimal Total { get; set; }
+    public decimal TotalBase { get; set; }
     public decimal WhtAmount { get; set; }
     public decimal PaidAmount { get; set; }
+    public decimal PaidBase { get; set; }
     public decimal DebitedAmount { get; set; }
+    public decimal DebitedBase { get; set; }
     public decimal WhtWithheld { get; set; }
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
     public MatchStatus MatchStatus { get; set; } = MatchStatus.NotApplicable;
@@ -138,6 +151,8 @@ public sealed class SupplierInvoice : TenantEntity
     public List<SupplierInvoiceLine> Lines { get; init; } = [];
 
     public decimal OpenAmount => Total - PaidAmount - DebitedAmount;
+
+    public decimal OpenBase => TotalBase - PaidBase - DebitedBase;
 }
 
 public sealed class SupplierInvoiceLine : TenantEntity
@@ -211,6 +226,11 @@ public sealed class SupplierPayment : TenantEntity
     public DateOnly PaymentDate { get; init; }
     public Guid PaymentAccountId { get; init; }
     public string? Reference { get; init; }
+    public string Currency { get; init; } = "QAR";
+    public decimal ExchangeRate { get; init; } = 1m;
+
+    /// <summary>QAR gain (positive) or loss (negative) against the invoices' rates.</summary>
+    public decimal FxDifference { get; set; }
     public decimal GrossAmount { get; set; }
     public decimal WhtAmount { get; set; }
     public decimal NetAmount { get; set; }
@@ -225,6 +245,9 @@ public sealed class SupplierPaymentAllocation : TenantEntity
     public Guid SupplierInvoiceId { get; init; }
     public decimal Amount { get; init; }
     public decimal WhtAmount { get; init; }
+
+    /// <summary>The invoice's QAR balance this allocation settles.</summary>
+    public decimal BaseCleared { get; init; }
 }
 
 public enum DebitNoteLineType { Return, Allowance }
@@ -240,6 +263,7 @@ public sealed class DebitNote : TenantEntity
     public Guid? WarehouseId { get; init; }
     public required string Reason { get; init; }
     public decimal Total { get; set; }
+    public decimal TotalBase { get; set; }
     public DocumentStatus Status { get; set; } = DocumentStatus.Posted;
     public Guid? JournalEntryId { get; set; }
     public List<DebitNoteLine> Lines { get; init; } = [];

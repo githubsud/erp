@@ -56,7 +56,15 @@ function whtOn(invoice: SupplierInvoice, paying: number): number {
             <mat-label>{{ 'pay.reference' | t }}</mat-label>
             <input matInput formControlName="reference" dir="ltr" />
           </mat-form-field>
+          @if (currency() !== 'QAR') {
+            <mat-form-field>
+              <mat-label>{{ 'fx.rate' | t: { c: currency() } }}</mat-label>
+              <input matInput type="number" min="0" step="0.0001" [formControl]="rate" dir="ltr" />
+              <mat-hint>{{ 'fx.paymentRateHint' | t }}</mat-hint>
+            </mat-form-field>
+          }
         </form>
+        @if (mixedCurrencies()) { <div class="error-panel">{{ 'fx.mixed' | t }}</div> }
         @if (openInvoices().length) {
           <table class="line-editor">
             <thead>
@@ -66,7 +74,8 @@ function whtOn(invoice: SupplierInvoice, paying: number): number {
             <tbody>
               @for (inv of openInvoices(); track inv.id) {
                 <tr>
-                  <td><span class="ltr">{{ inv.invoiceNo }}</span> <span class="secondary ltr">{{ inv.supplierRef }}</span></td>
+                  <td><span class="ltr">{{ inv.invoiceNo }}</span> <span class="secondary ltr">{{ inv.supplierRef }}</span>
+                    @if (inv.currency !== 'QAR') { <span class="chip info">{{ inv.currency }}</span> }</td>
                   <td class="ltr">{{ inv.dueDate | d }}</td>
                   <td class="num ltr">{{ inv.openAmount | money }}</td>
                   <td class="narrow"><mat-form-field><input matInput type="number" min="0" [max]="inv.openAmount" [formControl]="amounts[inv.id]" dir="ltr" /></mat-form-field></td>
@@ -86,7 +95,8 @@ function whtOn(invoice: SupplierInvoice, paying: number): number {
           @if (openInvoices().length) { <button mat-button type="button" (click)="payAll()">{{ 'pay.payAll' | t }}</button> }
           <span class="spacer"></span>
           <button mat-button type="button" (click)="showForm.set(false)">{{ 'app.cancel' | t }}</button>
-          <button mat-flat-button (click)="save()" [disabled]="form.invalid || gross() <= 0 || busy()">{{ 'doc.post' | t }}</button>
+          <button mat-flat-button (click)="save()"
+            [disabled]="form.invalid || gross() <= 0 || busy() || mixedCurrencies() || (currency() !== 'QAR' && !(Number(rate.value) > 0))">{{ 'doc.post' | t }}</button>
         </div>
       </mat-card>
     }
@@ -108,7 +118,9 @@ function whtOn(invoice: SupplierInvoice, paying: number): number {
         </ng-container>
         <ng-container matColumnDef="gross">
           <th mat-header-cell *matHeaderCellDef class="num">{{ 'pay.gross' | t }}</th>
-          <td mat-cell *matCellDef="let p" class="num ltr">{{ p.grossAmount | money }}</td>
+          <td mat-cell *matCellDef="let p" class="num ltr">@if (p.currency !== 'QAR') { <span class="secondary">{{ p.currency }} @ {{ p.exchangeRate }}</span> }
+            {{ p.grossAmount | money }}
+            @if (p.fxDifference) { <div class="secondary" [class.loss]="p.fxDifference < 0">{{ 'fx.difference' | t }} {{ p.fxDifference | money }}</div> }</td>
         </ng-container>
         <ng-container matColumnDef="wht">
           <th mat-header-cell *matHeaderCellDef class="num">{{ 'pay.wht' | t }}</th>
@@ -139,6 +151,7 @@ function whtOn(invoice: SupplierInvoice, paying: number): number {
   styles: `
     .bar { align-items: center; margin-top: 8px; }
     .spacer { flex: 1; }
+    .loss { color: #b3261e; }
   `
 })
 export class PaymentsPage implements OnInit {
@@ -157,7 +170,19 @@ export class PaymentsPage implements OnInit {
   protected readonly showForm = signal(false);
   protected readonly busy = signal(false);
   protected amounts: Record<string, FormControl<number | null>> = {};
+  protected readonly rate = new FormControl<number | null>(null);
+  protected readonly Number = Number;
   private readonly version = signal(0);
+  /** The currency of the invoices being paid (all must share one). */
+  protected readonly currency = computed(() => {
+    this.version();
+    const paying = this.openInvoices().filter((i) => Number(this.amounts[i.id]?.value) > 0);
+    return (paying[0] ?? this.openInvoices()[0])?.currency ?? 'QAR';
+  });
+  protected readonly mixedCurrencies = computed(() => {
+    this.version();
+    return new Set(this.openInvoices().filter((i) => Number(this.amounts[i.id]?.value) > 0).map((i) => i.currency)).size > 1;
+  });
   protected readonly form = inject(FormBuilder).nonNullable.group({
     supplierId: ['', Validators.required],
     paymentAccountId: ['', Validators.required],
@@ -213,7 +238,7 @@ export class PaymentsPage implements OnInit {
       .filter((i) => Number(this.amounts[i.id].value) > 0)
       .map((i) => ({ supplierInvoiceId: i.id, amount: Number(this.amounts[i.id].value) }));
     this.busy.set(true);
-    this.trade.createPayment({ ...this.form.getRawValue(), allocations }).subscribe({
+    this.trade.createPayment({ ...this.form.getRawValue(), allocations, exchangeRate: this.currency() === 'QAR' ? null : Number(this.rate.value) }).subscribe({
       next: () => {
         this.busy.set(false);
         this.showForm.set(false);

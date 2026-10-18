@@ -36,6 +36,32 @@ public static class PurchasingRules
     public static bool WithinTolerance(decimal invoicedUnitPrice, decimal receiptUnitCost, decimal tolerancePercent) =>
         invoicedUnitPrice <= receiptUnitCost * (1 + tolerancePercent / 100m) + 0.000001m;
 
+    /// <summary>The document currency: QAR when not given, otherwise a three-letter ISO code.</summary>
+    public static string CurrencyCode(string? currency)
+    {
+        var code = string.IsNullOrWhiteSpace(currency) ? Money.BaseCurrency : currency.Trim().ToUpperInvariant();
+        if (code.Length != 3 || !code.All(char.IsAsciiLetterUpper))
+            throw new BusinessRuleException("pur.currency", "Use a three-letter currency code (QAR, USD, EUR…).", "استخدم رمز عملة من ثلاثة أحرف.");
+        return code;
+    }
+
+    /// <summary>QAR per unit of the document currency: 1 for QAR, otherwise required and positive.</summary>
+    public static decimal ExchangeRate(string currency, decimal? rate)
+    {
+        if (currency == Money.BaseCurrency) return 1m;
+        if (rate is not > 0)
+            throw new BusinessRuleException("pur.exchange_rate", $"Enter the exchange rate from {currency} to QAR.", $"أدخل سعر صرف {currency} مقابل الريال القطري.");
+        return Math.Round(rate.Value, 6, MidpointRounding.AwayFromZero);
+    }
+
+    public static decimal ToBase(decimal amount, decimal rate) => Money.Round(amount * rate);
+
+    /// <summary>
+    /// The QAR a settlement clears from a document: the whole remaining QAR balance when it settles the document (so no cents
+    /// are left behind), otherwise the amount at the document's rate.
+    /// </summary>
+    public static decimal BaseCleared(decimal amount, decimal open, decimal openBase, decimal rate) => amount >= open ? openBase : ToBase(amount, rate);
+
     /// <summary>WHT withheld on a part payment: pro rata, with the last payment taking the remainder.</summary>
     public static decimal WhtOnPayment(decimal invoiceTotal, decimal invoiceWht, decimal alreadyWithheld, decimal openBefore, decimal paying)
     {

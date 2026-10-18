@@ -14,7 +14,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Erp.Modules.Purchasing.Endpoints;
 
 public sealed record SupplierDto(Guid Id, string Code, string NameEn, string NameAr, string Country, bool IsResident, bool HasPermanentEstablishment,
-    bool SubjectToWht, string? TaxCardNo, string? CrNo, string? Email, string? Phone, int PaymentTermsDays, string DefaultWhtCategory, bool IsActive);
+    bool SubjectToWht, string? TaxCardNo, string? CrNo, string? Email, string? Phone, int PaymentTermsDays, string DefaultWhtCategory, bool IsActive,
+    string Currency);
 
 public sealed record PurchaseSettingsDto(decimal ApprovalThreshold, decimal PriceTolerancePercent);
 
@@ -23,14 +24,14 @@ public sealed record OrderLineDto(Guid Id, int LineNo, Guid ItemId, string Sku, 
 
 public sealed record OrderDto(Guid Id, string PoNo, Guid SupplierId, string SupplierCode, string SupplierNameEn, string SupplierNameAr, DateOnly OrderDate,
     DateOnly? ExpectedDate, Guid WarehouseId, string Status, decimal Total, string? Notes, bool RequiresApproval, DateTimeOffset? ApprovedAt,
-    DateOnly? GtaNotificationDue, string? GtaNotificationRef, IReadOnlyList<OrderLineDto> Lines);
+    DateOnly? GtaNotificationDue, string? GtaNotificationRef, IReadOnlyList<OrderLineDto> Lines, string Currency, decimal ExchangeRate);
 
 public sealed record ReceiptLineDto(Guid Id, int LineNo, Guid PurchaseOrderLineId, Guid ItemId, string Sku, string NameEn, string NameAr, decimal Quantity,
     decimal UnitCost, decimal Value, decimal QuantityInvoiced);
 
 public sealed record ReceiptDto(Guid Id, string GrnNo, Guid PurchaseOrderId, string PoNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr,
     Guid WarehouseId, DateOnly ReceiptDate, string? SupplierDeliveryNote, string Status, decimal TotalValue, Guid? JournalEntryId,
-    IReadOnlyList<ReceiptLineDto> Lines);
+    IReadOnlyList<ReceiptLineDto> Lines, decimal ExchangeRate);
 
 public sealed record InvoiceLineDto(Guid Id, int LineNo, string LineType, Guid? GoodsReceiptLineId, Guid? PurchaseOrderLineId, Guid? ItemId, string? Sku,
     string? Description, decimal Quantity, decimal UnitPrice, decimal Amount, decimal? ReceiptUnitCost, decimal Variance, string WhtCategory,
@@ -38,7 +39,8 @@ public sealed record InvoiceLineDto(Guid Id, int LineNo, string LineType, Guid? 
 
 public sealed record InvoiceDto(Guid Id, string InvoiceNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr, string SupplierRef,
     DateOnly InvoiceDate, DateOnly DueDate, Guid? PurchaseOrderId, decimal Total, decimal WhtAmount, decimal PaidAmount, decimal OpenAmount,
-    string Status, string MatchStatus, string? Notes, Guid? JournalEntryId, IReadOnlyList<InvoiceLineDto> Lines, bool IsOpening, decimal DebitedAmount);
+    string Status, string MatchStatus, string? Notes, Guid? JournalEntryId, IReadOnlyList<InvoiceLineDto> Lines, bool IsOpening, decimal DebitedAmount,
+    string Currency, decimal ExchangeRate, decimal TotalBase, decimal OpenBase);
 
 public sealed record DebitNoteLineDto(int LineNo, string LineType, Guid? SupplierInvoiceLineId, Guid? ItemId, string? Sku, string? Description,
     decimal Quantity, decimal UnitPrice, decimal Amount, decimal StockValue);
@@ -58,7 +60,7 @@ public sealed record PaymentAllocationDto(Guid SupplierInvoiceId, string Invoice
 
 public sealed record PaymentDto(Guid Id, string PaymentNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr, DateOnly PaymentDate,
     Guid PaymentAccountId, string? Reference, decimal GrossAmount, decimal WhtAmount, decimal NetAmount, string Status, Guid? JournalEntryId,
-    IReadOnlyList<PaymentAllocationDto> Allocations);
+    IReadOnlyList<PaymentAllocationDto> Allocations, string Currency, decimal ExchangeRate, decimal FxDifference);
 
 public sealed record GrniRow(Guid GoodsReceiptId, string GrnNo, DateOnly ReceiptDate, string SupplierNameEn, string SupplierNameAr, string Sku,
     decimal QuantityNotInvoiced, decimal UnitCost, decimal Value);
@@ -227,7 +229,7 @@ internal static class PurchasingEndpoints
             CancellationToken ct) => await OrderAsync(db, t, inv, (await run(s, id, ct)).Id, ct)).RequirePermission(permission);
 
     private static SupplierDto ToDto(Supplier s) => new(s.Id, s.Code, s.NameEn, s.NameAr, s.Country, s.IsResident, s.HasPermanentEstablishment,
-        s.SubjectToWht, s.TaxCardNo, s.CrNo, s.Email, s.Phone, s.PaymentTermsDays, s.DefaultWhtCategory.ToString(), s.IsActive);
+        s.SubjectToWht, s.TaxCardNo, s.CrNo, s.Email, s.Phone, s.PaymentTermsDays, s.DefaultWhtCategory.ToString(), s.IsActive, s.Currency);
 
     private static async Task<OrderDto> OrderAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid id, CancellationToken ct) =>
         (await OrdersAsync(db, t, inv, id, null, null, ct)).SingleOrDefault() ?? throw new NotFoundException("Purchase order", id);
@@ -247,7 +249,7 @@ internal static class PurchasingEndpoints
             o.GtaNotificationDue, o.GtaNotificationRef,
             o.Lines.OrderBy(l => l.LineNo).Select(l => new OrderLineDto(l.Id, l.LineNo, l.ItemId, items[l.ItemId].Sku, items[l.ItemId].NameEn,
                 items[l.ItemId].NameAr, items[l.ItemId].Type.ToString(), items[l.ItemId].UomCode, l.Description, l.Quantity, l.UnitPrice, l.Amount,
-                l.QuantityReceived, l.QuantityInvoiced, l.WhtCategory.ToString())).ToList())).ToList();
+                l.QuantityReceived, l.QuantityInvoiced, l.WhtCategory.ToString())).ToList(), o.Currency, o.ExchangeRate)).ToList();
     }
 
     private static async Task<List<ReceiptDto>> ReceiptsAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? orderId, Guid? supplierId, CancellationToken ct)
@@ -264,7 +266,7 @@ internal static class PurchasingEndpoints
         return list.Select(r => new ReceiptDto(r.Id, r.GrnNo, r.PurchaseOrderId, poNos[r.PurchaseOrderId], r.SupplierId, suppliers[r.SupplierId].NameEn,
             suppliers[r.SupplierId].NameAr, r.WarehouseId, r.ReceiptDate, r.SupplierDeliveryNote, r.Status.ToString(), r.TotalValue, r.JournalEntryId,
             r.Lines.OrderBy(l => l.LineNo).Select(l => new ReceiptLineDto(l.Id, l.LineNo, l.PurchaseOrderLineId, l.ItemId, items[l.ItemId].Sku,
-                items[l.ItemId].NameEn, items[l.ItemId].NameAr, l.Quantity, l.UnitCost, l.Value, l.QuantityInvoiced)).ToList())).ToList();
+                items[l.ItemId].NameEn, items[l.ItemId].NameAr, l.Quantity, l.UnitCost, l.Value, l.QuantityInvoiced)).ToList(), r.ExchangeRate)).ToList();
     }
 
     private static async Task<List<InvoiceDto>> InvoicesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? supplierId, string? status, bool openOnly,
@@ -284,7 +286,8 @@ internal static class PurchasingEndpoints
             i.Notes, i.JournalEntryId,
             i.Lines.OrderBy(l => l.LineNo).Select(l => new InvoiceLineDto(l.Id, l.LineNo, l.LineType.ToString(), l.GoodsReceiptLineId, l.PurchaseOrderLineId,
                 l.ItemId, l.ItemId is { } item ? items[item].Sku : null, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.ReceiptUnitCost, l.Variance,
-                l.WhtCategory.ToString(), l.WhtRate, l.WhtAmount, l.QuantityReturned)).ToList(), i.IsOpening, i.DebitedAmount)).ToList();
+                l.WhtCategory.ToString(), l.WhtRate, l.WhtAmount, l.QuantityReturned)).ToList(), i.IsOpening, i.DebitedAmount, i.Currency, i.ExchangeRate,
+                i.TotalBase, i.OpenBase)).ToList();
     }
 
     private static async Task<List<DebitNoteDto>> DebitNotesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? supplierId,
@@ -333,7 +336,7 @@ internal static class PurchasingEndpoints
         return list.Select(p => new PaymentDto(p.Id, p.PaymentNo, p.SupplierId, suppliers[p.SupplierId].NameEn, suppliers[p.SupplierId].NameAr, p.PaymentDate,
             p.PaymentAccountId, p.Reference, p.GrossAmount, p.WhtAmount, p.NetAmount, p.Status.ToString(), p.JournalEntryId,
             p.Allocations.Select(a => new PaymentAllocationDto(a.SupplierInvoiceId, invoices[a.SupplierInvoiceId].InvoiceNo,
-                invoices[a.SupplierInvoiceId].SupplierRef, a.Amount, a.WhtAmount)).ToList())).ToList();
+                invoices[a.SupplierInvoiceId].SupplierRef, a.Amount, a.WhtAmount)).ToList(), p.Currency, p.ExchangeRate, p.FxDifference)).ToList();
     }
 
     /// <summary>Received but not yet invoiced, at receipt cost, next to the GRNI account balance.</summary>
@@ -365,7 +368,7 @@ internal static class PurchasingEndpoints
                           join s in db.Set<Supplier>() on i.SupplierId equals s.Id
                           where i.CompanyId == t.RequireCompanyId() && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.PartiallyPaid)
                                 && i.InvoiceDate <= date
-                          select new { s.Id, s.Code, s.NameEn, s.NameAr, i.DueDate, Open = i.Total - i.PaidAmount - i.DebitedAmount }).ToListAsync(ct);
+                          select new { s.Id, s.Code, s.NameEn, s.NameAr, i.DueDate, Open = i.TotalBase - i.PaidBase - i.DebitedBase }).ToListAsync(ct);
         var rows = open.GroupBy(x => new { x.Id, x.Code, x.NameEn, x.NameAr }).Select(g =>
         {
             decimal Bucket(int from, int to) => g.Where(x => (date.DayNumber - x.DueDate.DayNumber) is var d && d >= from && d <= to).Sum(x => x.Open);
@@ -389,14 +392,15 @@ internal static class PurchasingEndpoints
                           where p.CompanyId == t.RequireCompanyId() && p.Status == DocumentStatus.Posted && a.WhtAmount > 0
                                 && p.PaymentDate >= start && p.PaymentDate <= end
                           orderby p.PaymentDate, p.PaymentNo
-                          select new { p.PaymentDate, p.PaymentNo, s.NameEn, s.NameAr, s.Country, s.TaxCardNo, i.Id, i.InvoiceNo, a.Amount, a.WhtAmount })
+                          select new { p.PaymentDate, p.PaymentNo, s.NameEn, s.NameAr, s.Country, s.TaxCardNo, i.Id, i.InvoiceNo, a.Amount, a.WhtAmount, p.ExchangeRate })
             .ToListAsync(ct);
         var invoiceIds = rows.Select(r => r.Id).Distinct().ToList();
         var categories = (await db.Set<SupplierInvoiceLine>().AsNoTracking().Where(l => invoiceIds.Contains(l.SupplierInvoiceId) && l.WhtAmount > 0)
                 .Select(l => new { l.SupplierInvoiceId, l.WhtCategory }).ToListAsync(ct))
             .GroupBy(l => l.SupplierInvoiceId).ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.WhtCategory.ToString()).Distinct()));
         var result = rows.Select(r => new WhtRow(r.PaymentDate, r.PaymentNo, r.NameEn, r.NameAr, r.Country, r.TaxCardNo, r.InvoiceNo,
-            categories.GetValueOrDefault(r.Id, ""), r.Amount, r.Amount == 0 ? 0 : Math.Round(r.WhtAmount * 100m / r.Amount, 2), r.WhtAmount)).ToList();
+            categories.GetValueOrDefault(r.Id, ""), PurchasingRules.ToBase(r.Amount, r.ExchangeRate), r.Amount == 0 ? 0 : Math.Round(r.WhtAmount * 100m / r.Amount, 2),
+            PurchasingRules.ToBase(r.WhtAmount, r.ExchangeRate))).ToList();
         return new WhtReport(start.Year, start.Month, start.AddMonths(1).AddDays(15), result, result.Sum(r => r.Gross), result.Sum(r => r.Tax));
     }
 

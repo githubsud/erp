@@ -12,7 +12,7 @@ public sealed record InvoiceLineRequest(InvoiceLineType LineType, Guid? GoodsRec
     decimal Quantity, decimal UnitPrice, WhtCategory? WhtCategory = null);
 
 public sealed record InvoiceRequest(Guid SupplierId, string SupplierRef, DateOnly InvoiceDate, DateOnly? DueDate, Guid? PurchaseOrderId, string? Notes,
-    IReadOnlyList<InvoiceLineRequest> Lines);
+    IReadOnlyList<InvoiceLineRequest> Lines, string? Currency = null, decimal? ExchangeRate = null);
 
 public sealed record ChargeRequest(ChargeType ChargeType, string? Description, decimal Amount, Guid? SupplierInvoiceId);
 
@@ -21,7 +21,9 @@ public sealed record LandedCostRequest(DateOnly Date, AllocationMethod Method, I
 
 public sealed record PaymentAllocationRequest(Guid SupplierInvoiceId, decimal Amount);
 
-public sealed record PaymentRequest(Guid SupplierId, DateOnly Date, Guid PaymentAccountId, string? Reference, IReadOnlyList<PaymentAllocationRequest> Allocations);
+/// <summary>Allocations are in the invoices' currency; a rate for the payment date is needed when that is not QAR.</summary>
+public sealed record PaymentRequest(Guid SupplierId, DateOnly Date, Guid PaymentAccountId, string? Reference, IReadOnlyList<PaymentAllocationRequest> Allocations,
+    decimal? ExchangeRate = null);
 
 /// <summary>Collects signed amounts per account role and key, then emits balanced debit/credit posting lines.</summary>
 internal sealed class PostingBuilder
@@ -68,7 +70,8 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
             var grnLines = await (from l in db.Set<GoodsReceiptLine>()
                                   join g in db.Set<GoodsReceipt>() on l.GoodsReceiptId equals g.Id
                                   where grnLineIds.Contains(l.Id) && g.CompanyId == supplier.CompanyId
-                                  select new { Line = l, g.SupplierId, g.Status }).ToDictionaryAsync(x => x.Line.Id, token);
+                                  join o in db.Set<PurchaseOrder>() on g.PurchaseOrderId equals o.Id
+                                  select new { Line = l, g.SupplierId, g.Status, o.Currency }).ToDictionaryAsync(x => x.Line.Id, token);
             var poLineIds = r.Lines.Where(l => l.PurchaseOrderLineId is not null).Select(l => l.PurchaseOrderLineId!.Value).ToList();
             var poLines = await (from l in db.Set<PurchaseOrderLine>()
                                  join o in db.Set<PurchaseOrder>() on l.PurchaseOrderId equals o.Id
@@ -77,9 +80,13 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
             var items = await inventory.GetItemsAsync(r.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value)
                 .Concat(grnLines.Values.Select(g => g.Line.ItemId)).Concat(poLines.Values.Select(p => p.Line.ItemId)), token);
 
+            var currency = PurchasingRules.CurrencyCode(r.Currency ?? supplier.Currency);
+            var fx = PurchasingRules.ExchangeRate(currency, r.ExchangeRate);
             var invoice = new SupplierInvoice
             {
                 CompanyId = supplier.CompanyId,
+                Currency = currency,
+                ExchangeRate = fx,
                 InvoiceNo = await numbering.NextAsync(SourceType, "PINV", r.InvoiceDate, ct: token),
                 SupplierId = supplier.Id,
                 SupplierRef = Guard.Required(r.SupplierRef, "supplierRef"),
@@ -110,6 +117,9 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                         if (grn.SupplierId != supplier.Id || grn.Status != DocumentStatus.Posted)
                             throw new BusinessRuleException("pur.receipt_mismatch", "The receipt belongs to another supplier or was reversed.",
                                 "الاستلام يخص مورداً آخر أو تم عكسه.");
+                        if (grn.Currency != currency)
+                            throw new BusinessRuleException("pur.currency_mismatch", $"The goods were ordered in {grn.Currency}; invoice them in the same currency.",
+                                $"تم طلب البضاعة بعملة {grn.Currency}؛ أصدر الفاتورة بنفس العملة.");
                         if (l.Quantity > grn.Line.Quantity - grn.Line.QuantityInvoiced)
                             throw new BusinessRuleException("pur.over_invoice",
                                 $"Only {grn.Line.Quantity - grn.Line.QuantityInvoiced:0.##} received and not yet invoiced.",
@@ -117,8 +127,9 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                         itemId = grn.Line.ItemId;
                         poLineId = grn.Line.PurchaseOrderLineId;
                         receiptCost = grn.Line.UnitCost;
-                        lineVariance = amount - Money.Round(l.Quantity * grn.Line.UnitCost);
-                        if (!PurchasingRules.WithinTolerance(l.UnitPrice, grn.Line.UnitCost, settings.PriceTolerancePercent)) variance = true;
+                        // Matching is in QAR: the invoice price at the invoice rate against the receipt cost.
+                        lineVariance = PurchasingRules.ToBase(amount, fx) - Money.Round(l.Quantity * grn.Line.UnitCost);
+                        if (!PurchasingRules.WithinTolerance(l.UnitPrice * fx, grn.Line.UnitCost, settings.PriceTolerancePercent)) variance = true;
                         break;
                     case InvoiceLineType.Service:
                         if (poLineId is { } pl)
@@ -156,6 +167,7 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                 });
             }
             invoice.Total = invoice.Lines.Sum(l => l.Amount);
+            invoice.TotalBase = invoice.Lines.Sum(l => PurchasingRules.ToBase(l.Amount, fx));
             if (invoice.Total <= 0)
                 throw new BusinessRuleException("pur.invoice_total", "The invoice total must be positive.", "يجب أن يكون إجمالي الفاتورة موجباً.");
             invoice.WhtAmount = invoice.Lines.Sum(l => l.WhtAmount);
@@ -213,14 +225,16 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                             throw new BusinessRuleException("pur.over_invoice", $"Line {l.LineNo}: the receipt has already been invoiced.",
                                 $"السطر {l.LineNo}: تمت فوترة الاستلام مسبقاً.");
                         grn.QuantityInvoiced += l.Quantity;
-                        builder.Add(AccountRoles.GoodsReceivedNotInvoiced, null, l.Amount - l.Variance, invoice.SupplierId);
+                        builder.Add(AccountRoles.GoodsReceivedNotInvoiced, null, PurchasingRules.ToBase(l.Amount, invoice.ExchangeRate) - l.Variance,
+                            invoice.SupplierId);
                         if (l.Variance != 0) revaluations.Add(new RevaluationLine(l.ItemId!.Value, l.Variance, l.Quantity, l.Id));
                         break;
                     case InvoiceLineType.Service:
-                        builder.Add(AccountRoles.PurchaseExpense, l.ItemId is { } item ? items[item].ItemGroupId : null, l.Amount);
+                        builder.Add(AccountRoles.PurchaseExpense, l.ItemId is { } item ? items[item].ItemGroupId : null,
+                            PurchasingRules.ToBase(l.Amount, invoice.ExchangeRate));
                         break;
                     case InvoiceLineType.LandedCost:
-                        builder.Add(AccountRoles.LandedCostClearing, null, l.Amount);
+                        builder.Add(AccountRoles.LandedCostClearing, null, PurchasingRules.ToBase(l.Amount, invoice.ExchangeRate));
                         break;
                 }
                 if (l.PurchaseOrderLineId is { } poLine) poLines[poLine].QuantityInvoiced += l.Quantity;
@@ -230,13 +244,14 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                 builder.Add(AccountRoles.Inventory, x.ItemGroupId, x.ToInventory);
                 builder.Add(AccountRoles.CostOfSales, x.ItemGroupId, x.ToCostOfSales);
             }
-            builder.Add(AccountRoles.AccountsPayable, null, -invoice.Total, invoice.SupplierId);
+            builder.Add(AccountRoles.AccountsPayable, null, -invoice.TotalBase, invoice.SupplierId);
 
             var supplier = await db.Set<Supplier>().AsNoTracking().SingleAsync(s => s.Id == invoice.SupplierId, token);
             invoice.JournalEntryId = (await posting.PostAsync(new PostingRequest
             {
                 SourceType = SourceType, SourceId = invoice.Id, SourceNo = invoice.InvoiceNo, PostingDate = invoice.InvoiceDate,
-                MemoEn = $"Supplier invoice {invoice.SupplierRef} — {supplier.NameEn}", MemoAr = $"فاتورة مورد {invoice.SupplierRef} — {supplier.NameAr}",
+                MemoEn = $"Supplier invoice {invoice.SupplierRef} — {supplier.NameEn}{FxMemo(invoice.Currency, invoice.Total, invoice.ExchangeRate)}",
+                MemoAr = $"فاتورة مورد {invoice.SupplierRef} — {supplier.NameAr}{FxMemo(invoice.Currency, invoice.Total, invoice.ExchangeRate)}",
                 Lines = builder.Lines()
             }, token)).JournalEntryId;
             invoice.Status = InvoiceStatus.Posted;
@@ -271,6 +286,10 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
             await db.SaveChangesAsync(token);
             return invoice;
         }, ct);
+
+    /// <summary>Foreign-currency documents show their original amount and rate in the journal memo.</summary>
+    internal static string FxMemo(string currency, decimal amount, decimal rate) =>
+        currency == Money.BaseCurrency ? "" : $" ({currency} {amount:N2} @ {rate:0.######})";
 
     /// <summary>Paid once payments and debit notes cover the total; partly paid once anything has been settled.</summary>
     internal static void RefreshPaymentStatus(SupplierInvoice invoice) =>
@@ -316,7 +335,7 @@ internal sealed class LandedCostService(ErpDbContext db, ITenantContext tenant, 
                               ?? throw new NotFoundException("Supplier invoice", group.Key);
                 if (invoice.Status is InvoiceStatus.Draft or InvoiceStatus.Reversed)
                     throw new BusinessRuleException("pur.charge_invoice", $"Invoice {invoice.InvoiceNo} is not posted.", $"الفاتورة {invoice.InvoiceNo} غير مرحّلة.");
-                var available = invoice.Lines.Where(l => l.LineType == InvoiceLineType.LandedCost).Sum(l => l.Amount);
+                var available = invoice.Lines.Where(l => l.LineType == InvoiceLineType.LandedCost).Sum(l => PurchasingRules.ToBase(l.Amount, invoice.ExchangeRate));
                 var used = await (from c in db.Set<LandedCostCharge>()
                                   join v in db.Set<LandedCostVoucher>() on c.LandedCostVoucherId equals v.Id
                                   where c.SupplierInvoiceId == invoice.Id && v.Status == DocumentStatus.Posted
@@ -416,6 +435,10 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
 
             var ids = r.Allocations.Select(a => a.SupplierInvoiceId).ToList();
             var invoices = await db.Set<SupplierInvoice>().Where(i => ids.Contains(i.Id)).ToDictionaryAsync(i => i.Id, token);
+            var currencies = invoices.Values.Select(i => i.Currency).Distinct().ToList();
+            if (currencies.Count > 1)
+                throw new BusinessRuleException("pur.payment_currencies", "Pay invoices in different currencies separately.", "سدد الفواتير ذات العملات المختلفة بشكل منفصل.");
+            var currency = currencies.SingleOrDefault() ?? Money.BaseCurrency;
             var payment = new SupplierPayment
             {
                 CompanyId = supplier.CompanyId,
@@ -423,7 +446,9 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
                 SupplierId = supplier.Id,
                 PaymentDate = r.Date,
                 PaymentAccountId = account.Id,
-                Reference = SupplierService.Clean(r.Reference)
+                Reference = SupplierService.Clean(r.Reference),
+                Currency = currency,
+                ExchangeRate = PurchasingRules.ExchangeRate(currency, r.ExchangeRate)
             };
             foreach (var a in r.Allocations)
             {
@@ -437,12 +462,14 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
                     throw new BusinessRuleException("pur.overpayment", $"Invoice {invoice.InvoiceNo} has only {invoice.OpenAmount:N2} open.",
                         $"المتبقي على الفاتورة {invoice.InvoiceNo} هو {invoice.OpenAmount:N2} فقط.");
                 var wht = PurchasingRules.WhtOnPayment(invoice.Total, invoice.WhtAmount, invoice.WhtWithheld, invoice.OpenAmount, amount);
+                var cleared = PurchasingRules.BaseCleared(amount, invoice.OpenAmount, invoice.OpenBase, invoice.ExchangeRate);
                 invoice.PaidAmount += amount;
+                invoice.PaidBase += cleared;
                 invoice.WhtWithheld += wht;
                 SupplierInvoiceService.RefreshPaymentStatus(invoice);
                 payment.Allocations.Add(new SupplierPaymentAllocation
                 {
-                    SupplierPaymentId = payment.Id, SupplierInvoiceId = invoice.Id, Amount = amount, WhtAmount = wht
+                    SupplierPaymentId = payment.Id, SupplierInvoiceId = invoice.Id, Amount = amount, WhtAmount = wht, BaseCleared = cleared
                 });
             }
             payment.GrossAmount = payment.Allocations.Sum(a => a.Amount);
@@ -450,25 +477,37 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
             payment.NetAmount = payment.GrossAmount - payment.WhtAmount;
             db.Add(payment);
 
+            // AP is cleared at the invoices' rates, the bank and the tax at today's rate; the difference is an exchange gain or loss.
+            var clearedBase = payment.Allocations.Sum(a => a.BaseCleared);
+            var netBase = PurchasingRules.ToBase(payment.NetAmount, payment.ExchangeRate);
+            var whtBase = PurchasingRules.ToBase(payment.WhtAmount, payment.ExchangeRate);
+            payment.FxDifference = clearedBase - netBase - whtBase;
             List<PostingLine> lines =
             [
                 new()
                 {
-                    AccountRole = AccountRoles.AccountsPayable, Side = PostingSide.Debit, Amount = payment.GrossAmount, PartyType = PartyType.Supplier,
+                    AccountRole = AccountRoles.AccountsPayable, Side = PostingSide.Debit, Amount = clearedBase, PartyType = PartyType.Supplier,
                     PartyId = supplier.Id
                 },
-                new() { AccountId = account.Id, Side = PostingSide.Credit, Amount = payment.NetAmount }
+                new() { AccountId = account.Id, Side = PostingSide.Credit, Amount = netBase }
             ];
-            if (payment.WhtAmount > 0)
+            if (whtBase > 0)
                 lines.Add(new PostingLine
                 {
-                    AccountRole = AccountRoles.WithholdingTaxPayable, Side = PostingSide.Credit, Amount = payment.WhtAmount,
+                    AccountRole = AccountRoles.WithholdingTaxPayable, Side = PostingSide.Credit, Amount = whtBase,
                     PartyType = PartyType.Supplier, PartyId = supplier.Id
+                });
+            if (payment.FxDifference != 0)
+                lines.Add(new PostingLine
+                {
+                    AccountRole = AccountRoles.ExchangeDifference, Side = payment.FxDifference > 0 ? PostingSide.Credit : PostingSide.Debit,
+                    Amount = Math.Abs(payment.FxDifference), Description = "Exchange difference"
                 });
             payment.JournalEntryId = (await posting.PostAsync(new PostingRequest
             {
                 SourceType = SourceType, SourceId = payment.Id, SourceNo = payment.PaymentNo, PostingDate = r.Date,
-                MemoEn = $"Payment to {supplier.NameEn}", MemoAr = $"دفعة إلى {supplier.NameAr}", Lines = lines
+                MemoEn = $"Payment to {supplier.NameEn}{SupplierInvoiceService.FxMemo(payment.Currency, payment.GrossAmount, payment.ExchangeRate)}",
+                MemoAr = $"دفعة إلى {supplier.NameAr}{SupplierInvoiceService.FxMemo(payment.Currency, payment.GrossAmount, payment.ExchangeRate)}", Lines = lines
             }, token)).JournalEntryId;
             await db.SaveChangesAsync(token);
             return payment;
@@ -489,6 +528,7 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
             {
                 var invoice = invoices[a.SupplierInvoiceId];
                 invoice.PaidAmount -= a.Amount;
+                invoice.PaidBase -= a.BaseCleared;
                 invoice.WhtWithheld -= a.WhtAmount;
                 SupplierInvoiceService.RefreshPaymentStatus(invoice);
             }

@@ -6,7 +6,7 @@ import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
-import { Supplier, WHT_CATEGORIES, WhtCategory } from '../../core/trade.models';
+import { CURRENCIES, Supplier, WHT_CATEGORIES, WhtCategory } from '../../core/trade.models';
 import { NATIONALITIES, SHARED } from '../../shared/shared';
 
 @Component({
@@ -48,6 +48,12 @@ import { NATIONALITIES, SHARED } from '../../shared/shared';
           </mat-form-field>
         }
         <mat-form-field>
+          <mat-label>{{ 'fx.currency' | t }}</mat-label>
+          <mat-select formControlName="currency">
+            @for (c of currencies; track c) { <mat-option [value]="c">{{ c }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field>
           <mat-label>{{ 'sup.terms' | t }}</mat-label>
           <input matInput type="number" min="0" max="365" formControlName="paymentTermsDays" dir="ltr" />
         </mat-form-field>
@@ -83,6 +89,7 @@ export class SupplierDialog {
   private readonly notify = inject(NotifyService);
   protected readonly countries = NATIONALITIES;
   protected readonly whtCategories = WHT_CATEGORIES;
+  protected readonly currencies = CURRENCIES;
   protected readonly busy = signal(false);
   private readonly s = this.data.supplier;
   protected readonly form = inject(FormBuilder).nonNullable.group({
@@ -94,6 +101,7 @@ export class SupplierDialog {
     hasPermanentEstablishment: [this.s?.hasPermanentEstablishment ?? false],
     defaultWhtCategory: [(this.s?.defaultWhtCategory ?? 'None') as WhtCategory],
     paymentTermsDays: [this.s?.paymentTermsDays ?? 30, [Validators.min(0), Validators.max(365)]],
+    currency: [this.s?.currency ?? 'QAR'],
     taxCardNo: [this.s?.taxCardNo ?? ''],
     crNo: [this.s?.crNo ?? ''],
     email: [this.s?.email ?? '', Validators.email],
@@ -158,6 +166,7 @@ export class SupplierDialog {
           <td mat-cell *matCellDef="let s">
             <span class="ltr">{{ s.country }}</span>
             @if (s.subjectToWht) { <span class="chip warn">{{ 'sup.whtFlag' | t }}</span> }
+            @if (s.currency !== 'QAR') { <span class="chip info">{{ s.currency }}</span> }
           </td>
         </ng-container>
         <ng-container matColumnDef="terms">

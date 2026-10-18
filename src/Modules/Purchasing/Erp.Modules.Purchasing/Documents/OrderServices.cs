@@ -10,19 +10,20 @@ namespace Erp.Modules.Purchasing.Documents;
 
 public sealed record SupplierRequest(string Code, string? NameEn, string? NameAr, string? Country, bool IsResident, bool HasPermanentEstablishment,
     string? TaxCardNo, string? CrNo, string? Email, string? Phone, int PaymentTermsDays = 30, WhtCategory DefaultWhtCategory = WhtCategory.None,
-    bool IsActive = true);
+    bool IsActive = true, string? Currency = null);
 
 public sealed record PurchaseSettingsRequest(decimal ApprovalThreshold, decimal PriceTolerancePercent);
 
 public sealed record OrderLineRequest(Guid ItemId, string? Description, decimal Quantity, decimal UnitPrice, WhtCategory? WhtCategory = null);
 
 public sealed record OrderRequest(Guid SupplierId, DateOnly OrderDate, DateOnly? ExpectedDate, Guid WarehouseId, string? Notes,
-    IReadOnlyList<OrderLineRequest> Lines);
+    IReadOnlyList<OrderLineRequest> Lines, string? Currency = null, decimal? ExchangeRate = null);
 
 public sealed record ReceiptLineRequest(Guid PurchaseOrderLineId, decimal Quantity);
 
+/// <summary>Goods are costed at the order's exchange rate unless a rate for the receipt date is given.</summary>
 public sealed record ReceiptRequest(Guid PurchaseOrderId, DateOnly ReceiptDate, Guid? WarehouseId, string? SupplierDeliveryNote,
-    IReadOnlyList<ReceiptLineRequest> Lines);
+    IReadOnlyList<ReceiptLineRequest> Lines, decimal? ExchangeRate = null);
 
 public sealed record ReverseRequest(DateOnly Date, string Reason);
 
@@ -53,6 +54,7 @@ internal sealed class SupplierService(ErpDbContext db, ITenantContext tenant)
         supplier.Email = Clean(r.Email)?.ToLowerInvariant();
         supplier.Phone = Clean(r.Phone);
         supplier.PaymentTermsDays = r.PaymentTermsDays;
+        supplier.Currency = PurchasingRules.CurrencyCode(r.Currency);
         supplier.DefaultWhtCategory = r.DefaultWhtCategory;
         supplier.IsActive = r.IsActive;
         await db.SaveChangesAsync(ct);
@@ -114,6 +116,8 @@ internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenan
         var items = await inventory.GetItemsAsync(r.Lines.Select(l => l.ItemId), ct);
 
         order.SupplierId = supplier.Id;
+        order.Currency = PurchasingRules.CurrencyCode(r.Currency ?? supplier.Currency);
+        order.ExchangeRate = PurchasingRules.ExchangeRate(order.Currency, r.ExchangeRate);
         order.OrderDate = r.OrderDate;
         order.ExpectedDate = r.ExpectedDate;
         order.WarehouseId = r.WarehouseId;
@@ -254,6 +258,7 @@ internal sealed class GoodsReceiptService(ErpDbContext db, ITenantContext tenant
                 throw new BusinessRuleException("pur.receipt_lines", "Enter the quantities received.", "أدخل الكميات المستلمة.");
             var items = await inventory.GetItemsAsync(order.Lines.Select(l => l.ItemId), token);
             var warehouseId = r.WarehouseId ?? order.WarehouseId;
+            var rate = r.ExchangeRate is null ? order.ExchangeRate : PurchasingRules.ExchangeRate(order.Currency, r.ExchangeRate);
 
             var receipt = new GoodsReceipt
             {
@@ -263,6 +268,7 @@ internal sealed class GoodsReceiptService(ErpDbContext db, ITenantContext tenant
                 SupplierId = order.SupplierId,
                 WarehouseId = warehouseId,
                 ReceiptDate = r.ReceiptDate,
+                ExchangeRate = rate,
                 SupplierDeliveryNote = SupplierService.Clean(r.SupplierDeliveryNote)
             };
             var lineNo = 0;
@@ -280,7 +286,7 @@ internal sealed class GoodsReceiptService(ErpDbContext db, ITenantContext tenant
                 receipt.Lines.Add(new GoodsReceiptLine
                 {
                     GoodsReceiptId = receipt.Id, LineNo = ++lineNo, PurchaseOrderLineId = poLine.Id, ItemId = poLine.ItemId, Quantity = l.Quantity,
-                    UnitCost = poLine.UnitPrice
+                    UnitCost = Math.Round(poLine.UnitPrice * rate, 6, MidpointRounding.AwayFromZero)
                 });
             }
             db.Add(receipt);

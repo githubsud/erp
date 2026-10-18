@@ -915,7 +915,15 @@ export const en = {
   'pdn.hint': 'Return goods to the supplier or record a price allowance. The total cannot exceed what is still open on the invoice.',
   'pdn.returns': 'Goods sent back',
   'pdn.allowance': 'Allowance from the supplier',
-  'pdn.debited': 'Debit notes'
+  'pdn.debited': 'Debit notes',
+  'fx.currency': 'Currency',
+  'fx.rate': 'QAR per 1 {c}',
+  'fx.rateShort': 'Exchange rate',
+  'fx.rateHint': 'Goods are received at this rate unless another is entered',
+  'fx.invoiceRateHint': 'The rate on the invoice date; the difference to the receipt is a price variance',
+  'fx.paymentRateHint': 'The rate on the payment date; the difference is an exchange gain or loss',
+  'fx.mixed': 'Pay invoices in different currencies separately.',
+  'fx.difference': 'Exchange difference'
 } as const;
 
 export type TranslationKey = keyof typeof en;

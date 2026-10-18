@@ -8,7 +8,7 @@ import { AuthService } from '../../core/auth.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
-import { GoodsReceipt, Item, Master, OrderStatus, PurchaseOrder, Supplier } from '../../core/trade.models';
+import { CURRENCIES, GoodsReceipt, Item, Master, OrderStatus, PurchaseOrder, Supplier } from '../../core/trade.models';
 import { ConfirmDialog, ReverseDialog, ReverseResult } from '../../shared/dialogs';
 import { SHARED } from '../../shared/shared';
 
@@ -53,7 +53,7 @@ export function orderChip(status: OrderStatus): string {
         </ng-container>
         <ng-container matColumnDef="total">
           <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.total' | t }}</th>
-          <td mat-cell *matCellDef="let o" class="num ltr">{{ o.total | money }}</td>
+          <td mat-cell *matCellDef="let o" class="num ltr">@if (o.currency !== 'QAR') { <span class="secondary">{{ o.currency }}</span> } {{ o.total | money }}</td>
         </ng-container>
         <ng-container matColumnDef="status">
           <th mat-header-cell *matHeaderCellDef>{{ 'app.status' | t }}</th>
@@ -120,6 +120,19 @@ type OrderLineGroup = FormGroup<{
           <input matInput type="date" formControlName="orderDate" />
         </mat-form-field>
         <mat-form-field>
+          <mat-label>{{ 'fx.currency' | t }}</mat-label>
+          <mat-select formControlName="currency">
+            @for (c of currencies; track c) { <mat-option [value]="c">{{ c }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        @if (form.controls.currency.value !== 'QAR') {
+          <mat-form-field>
+            <mat-label>{{ 'fx.rate' | t: { c: form.controls.currency.value } }}</mat-label>
+            <input matInput type="number" min="0" step="0.0001" formControlName="exchangeRate" dir="ltr" />
+            <mat-hint>{{ 'fx.rateHint' | t }}</mat-hint>
+          </mat-form-field>
+        }
+        <mat-form-field>
           <mat-label>{{ 'po.expected' | t }}</mat-label>
           <input matInput type="date" formControlName="expectedDate" />
         </mat-form-field>
@@ -131,7 +144,7 @@ type OrderLineGroup = FormGroup<{
 
       <table class="line-editor">
         <thead>
-          <tr><th>{{ 'po.item' | t }}</th><th>{{ 'po.description' | t }}</th><th class="narrow">{{ 'po.qty' | t }}</th><th class="narrow">{{ 'po.price' | t }}</th>
+          <tr><th class="item-col">{{ 'po.item' | t }}</th><th>{{ 'po.description' | t }}</th><th class="narrow">{{ 'po.qty' | t }}</th><th class="narrow">{{ 'po.price' | t }}</th>
             <th class="narrow num">{{ 'po.amount' | t }}</th><th></th></tr>
         </thead>
         <tbody>
@@ -151,7 +164,8 @@ type OrderLineGroup = FormGroup<{
               <td><button mat-icon-button type="button" (click)="lines.removeAt(i)" [disabled]="lines.length === 1"><mat-icon>delete</mat-icon></button></td>
             </tr>
           }
-          <tr class="total-row"><td colspan="4">{{ 'po.total' | t }}</td><td class="num ltr">{{ total() | money }}</td><td></td></tr>
+          <tr class="total-row"><td colspan="4">{{ 'po.total' | t }} <span class="secondary">{{ form.controls.currency.value }}</span></td>
+            <td class="num ltr">{{ total() | money }}</td><td></td></tr>
         </tbody>
       </table>
       <div class="actions bar">
@@ -180,7 +194,10 @@ export class OrderFormPage implements OnInit {
   protected readonly items = signal<Item[]>([]);
   protected readonly threshold = signal<number | null>(null);
   protected readonly busy = signal(false);
+  protected readonly currencies = CURRENCIES;
   protected readonly form = this.fb.group({
+    currency: ['QAR'],
+    exchangeRate: [null as number | null],
     supplierId: ['', Validators.required],
     warehouseId: ['', Validators.required],
     orderDate: [todayIso(), Validators.required],
@@ -196,6 +213,11 @@ export class OrderFormPage implements OnInit {
 
   constructor() {
     this.lines.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.version.update((v) => v + 1));
+    // A new order is in the supplier's currency unless changed.
+    this.form.controls.supplierId.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
+      const supplier = this.suppliers().find((s) => s.id === id);
+      if (supplier && !this.id()) this.form.controls.currency.setValue(supplier.currency);
+    });
   }
 
   ngOnInit(): void {
@@ -210,7 +232,7 @@ export class OrderFormPage implements OnInit {
     if (id) {
       this.trade.order(id).subscribe((o) => {
         this.form.patchValue({ supplierId: o.supplierId, warehouseId: o.warehouseId, orderDate: o.orderDate, expectedDate: o.expectedDate ?? '',
-          notes: o.notes ?? '' });
+          notes: o.notes ?? '', currency: o.currency, exchangeRate: o.currency === 'QAR' ? null : o.exchangeRate });
         for (const l of o.lines) this.addLine(l.itemId, l.description ?? '', l.quantity, l.unitPrice);
       });
     } else {
@@ -224,7 +246,8 @@ export class OrderFormPage implements OnInit {
   }
 
   protected invalid(): boolean {
-    return this.form.invalid || this.lines.invalid || this.lines.length === 0;
+    const v = this.form.getRawValue();
+    return this.form.invalid || this.lines.invalid || this.lines.length === 0 || (v.currency !== 'QAR' && !(Number(v.exchangeRate) > 0));
   }
 
   protected addLine(itemId = '', description = '', quantity: number | null = null, unitPrice: number | null = null): void {
@@ -248,6 +271,7 @@ export class OrderFormPage implements OnInit {
     const body = {
       ...v,
       expectedDate: v.expectedDate || null,
+      exchangeRate: v.currency === 'QAR' ? null : Number(v.exchangeRate),
       lines: this.lines.getRawValue().map((l) => ({
         itemId: l.itemId, description: l.description || null, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice)
       }))
@@ -386,7 +410,8 @@ export class ReceiveDialog {
         <span>{{ 'po.date' | t }}: <b class="ltr">{{ o.orderDate | d }}</b></span>
         @if (o.expectedDate) { <span>{{ 'po.expected' | t }}: <b class="ltr">{{ o.expectedDate | d }}</b></span> }
         <span>{{ 'po.warehouse' | t }}: <b>{{ warehouseName(o.warehouseId) }}</b></span>
-        <span>{{ 'po.total' | t }}: <b class="ltr">{{ o.total | money }}</b></span>
+        <span>{{ 'po.total' | t }}: <b class="ltr">{{ o.currency !== 'QAR' ? o.currency + ' ' : '' }}{{ o.total | money }}</b></span>
+        @if (o.currency !== 'QAR') { <span>{{ 'fx.rateShort' | t }}: <b class="ltr">{{ o.exchangeRate }}</b></span> }
       </div>
       @if (o.notes) { <p class="secondary">{{ o.notes }}</p> }
 

@@ -29,6 +29,7 @@ internal sealed class PurchaseOrderConfiguration : IEntityTypeConfiguration<Purc
     {
         b.ToTable("purchase_order", "pur");
         b.Property(x => x.Version).HasXminConcurrency();
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.PurchaseOrderId);
     }
 }
@@ -50,6 +51,7 @@ internal sealed class GoodsReceiptConfiguration : IEntityTypeConfiguration<Goods
     public void Configure(EntityTypeBuilder<GoodsReceipt> b)
     {
         b.ToTable("goods_receipt", "pur");
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.GoodsReceiptId);
     }
 }
@@ -71,6 +73,7 @@ internal sealed class SupplierInvoiceConfiguration : IEntityTypeConfiguration<Su
     {
         b.ToTable("supplier_invoice", "pur");
         b.Property(x => x.Version).HasXminConcurrency();
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.SupplierInvoiceId);
     }
 }
@@ -117,6 +120,7 @@ internal sealed class SupplierPaymentConfiguration : IEntityTypeConfiguration<Su
     public void Configure(EntityTypeBuilder<SupplierPayment> b)
     {
         b.ToTable("supplier_payment", "pur");
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.HasMany(x => x.Allocations).WithOne().HasForeignKey(x => x.SupplierPaymentId);
     }
 }

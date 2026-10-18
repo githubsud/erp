@@ -262,4 +262,68 @@ public sealed class PurchasingTests(ErpFixture fixture)
         var tb = await c.GetAsync<FinanceTests.Tb>($"/api/finance/reports/trial-balance?from={Today:yyyy-MM-dd}&to={Today:yyyy-MM-dd}");
         tb.IsBalanced.ShouldBeTrue();
     }
+
+    [Fact]
+    public async Task Euro_purchase_is_received_at_the_order_rate_and_paid_with_exchange_gains_and_losses()
+    {
+        var t = await fixture.CreateTenantAsync();
+        var c = t.Client;
+        var (main, _, _) = await InventoryTests.DefaultsAsync(c);
+        var tile = await InventoryTests.CreateItemAsync(c, "TILE");
+        var bank = (await c.GetAsync<List<FinanceTests.Account>>("/api/finance/accounts")).Single(a => a.Code == "1120").Id;
+        var italy = (await c.PostAsync<JsonElement>("/api/purchasing/suppliers", new
+        {
+            code = "S-IT", nameEn = "Ceramiche", country = "IT", isResident = false, hasPermanentEstablishment = false, currency = "EUR"
+        })).GetProperty("id").GetGuid();
+
+        // 100 tiles at EUR 10 ordered at 4.00: received at QAR 40 each.
+        var order = await c.PostAsync<JsonElement>("/api/purchasing/orders", new
+        {
+            supplierId = italy, orderDate = Today, warehouseId = main, exchangeRate = 4.00m,
+            lines = new[] { new { itemId = tile, quantity = 100m, unitPrice = 10m } }
+        });
+        order.GetProperty("currency").GetString().ShouldBe("EUR");
+        var po = await c.PostAsync<Order>($"/api/purchasing/orders/{order.GetProperty("id").GetGuid()}/submit", new { });
+        var grn = await (await ReceiveAsync(c, po, 100m)).ReadAsync<Receipt>();
+        grn.TotalValue.ShouldBe(4_000m);
+
+        // Invoiced at 4.05: EUR 1,000 = QAR 4,050; the QAR 50 difference raises the stock value.
+        var invoice = await c.PostAsync<Invoice>("/api/purchasing/invoices", new
+        {
+            supplierId = italy, supplierRef = "IT-77", invoiceDate = Today, exchangeRate = 4.05m,
+            lines = new[] { new { lineType = "Goods", goodsReceiptLineId = grn.Lines[0].Id, quantity = 100m, unitPrice = 10m } }
+        });
+        invoice.MatchStatus.ShouldBe("Matched");
+        invoice = await c.PostAsync<Invoice>($"/api/purchasing/invoices/{invoice.Id}/post", new { });
+        (await ClosingAsync(c, "2110")).ShouldBe(-4_050m);
+        (await ClosingAsync(c, "1150")).ShouldBe(4_050m);
+
+        // EUR 600 paid at 4.10 (QAR 30 loss), the remaining EUR 400 at 3.95 (QAR 40 gain).
+        var first = await c.PostAsync<JsonElement>("/api/purchasing/payments", new
+        {
+            supplierId = italy, date = Today, paymentAccountId = bank, exchangeRate = 4.10m,
+            allocations = new[] { new { supplierInvoiceId = invoice.Id, amount = 600m } }
+        });
+        first.GetProperty("fxDifference").GetDecimal().ShouldBe(-30m);
+        var second = await c.PostAsync<JsonElement>("/api/purchasing/payments", new
+        {
+            supplierId = italy, date = Today, paymentAccountId = bank, exchangeRate = 3.95m,
+            allocations = new[] { new { supplierInvoiceId = invoice.Id, amount = 400m } }
+        });
+        second.GetProperty("fxDifference").GetDecimal().ShouldBe(40m);
+        (await c.GetAsync<Invoice>($"/api/purchasing/invoices/{invoice.Id}")).Status.ShouldBe("Paid");
+        (await ClosingAsync(c, "2110")).ShouldBe(0m);
+        (await ClosingAsync(c, "1120")).ShouldBe(-4_040m);
+        (await ClosingAsync(c, "4220")).ShouldBe(-10m);
+
+        // A payment needs the rate; invoices in different currencies are paid separately.
+        (await c.PostJsonAsync("/api/purchasing/payments", new
+        {
+            supplierId = italy, date = Today, paymentAccountId = bank, allocations = new[] { new { supplierInvoiceId = invoice.Id, amount = 1m } }
+        })).StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var valuation = await c.GetAsync<InventoryTests.Valuation>($"/api/inventory/reports/valuation?asOf={Today:yyyy-MM-dd}");
+        valuation.Difference.ShouldBe(0m);
+        var tb = await c.GetAsync<FinanceTests.Tb>($"/api/finance/reports/trial-balance?from={Today:yyyy-MM-dd}&to={Today:yyyy-MM-dd}");
+        tb.IsBalanced.ShouldBeTrue();
+    }
 }

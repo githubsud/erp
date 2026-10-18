@@ -161,7 +161,11 @@ export interface Supplier {
   paymentTermsDays: number;
   defaultWhtCategory: WhtCategory;
   isActive: boolean;
+  currency: string;
 }
+
+/** Currencies Qatari importers deal in most; any ISO code is accepted by the server. */
+export const CURRENCIES = ['QAR', 'USD', 'EUR', 'GBP', 'AED', 'SAR', 'KWD', 'OMR', 'BHD', 'INR', 'CNY', 'JPY', 'TRY', 'EGP'];
 
 export type OrderStatus = 'Draft' | 'PendingApproval' | 'Approved' | 'PartiallyReceived' | 'Received' | 'Closed' | 'Cancelled';
 
@@ -201,6 +205,8 @@ export interface PurchaseOrder {
   gtaNotificationDue: string | null;
   gtaNotificationRef: string | null;
   lines: OrderLine[];
+  currency: string;
+  exchangeRate: number;
 }
 
 export interface ReceiptLine {
@@ -279,6 +285,10 @@ export interface SupplierInvoice {
   lines: InvoiceLine[];
   isOpening: boolean;
   debitedAmount: number;
+  currency: string;
+  exchangeRate: number;
+  totalBase: number;
+  openBase: number;
 }
 
 export interface DebitNote {
@@ -330,6 +340,9 @@ export interface SupplierPayment {
   status: 'Posted' | 'Reversed';
   journalEntryId: string | null;
   allocations: { supplierInvoiceId: string; invoiceNo: string; supplierRef: string; amount: number; whtAmount: number }[];
+  currency: string;
+  exchangeRate: number;
+  fxDifference: number;
 }
 
 export interface PurchaseSettings {

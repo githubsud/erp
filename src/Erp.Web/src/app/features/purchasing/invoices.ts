@@ -9,7 +9,7 @@ import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import {
-  DebitNote, GoodsReceipt, InvoiceLine, InvoiceLineType, InvoiceStatus, Item, MatchStatus, PurchaseOrder, Supplier, SupplierInvoice, WHT_CATEGORIES,
+  CURRENCIES, DebitNote, GoodsReceipt, InvoiceLine, InvoiceLineType, InvoiceStatus, Item, MatchStatus, PurchaseOrder, Supplier, SupplierInvoice, WHT_CATEGORIES,
   WhtCategory
 } from '../../core/trade.models';
 import { ConfirmDialog, ReverseDialog, ReverseResult } from '../../shared/dialogs';
@@ -153,6 +153,19 @@ interface OpenReceiptLine {
           <mat-label>{{ 'pinv.due' | t }}</mat-label>
           <input matInput type="date" formControlName="dueDate" />
         </mat-form-field>
+        <mat-form-field>
+          <mat-label>{{ 'fx.currency' | t }}</mat-label>
+          <mat-select formControlName="currency">
+            @for (c of currencies; track c) { <mat-option [value]="c">{{ c }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        @if (form.controls.currency.value !== 'QAR') {
+          <mat-form-field>
+            <mat-label>{{ 'fx.rate' | t: { c: form.controls.currency.value } }}</mat-label>
+            <input matInput type="number" min="0" step="0.0001" formControlName="exchangeRate" dir="ltr" />
+            <mat-hint>{{ 'fx.invoiceRateHint' | t }}</mat-hint>
+          </mat-form-field>
+        }
         <mat-form-field class="full">
           <mat-label>{{ 'app.notes' | t }}</mat-label>
           <input matInput formControlName="notes" />
@@ -229,7 +242,12 @@ interface OpenReceiptLine {
         <button mat-button type="button" (click)="addLine('Service')"><mat-icon>add</mat-icon> {{ 'pinv.addService' | t }}</button>
         <button mat-button type="button" (click)="addLine('LandedCost')"><mat-icon>add</mat-icon> {{ 'pinv.addLanded' | t }}</button>
         <span class="spacer"></span>
-        <button mat-flat-button (click)="save()" [disabled]="form.invalid || lines.invalid || lines.length === 0 || busy()">{{ 'app.save' | t }}</button>
+        @if (form.controls.currency.value !== 'QAR' && form.controls.exchangeRate.value) {
+          <span class="secondary">≈ QAR <span class="ltr">{{ total() * form.controls.exchangeRate.value | money }}</span></span>
+        }
+        <button mat-flat-button (click)="save()"
+          [disabled]="form.invalid || lines.invalid || lines.length === 0 || busy() || (form.controls.currency.value !== 'QAR' && !form.controls.exchangeRate.value)">
+          {{ 'app.save' | t }}</button>
       </div>
     </mat-card>
   `,
@@ -252,7 +270,10 @@ export class InvoiceFormPage implements OnInit {
   protected readonly serviceItems = signal<Item[]>([]);
   protected readonly receipts = signal<GoodsReceipt[]>([]);
   protected readonly busy = signal(false);
+  protected readonly currencies = CURRENCIES;
   protected readonly form = this.fb.group({
+    currency: ['QAR'],
+    exchangeRate: [null as number | null],
     supplierId: ['', Validators.required],
     supplierRef: ['', Validators.required],
     invoiceDate: [todayIso(), Validators.required],
@@ -319,6 +340,7 @@ export class InvoiceFormPage implements OnInit {
       .createInvoice({
         ...v,
         dueDate: v.dueDate || null,
+        exchangeRate: v.currency === 'QAR' ? null : Number(v.exchangeRate),
         purchaseOrderId: this.orderId(),
         lines: this.lines.getRawValue().map((l) => ({
           lineType: l.lineType,
@@ -345,6 +367,8 @@ export class InvoiceFormPage implements OnInit {
 
   private selectSupplier(id: string): void {
     this.supplierId.set(id);
+    const supplier = this.suppliers().find((s) => s.id === id);
+    if (supplier) this.form.controls.currency.setValue(supplier.currency);
     this.lines.clear();
     this.receipts.set([]);
     if (!id) return;
@@ -519,6 +543,10 @@ export class DebitNoteDialog {
         <span>{{ 'pinv.ref' | t }}: <b class="ltr">{{ i.supplierRef }}</b></span>
         <span>{{ 'pinv.date' | t }}: <b class="ltr">{{ i.invoiceDate | d }}</b></span>
         <span>{{ 'pinv.due' | t }}: <b class="ltr">{{ i.dueDate | d }}</b></span>
+        @if (i.currency !== 'QAR') {
+          <span>{{ 'fx.currency' | t }}: <b class="ltr">{{ i.currency }} @ {{ i.exchangeRate }}</b></span>
+          <span>QAR: <b class="ltr">{{ i.totalBase | money }}</b> · {{ 'pinv.open' | t }} <b class="ltr">{{ i.openBase | money }}</b></span>
+        }
       </div>
       <div class="card-grid">
         <mat-card appearance="outlined" class="stat"><div class="label">{{ 'po.total' | t }}</div><div class="value ltr">{{ i.total | money }}</div></mat-card>

@@ -46,6 +46,7 @@ internal sealed class SupplierOpeningService(ErpDbContext db, ITenantContext ten
                     DueDate = line.DueDate ?? line.InvoiceDate.AddDays(supplier.PaymentTermsDays),
                     IsOpening = true,
                     Total = amount,
+                    TotalBase = amount,
                     Status = InvoiceStatus.Posted,
                     MatchStatus = MatchStatus.NotApplicable,
                     Notes = "Opening balance · رصيد افتتاحي"

@@ -91,13 +91,18 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
                     Amount = Money.Round(l.Quantity * price)
                 };
                 note.Lines.Add(line);
+                var lineBase = PurchasingRules.ToBase(line.Amount, invoice.ExchangeRate);
                 if (l.LineType == DebitNoteLineType.Return) returns.Add(line);
                 else if (original is { LineType: InvoiceLineType.Goods, ItemId: { } goodsItem })
-                    revaluations.Add(new RevaluationLine(goodsItem, -line.Amount, original.Quantity, line.Id));
+                    revaluations.Add(new RevaluationLine(goodsItem, -lineBase, original.Quantity, line.Id));
                 else
-                    builder.Add(AccountRoles.PurchaseExpense, original?.ItemId is { } svc ? items[svc].ItemGroupId : null, -line.Amount);
+                    builder.Add(AccountRoles.PurchaseExpense, original?.ItemId is { } svc ? items[svc].ItemGroupId : null, -lineBase);
             }
             note.Total = note.Lines.Sum(x => x.Amount);
+            var linesBase = note.Lines.Sum(x => PurchasingRules.ToBase(x.Amount, invoice.ExchangeRate));
+            note.TotalBase = PurchasingRules.BaseCleared(note.Total, invoice.OpenAmount, invoice.OpenBase, invoice.ExchangeRate);
+            // Closing a foreign-currency invoice can leave a cent of conversion rounding; it is an exchange difference.
+            builder.Add(AccountRoles.ExchangeDifference, null, linesBase - note.TotalBase);
             if (note.Total > invoice.OpenAmount)
                 throw new BusinessRuleException("pur.debit_exceeds_open",
                     $"Invoice {invoice.InvoiceNo} has only {invoice.OpenAmount:N2} open; refunds of paid amounts are not supported yet.",
@@ -116,7 +121,7 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
                     line.StockValue = -x.Value;
                     builder.Add(AccountRoles.Inventory, x.ItemGroupId, x.Value);
                     // What the supplier credits us beyond the stock's average cost (or short of it) is a cost of sales difference.
-                    builder.Add(AccountRoles.CostOfSales, x.ItemGroupId, -(line.Amount + x.Value));
+                    builder.Add(AccountRoles.CostOfSales, x.ItemGroupId, -(PurchasingRules.ToBase(line.Amount, invoice.ExchangeRate) + x.Value));
                 }
             }
             foreach (var x in await stock.RevalueAsync(SourceType, note.Id, note.DebitNoteNo, r.Date, revaluations, token))
@@ -124,7 +129,7 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
                 builder.Add(AccountRoles.Inventory, x.ItemGroupId, x.ToInventory);
                 builder.Add(AccountRoles.CostOfSales, x.ItemGroupId, x.ToCostOfSales);
             }
-            builder.Add(AccountRoles.AccountsPayable, null, note.Total, invoice.SupplierId);
+            builder.Add(AccountRoles.AccountsPayable, null, note.TotalBase, invoice.SupplierId);
 
             var supplier = await db.Set<Supplier>().AsNoTracking().SingleAsync(s => s.Id == invoice.SupplierId, token);
             note.JournalEntryId = (await posting.PostAsync(new PostingRequest
@@ -135,6 +140,7 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
                 Lines = builder.Lines()
             }, token)).JournalEntryId;
             invoice.DebitedAmount += note.Total;
+            invoice.DebitedBase += note.TotalBase;
             SupplierInvoiceService.RefreshPaymentStatus(invoice);
             await db.SaveChangesAsync(token);
             return note;
@@ -154,6 +160,7 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
             foreach (var l in note.Lines.Where(l => l.LineType == DebitNoteLineType.Return))
                 invoice.Lines.Single(x => x.Id == l.SupplierInvoiceLineId).QuantityReturned -= l.Quantity;
             invoice.DebitedAmount -= note.Total;
+            invoice.DebitedBase -= note.TotalBase;
             SupplierInvoiceService.RefreshPaymentStatus(invoice);
             note.Status = DocumentStatus.Reversed;
             await db.SaveChangesAsync(token);
