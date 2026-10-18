@@ -23,7 +23,8 @@ public sealed record BankStatementDto(Guid Id, string StatementNo, Guid AccountI
 public sealed record LedgerItemDto(Guid JournalLineId, Guid JournalEntryId, string EntryNo, DateOnly PostingDate, string SourceType, string SourceNo,
     string? Memo, decimal Amount);
 
-public sealed record BankReconciliationReport(Guid AccountId, DateOnly AsOf, decimal LedgerBalance, decimal? StatementBalance, DateOnly? StatementDate,
+public sealed record BankReconciliationReport(Guid AccountId, DateOnly AsOf, DateOnly? ReconcileFrom, decimal LedgerBalance, decimal? StatementBalance,
+    DateOnly? StatementDate,
     IReadOnlyList<LedgerItemDto> UnclearedLedgerItems, IReadOnlyList<BankLineDto> UnrecordedBankItems, decimal AdjustedLedgerBalance,
     decimal? AdjustedStatementBalance, decimal? Difference);
 
@@ -135,6 +136,7 @@ internal static class BankEndpoints
     /// <summary>
     /// Book side: ledger balance plus bank items not yet recorded. Bank side: latest statement closing balance plus ledger items the
     /// bank has not cleared yet (receipts in transit, cheques not presented). The two adjusted balances agree when reconciled.
+    /// Ledger lines before the first imported statement are covered by its opening balance, so only later ones count as uncleared.
     /// </summary>
     private static async Task<BankReconciliationReport> ReconciliationAsync(Guid accountId, ErpDbContext db, ITenantContext t, BankReconciliationService s,
         IClock clock, CancellationToken ct, DateOnly? asOf = null)
@@ -148,7 +150,9 @@ internal static class BankEndpoints
         var statement = await db.Set<BankStatement>().AsNoTracking()
             .Where(x => x.CompanyId == companyId && x.AccountId == accountId && x.DateTo <= date && x.ClosingBalance != null)
             .OrderByDescending(x => x.DateTo).FirstOrDefaultAsync(ct);
-        var uncleared = await s.UnmatchedLedgerLinesAsync(accountId, null, date, ct);
+        var reconcileFrom = await db.Set<BankStatement>().Where(x => x.CompanyId == companyId && x.AccountId == accountId)
+            .MinAsync(x => (DateOnly?)x.DateFrom, ct);
+        var uncleared = await s.UnmatchedLedgerLinesAsync(accountId, reconcileFrom, date, ct);
         var unrecorded = await (from l in db.Set<BankStatementLine>().AsNoTracking()
                                 join st in db.Set<BankStatement>() on l.BankStatementId equals st.Id
                                 where st.CompanyId == companyId && st.AccountId == accountId && l.Status == BankLineStatus.Unmatched && l.TxnDate <= date
@@ -157,7 +161,7 @@ internal static class BankEndpoints
         var items = await LedgerItemsAsync(db, uncleared.Select(c => c.JournalLineId).ToList(), ct);
         var adjustedLedger = ledger + unrecorded.Sum(l => l.Amount);
         decimal? adjustedBank = statement?.ClosingBalance is { } closing ? closing + uncleared.Sum(c => c.Amount) : null;
-        return new BankReconciliationReport(accountId, date, ledger, statement?.ClosingBalance, statement?.DateTo, items,
+        return new BankReconciliationReport(accountId, date, reconcileFrom, ledger, statement?.ClosingBalance, statement?.DateTo, items,
             unrecorded.Select(l => LineDto(l, new Dictionary<Guid, List<BankMatchDto>>())).ToList(), adjustedLedger, adjustedBank,
             adjustedBank is { } b ? b - adjustedLedger : null);
     }

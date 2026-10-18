@@ -143,3 +143,7 @@ span.secondary, b + .secondary { margin-inline-start: 6px; }
 /* Links inside tables and fact rows follow the theme instead of the browser default. */
 .table-wrap a, .facts a, .statement a { color: var(--mat-sys-primary); text-decoration: none; }
 .table-wrap a:hover, .facts a:hover { text-decoration: underline; }
+
+/* Status chips and row action buttons stay on one line. */
+.chip { white-space: nowrap; }
+td.mat-column-actions { white-space: nowrap; }

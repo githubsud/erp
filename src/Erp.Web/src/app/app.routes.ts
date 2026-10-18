@@ -276,6 +276,31 @@ export const routes: Routes = [
         loadComponent: () => import('./features/finance/trial-balance').then((m) => m.TrialBalancePage)
       },
       {
+        path: 'finance/statements',
+        canActivate: [permissionGuard('fin.reports:read')],
+        loadComponent: () => import('./features/finance/statements').then((m) => m.StatementsPage)
+      },
+      {
+        path: 'finance/vouchers',
+        canActivate: [permissionGuard('fin.journal:read')],
+        loadComponent: () => import('./features/finance/vouchers').then((m) => m.VouchersPage)
+      },
+      {
+        path: 'finance/opening-balances',
+        canActivate: [permissionGuard('fin.journal:post')],
+        loadComponent: () => import('./features/finance/opening-balances').then((m) => m.OpeningBalancesPage)
+      },
+      {
+        path: 'finance/bank',
+        canActivate: [permissionGuard('fin.bank:reconcile')],
+        loadComponent: () => import('./features/finance/bank').then((m) => m.BankPage)
+      },
+      {
+        path: 'finance/bank/:id',
+        canActivate: [permissionGuard('fin.bank:reconcile')],
+        loadComponent: () => import('./features/finance/bank').then((m) => m.BankStatementPage)
+      },
+      {
         path: 'finance/journal',
         canActivate: [permissionGuard('fin.journal:read')],
         loadComponent: () => import('./features/finance/journal').then((m) => m.JournalPage)

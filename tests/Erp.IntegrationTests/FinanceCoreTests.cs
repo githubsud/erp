@@ -107,17 +107,26 @@ public sealed class FinanceCoreTests(ErpFixture fixture)
         var t = await fixture.CreateTenantAsync();
         var c = t.Client;
         var a = await AccountsAsync(c);
+        // Money banked before the first statement is covered by that statement's opening balance.
+        var before = Today.DayOfYear > 1 ? 40_000m : 0m;
+        if (before > 0)
+            await (await c.PostJsonAsync("/api/finance/journal-vouchers", new
+            {
+                date = Today.AddDays(-1), memoEn = "Earlier deposit",
+                lines = new[] { new { accountId = a["1120"], debit = before, credit = 0m }, new { accountId = a["3110"], debit = 0m, credit = before } }
+            })).EnsureSuccessAsync();
         await VoucherAsync(c, a, "1120", "3110", 100_000m, "Capital deposited");
         await VoucherAsync(c, a, "5310", "1120", 2_000m, "Rent cheque 000451");
         await VoucherAsync(c, a, "5320", "1120", 300m, "Kahramaa - not yet presented");
 
         var d = Today.ToString("dd/MM/yyyy");
+        string Bal(decimal x) => (before + x).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
         var csv = $"""
             QNB statement,,,,,
             Date,Description,Reference,Debit,Credit,Balance
-            {d},Cash deposit capital,,,"100,000.00","100,000.00"
-            {d},Cheque 000451 cleared,000451,"2,000.00",,"98,000.00"
-            {d},Bank charges,,25.00,,"97,975.00"
+            {d},Cash deposit capital,,,100000.00,{Bal(100_000m)}
+            {d},Cheque 000451 cleared,000451,2000.00,,{Bal(98_000m)}
+            {d},Bank charges,,25.00,,{Bal(97_975m)}
             """;
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
@@ -129,7 +138,7 @@ public sealed class FinanceCoreTests(ErpFixture fixture)
         var statementId = import.GetProperty("statementId").GetGuid();
 
         var statement = await c.GetAsync<JsonElement>($"/api/finance/bank-statements/{statementId}");
-        statement.GetProperty("closingBalance").GetDecimal().ShouldBe(97_975m);
+        statement.GetProperty("closingBalance").GetDecimal().ShouldBe(before + 97_975m);
         var charges = statement.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("status").GetString() == "Unmatched");
 
         var report = await c.GetAsync<JsonElement>($"/api/finance/reports/bank-reconciliation?accountId={a["1120"]}&asOf={Today:yyyy-MM-dd}");
@@ -143,7 +152,7 @@ public sealed class FinanceCoreTests(ErpFixture fixture)
         statement = await c.GetAsync<JsonElement>($"/api/finance/bank-statements/{statementId}");
         statement.GetProperty("status").GetString().ShouldBe("Reconciled");
         report = await c.GetAsync<JsonElement>($"/api/finance/reports/bank-reconciliation?accountId={a["1120"]}&asOf={Today:yyyy-MM-dd}");
-        report.GetProperty("ledgerBalance").GetDecimal().ShouldBe(97_675m);
+        report.GetProperty("ledgerBalance").GetDecimal().ShouldBe(before + 97_675m);
         report.GetProperty("unrecordedBankItems").GetArrayLength().ShouldBe(0);
         report.GetProperty("difference").GetDecimal().ShouldBe(0m);
 

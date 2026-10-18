@@ -6,6 +6,7 @@ Records are left in different states (draft / pending / posted / paid / reversed
     python scripts/seed-demo.py                     # API on http://localhost:5080, company "demo"
     python scripts/seed-demo.py --company acme --api http://localhost:5080
     python scripts/seed-demo.py --sales-only        # add the sales scenario to an already seeded company
+    python scripts/seed-demo.py --finance-only      # add opening balances and a bank statement to reconcile
 
 The company is provisioned if it does not exist yet. Run it once per company: business keys (employee numbers,
 SKUs, supplier codes) are unique, so a second run stops at the first duplicate.
@@ -24,6 +25,7 @@ p = argparse.ArgumentParser()
 p.add_argument("--api", default="http://localhost:5080")
 p.add_argument("--company", default="demo")
 p.add_argument("--sales-only", action="store_true", help="only add customers, quotations, orders, invoices and receipts")
+p.add_argument("--finance-only", action="store_true", help="only add opening balances and a bank statement to reconcile")
 args = p.parse_args()
 API = args.api.rstrip("/")
 token = None
@@ -177,9 +179,65 @@ def seed_sales():
                                  "allocations": [{"salesInvoiceId": inv["id"], "amount": inv["total"]}]})
 
 
+def upload(path, file_name, content):
+    """POSTs one file as multipart/form-data."""
+    boundary = "----seed" + "0123456789abcdef"
+    body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\n"
+            f"Content-Type: text/csv\r\n\r\n").encode("utf-8") + content.encode("utf-8") + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    req = urllib.request.Request(API + path, data=body, method="POST")
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        sys.exit(f"\n✗ POST {path} -> {e.code}\n{e.read().decode('utf-8', 'replace')}")
+
+
+def seed_finance():
+    """Opening balances for a customer and a supplier, and an October bank statement to reconcile."""
+    accounts = {a["code"]: a["id"] for a in get("/api/finance/accounts")}
+    step("Finance: opening balances brought over from the old system (cut-over 31/08/2026)")
+    old_customer = post("/api/sales/customers", {"code": "QBUILD", "nameEn": "Qatar Builders Co.", "nameAr": "شركة قطر للبناء", "country": "QA",
+                                                 "creditLimit": 50000, "paymentTermsDays": 45, "phone": "+974 4433 2211"})["id"]
+    post("/api/sales/opening-balances", {"postingDate": "2026-08-31", "invoices": [
+        {"customerId": old_customer, "reference": "OLD-INV-2291", "invoiceDate": "2026-06-20", "amount": 12500},
+        {"customerId": old_customer, "reference": "OLD-INV-2340", "invoiceDate": "2026-08-15", "amount": 4800}]})
+    suppliers = {s["code"]: s["id"] for s in get("/api/purchasing/suppliers")}
+    post("/api/purchasing/opening-balances", {"postingDate": "2026-08-31", "invoices": [
+        {"supplierId": suppliers["DBM"], "reference": "DBM-0877", "invoiceDate": "2026-08-10", "amount": 3200}]})
+
+    step("Finance: October bank statement (QNB) imported and reconciled automatically")
+    ledger = get(f"/api/finance/reports/account-ledger?accountId={accounts['1120']}&from=2026-10-01&to=2026-10-17")
+    balance = ledger["opening"]
+    rows = []
+    skipped = False
+    for r in ledger["rows"]:
+        amount = r["debit"] - r["credit"]
+        # Leave the latest supplier payment unpresented so it shows as a cheque in transit.
+        if not skipped and r["sourceType"] == "supplier_payment" and r["postingDate"] == "2026-10-15":
+            skipped = True
+            continue
+        rows.append((r["postingDate"], (r["description"] or r["sourceNo"])[:60], r["sourceNo"], amount))
+    rows += [("2026-10-16", "Monthly account maintenance fee", "", -45.0), ("2026-10-17", "Profit on current account", "", 120.0)]
+    lines = ["Qatar National Bank - Statement of account", "Date,Description,Reference,Debit,Credit,Balance"]
+    for date, desc, ref, amount in sorted(rows, key=lambda x: x[0]):
+        balance += amount
+        d = f"{date[8:10]}/{date[5:7]}/{date[0:4]}"
+        debit, credit = (f"{-amount:.2f}", "") if amount < 0 else ("", f"{amount:.2f}")
+        lines.append(f"{d},\"{desc.replace(chr(34), '')}\",{ref},{debit},{credit},{balance:.2f}")
+    result = upload(f"/api/finance/bank-statements/import?accountId={accounts['1120']}", "qnb_october_2026.csv", "\n".join(lines) + "\n")
+    print(f"  {result['lines']} lines imported, {result['autoMatched']} matched automatically")
+
+
 if args.sales_only:
     seed_sales()
     print(f"\n✓ Sales sample data added to '{args.company}'.")
+    sys.exit(0)
+
+if args.finance_only:
+    seed_finance()
+    print(f"\n✓ Finance sample data added to '{args.company}'.")
     sys.exit(0)
 
 if get("/api/hr/employees")["total"]:
@@ -476,6 +534,7 @@ counted = {item["CEM-50"]: 59, item["TIL-6060"]: 1398, item["DRL-18V"]: 10}
 put(f"/api/inventory/counts/{count['id']}/lines", [{"itemId": i, "countedQuantity": q} for i, q in counted.items()])
 
 seed_sales()
+seed_finance()
 
 print(f"\n✓ Done. Sign in at http://localhost:4200 with company '{args.company}', owner@demo.qa / {PASSWORD}")
 print("  Other users (same password): hr@ payroll@ accounts@ store@ buyer@ gm@ sales@ demo.qa")
