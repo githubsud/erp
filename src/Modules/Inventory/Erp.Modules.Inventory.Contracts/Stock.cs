@@ -3,7 +3,8 @@ namespace Erp.Modules.Inventory.Contracts;
 /// <summary>Stock items are counted and valued; service items (freight, maintenance, consultancy) are only bought or sold.</summary>
 public enum ItemType { Stock, Service }
 
-public sealed record ItemInfo(Guid Id, string Sku, string NameEn, string NameAr, ItemType Type, Guid ItemGroupId, string UomCode, bool IsActive);
+public sealed record ItemInfo(Guid Id, string Sku, string NameEn, string NameAr, ItemType Type, Guid ItemGroupId, string UomCode, bool IsActive,
+    decimal? SalesPrice = null);
 
 public sealed record WarehouseInfo(Guid Id, string Code, string NameEn, string NameAr, bool IsActive);
 

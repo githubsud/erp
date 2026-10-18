@@ -38,6 +38,7 @@ internal static class DefaultRoleNames
         (PayrollOfficer, "Payroll Officer", "مسؤول الرواتب"),
         (Purchaser, "Purchasing Officer", "مسؤول المشتريات"),
         (Storekeeper, "Storekeeper", "أمين المخزن"),
+        (Salesperson, "Sales Executive", "مسؤول المبيعات"),
         (Auditor, "Auditor (read-only)", "المدقق (قراءة فقط)")
     ];
 }

@@ -121,7 +121,12 @@ internal static class ChartOfAccountsTemplate
         (AccountRoles.AccountsPayable, "2110"),
         (AccountRoles.WithholdingTaxPayable, "2170"),
         (AccountRoles.LandedCostClearing, "1190"),
-        (AccountRoles.PurchaseExpense, "5360")
+        (AccountRoles.PurchaseExpense, "5360"),
+        (AccountRoles.AccountsReceivable, "1130"),
+        (AccountRoles.SalesRevenue, "4110"),
+        (AccountRoles.ServiceRevenue, "4120"),
+        (AccountRoles.SalesReturns, "4130"),
+        (AccountRoles.PdcReceivable, "1140")
     ];
 
     public static NormalBalance DefaultNormal(AccountType type) =>

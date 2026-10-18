@@ -16,7 +16,7 @@ internal sealed class InventoryPermissionProvider : IPermissionProvider
 {
     public IEnumerable<PermissionDefinition> GetPermissions() =>
     [
-        new(InventoryPermissions.ItemsRead, "View items and stock", "عرض الأصناف والمخزون", Storekeeper, Purchaser, Accountant, GeneralManager, Auditor),
+        new(InventoryPermissions.ItemsRead, "View items and stock", "عرض الأصناف والمخزون", Storekeeper, Purchaser, Salesperson, Accountant, GeneralManager, Auditor),
         new(InventoryPermissions.ItemsManage, "Create and edit items", "إضافة وتعديل الأصناف", Storekeeper, Purchaser),
         new(InventoryPermissions.StockPost, "Post stock adjustments, transfers and counts", "ترحيل تسويات المخزون والتحويلات والجرد", Storekeeper, Accountant),
         new(InventoryPermissions.ReportsRead, "View stock valuation", "عرض تقييم المخزون", Accountant, GeneralManager, Auditor, Storekeeper),

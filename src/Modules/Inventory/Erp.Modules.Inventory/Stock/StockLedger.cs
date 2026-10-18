@@ -213,7 +213,7 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
         return await (from i in db.Set<Item>().AsNoTracking()
                       join u in db.Set<Uom>() on i.UomId equals u.Id
                       where list.Contains(i.Id) && i.CompanyId == companyId
-                      select new ItemInfo(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType, i.ItemGroupId, u.Code, i.IsActive))
+                      select new ItemInfo(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType, i.ItemGroupId, u.Code, i.IsActive, i.SalesPrice))
             .ToDictionaryAsync(i => i.Id, ct);
     }
 

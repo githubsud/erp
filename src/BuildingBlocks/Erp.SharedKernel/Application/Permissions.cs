@@ -11,6 +11,7 @@ public static class DefaultRoles
     public const string Auditor = "auditor";
     public const string Purchaser = "purchaser";
     public const string Storekeeper = "storekeeper";
+    public const string Salesperson = "salesperson";
 
     /// <summary>Grants every permission.</summary>
     public const string Wildcard = "*";

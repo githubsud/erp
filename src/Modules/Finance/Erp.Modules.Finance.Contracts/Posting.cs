@@ -105,4 +105,14 @@ public static class AccountRoles
     public const string LandedCostClearing = "pur.landed_cost_clearing";
     /// <summary>Non-stock purchases (services, supplies); keyed by item group.</summary>
     public const string PurchaseExpense = "pur.expense";
+
+    public const string AccountsReceivable = "sal.receivable";
+    /// <summary>Revenue from goods; keyed by item group.</summary>
+    public const string SalesRevenue = "sal.revenue";
+    /// <summary>Revenue from services; keyed by item group.</summary>
+    public const string ServiceRevenue = "sal.service_revenue";
+    /// <summary>Returns and allowances granted by credit notes (contra revenue).</summary>
+    public const string SalesReturns = "sal.returns";
+    /// <summary>Post-dated cheques received and held until their date.</summary>
+    public const string PdcReceivable = "sal.pdc_receivable";
 }

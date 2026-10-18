@@ -110,4 +110,22 @@ internal sealed class FinanceQueries(ErpDbContext db, ITenantContext tenant) : I
                       where l.AccountId == accountId && l.PartyType == partyType && l.PartyId == partyId && e.PostingDate <= asOf
                       select l.DebitBase - l.CreditBase).SumAsync(ct);
     }
+
+    public async Task<PartyLedger> GetPartyLedgerAsync(string accountRole, PartyType partyType, Guid partyId, DateOnly periodStart, DateOnly periodEnd,
+        CancellationToken ct = default)
+    {
+        var opening = await GetPartyBalanceAsync(accountRole, partyType, partyId, periodStart.AddDays(-1), ct);
+        var companyId = tenant.RequireCompanyId();
+        var rules = await db.Set<PostingRule>().AsNoTracking()
+            .Where(r => r.CompanyId == companyId && r.AccountRole == accountRole && r.RoleKey == null).ToListAsync(ct);
+        var accountId = PostingService.Resolve(rules, accountRole, null);
+        var lines = await (from l in db.Set<JournalLine>().AsNoTracking()
+                           join e in db.Set<JournalEntry>() on l.JournalEntryId equals e.Id
+                           where l.AccountId == accountId && l.PartyType == partyType && l.PartyId == partyId
+                                 && e.PostingDate >= periodStart && e.PostingDate <= periodEnd
+                           orderby e.PostingDate, e.EntryNo, l.LineNo
+                           select new PartyLedgerLine(e.PostingDate, e.EntryNo, e.SourceType, e.SourceId, e.SourceNo, e.MemoEn, e.MemoAr,
+                               l.DebitBase, l.CreditBase)).ToListAsync(ct);
+        return new PartyLedger(opening, lines, opening + lines.Sum(l => l.Debit - l.Credit));
+    }
 }

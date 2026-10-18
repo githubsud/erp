@@ -75,7 +75,7 @@ public interface ITenantProvisioner
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 
 public sealed record CompanyProfile(string NameEn, string NameAr, string? CrNo, string? EstablishmentId, string? AddressEn,
-    string? AddressAr, string? Phone, string? Email);
+    string? AddressAr, string? Phone, string? Email, string? Tin = null);
 
 /// <summary>Letterhead details of the current company, for printed documents in any module.</summary>
 public interface ICompanyProfileProvider

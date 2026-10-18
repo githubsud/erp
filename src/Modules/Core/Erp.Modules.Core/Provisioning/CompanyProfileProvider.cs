@@ -12,7 +12,7 @@ internal sealed class CompanyProfileProvider(ErpDbContext db, ITenantContext ten
     {
         var companyId = tenant.RequireCompanyId();
         return await db.Set<Company>().AsNoTracking().Where(c => c.Id == companyId)
-                   .Select(c => new CompanyProfile(c.NameEn, c.NameAr, c.CrNo, c.EstablishmentId, c.AddressEn, c.AddressAr, c.Phone, c.Email))
+                   .Select(c => new CompanyProfile(c.NameEn, c.NameAr, c.CrNo, c.EstablishmentId, c.AddressEn, c.AddressAr, c.Phone, c.Email, c.Tin))
                    .SingleOrDefaultAsync(ct)
                ?? throw new NotFoundException("Company", companyId);
     }
