@@ -124,6 +124,7 @@ public sealed class SupplierInvoice : TenantEntity
     public decimal Total { get; set; }
     public decimal WhtAmount { get; set; }
     public decimal PaidAmount { get; set; }
+    public decimal DebitedAmount { get; set; }
     public decimal WhtWithheld { get; set; }
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
     public MatchStatus MatchStatus { get; set; } = MatchStatus.NotApplicable;
@@ -136,7 +137,7 @@ public sealed class SupplierInvoice : TenantEntity
     public uint Version { get; set; }
     public List<SupplierInvoiceLine> Lines { get; init; } = [];
 
-    public decimal OpenAmount => Total - PaidAmount;
+    public decimal OpenAmount => Total - PaidAmount - DebitedAmount;
 }
 
 public sealed class SupplierInvoiceLine : TenantEntity
@@ -160,6 +161,7 @@ public sealed class SupplierInvoiceLine : TenantEntity
     public WhtCategory WhtCategory { get; init; }
     public decimal WhtRate { get; init; }
     public decimal WhtAmount { get; init; }
+    public decimal QuantityReturned { get; set; }
 }
 
 public enum AllocationMethod { Value, Quantity }
@@ -223,4 +225,38 @@ public sealed class SupplierPaymentAllocation : TenantEntity
     public Guid SupplierInvoiceId { get; init; }
     public decimal Amount { get; init; }
     public decimal WhtAmount { get; init; }
+}
+
+public enum DebitNoteLineType { Return, Allowance }
+
+/// <summary>Goods returned to a supplier or a price allowance received, reducing a posted supplier invoice.</summary>
+public sealed class DebitNote : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public required string DebitNoteNo { get; init; }
+    public Guid SupplierId { get; init; }
+    public Guid SupplierInvoiceId { get; init; }
+    public DateOnly NoteDate { get; init; }
+    public Guid? WarehouseId { get; init; }
+    public required string Reason { get; init; }
+    public decimal Total { get; set; }
+    public DocumentStatus Status { get; set; } = DocumentStatus.Posted;
+    public Guid? JournalEntryId { get; set; }
+    public List<DebitNoteLine> Lines { get; init; } = [];
+}
+
+public sealed class DebitNoteLine : TenantEntity
+{
+    public Guid DebitNoteId { get; init; }
+    public int LineNo { get; init; }
+    public DebitNoteLineType LineType { get; init; }
+    public Guid? SupplierInvoiceLineId { get; init; }
+    public Guid? ItemId { get; init; }
+    public string? Description { get; init; }
+    public decimal Quantity { get; init; }
+    public decimal UnitPrice { get; init; }
+    public decimal Amount { get; init; }
+
+    /// <summary>Returns: the weighted-average value of the stock sent back (positive).</summary>
+    public decimal StockValue { get; set; }
 }

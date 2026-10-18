@@ -1,7 +1,7 @@
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormArray, FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
-import { MatDialog } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { ActivatedRoute, Router } from '@angular/router';
 import { filter, merge, switchMap } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
@@ -9,7 +9,8 @@ import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import {
-  GoodsReceipt, InvoiceLineType, InvoiceStatus, Item, MatchStatus, PurchaseOrder, Supplier, SupplierInvoice, WHT_CATEGORIES, WhtCategory
+  DebitNote, GoodsReceipt, InvoiceLine, InvoiceLineType, InvoiceStatus, Item, MatchStatus, PurchaseOrder, Supplier, SupplierInvoice, WHT_CATEGORIES,
+  WhtCategory
 } from '../../core/trade.models';
 import { ConfirmDialog, ReverseDialog, ReverseResult } from '../../shared/dialogs';
 import { SHARED } from '../../shared/shared';
@@ -376,6 +377,108 @@ export class InvoiceFormPage implements OnInit {
   }
 }
 
+/** Goods sent back to the supplier and price allowances received, against a posted invoice. */
+@Component({
+  selector: 'app-debit-note-dialog',
+  imports: [...SHARED],
+  template: `
+    <h2 mat-dialog-title>{{ 'pdn.new' | t }} · <span class="ltr">{{ data.invoice.invoiceNo }}</span></h2>
+    <mat-dialog-content>
+      <p class="secondary">{{ 'pdn.hint' | t }} · {{ 'pinv.open' | t }}: <b class="ltr">{{ data.invoice.openAmount | money }}</b></p>
+      <form [formGroup]="form" class="form-grid">
+        <mat-form-field>
+          <mat-label>{{ 'app.date' | t }}</mat-label>
+          <input matInput type="date" formControlName="date" />
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>{{ 'app.reason' | t }}</mat-label>
+          <input matInput formControlName="reason" />
+        </mat-form-field>
+      </form>
+      @if (goods.length) {
+        <div class="section-title">{{ 'pdn.returns' | t }}</div>
+        <table class="line-editor">
+          <thead><tr><th>{{ 'po.item' | t }}</th><th class="num">{{ 'scn.returnable' | t }}</th><th class="num">{{ 'po.price' | t }}</th><th class="narrow">{{ 'scn.returnQty' | t }}</th></tr></thead>
+          <tbody>
+            @for (l of goods; track l.id) {
+              <tr>
+                <td><span class="ltr">{{ l.sku }}</span> {{ l.description }}</td>
+                <td class="num ltr">{{ l.quantity - l.quantityReturned }}</td>
+                <td class="num ltr">{{ l.unitPrice | money }}</td>
+                <td class="narrow"><mat-form-field><input matInput type="number" min="0" [max]="l.quantity - l.quantityReturned" [formControl]="qty[l.id]" dir="ltr" /></mat-form-field></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+      <div class="section-title">{{ 'pdn.allowance' | t }}</div>
+      <div class="form-grid">
+        <mat-form-field>
+          <mat-label>{{ 'po.item' | t }}</mat-label>
+          <mat-select [formControl]="allowanceLine">
+            <mat-option [value]="null">—</mat-option>
+            @for (l of data.invoice.lines; track l.id) { <mat-option [value]="l.id"><span class="ltr">{{ l.sku ?? l.lineNo }}</span> {{ l.description }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>{{ 'app.amount' | t }}</mat-label>
+          <input matInput type="number" min="0" [formControl]="allowanceAmount" dir="ltr" />
+        </mat-form-field>
+      </div>
+      <div class="total">{{ 'po.total' | t }}: <b class="ltr">{{ total() | money }}</b></div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>{{ 'app.cancel' | t }}</button>
+      <button mat-flat-button [disabled]="busy() || form.invalid || total() <= 0 || total() > data.invoice.openAmount" (click)="save()">{{ 'doc.post' | t }}</button>
+    </mat-dialog-actions>
+  `,
+  styles: `.total { text-align: end; margin-top: 8px; }`
+})
+export class DebitNoteDialog {
+  protected readonly data = inject<{ invoice: SupplierInvoice }>(MAT_DIALOG_DATA);
+  private readonly ref = inject(MatDialogRef<DebitNoteDialog, DebitNote>);
+  private readonly trade = inject(TradeApi);
+  private readonly notify = inject(NotifyService);
+  protected readonly busy = signal(false);
+  protected readonly goods: InvoiceLine[] = this.data.invoice.lines.filter((l) => l.lineType === 'Goods' && l.quantityReturned < l.quantity);
+  protected readonly qty: Record<string, FormControl<number | null>> = Object.fromEntries(this.goods.map((l) => [l.id, new FormControl<number | null>(null)]));
+  protected readonly allowanceLine = new FormControl<string | null>(null);
+  protected readonly allowanceAmount = new FormControl<number | null>(null);
+  protected readonly form = inject(FormBuilder).nonNullable.group({ date: [todayIso(), Validators.required], reason: ['', Validators.required] });
+  private readonly version = signal(0);
+  protected readonly total = computed(() => {
+    this.version();
+    const returns = this.goods.reduce((s, l) => s + Math.round((Number(this.qty[l.id].value) || 0) * l.unitPrice * 100) / 100, 0);
+    return returns + (Number(this.allowanceAmount.value) || 0);
+  });
+
+  constructor() {
+    merge(this.allowanceAmount.valueChanges, ...Object.values(this.qty).map((c) => c.valueChanges))
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.version.update((v) => v + 1));
+  }
+
+  protected save(): void {
+    const lines: object[] = this.goods
+      .filter((l) => Number(this.qty[l.id].value) > 0)
+      .map((l) => ({ lineType: 'Return', supplierInvoiceLineId: l.id, quantity: Number(this.qty[l.id].value) }));
+    if (Number(this.allowanceAmount.value) > 0)
+      lines.push({ lineType: 'Allowance', supplierInvoiceLineId: this.allowanceLine.value, description: this.form.value.reason, quantity: 1,
+        unitPrice: Number(this.allowanceAmount.value) });
+    this.busy.set(true);
+    this.trade.createDebitNote({ supplierInvoiceId: this.data.invoice.id, ...this.form.getRawValue(), lines }).subscribe({
+      next: (n) => {
+        this.notify.success();
+        this.ref.close(n);
+      },
+      error: (e) => {
+        this.busy.set(false);
+        this.notify.error(e);
+      }
+    });
+  }
+}
+
 @Component({
   selector: 'app-invoice-detail',
   imports: [...SHARED],
@@ -399,7 +502,10 @@ export class InvoiceFormPage implements OnInit {
             <button mat-button color="warn" (click)="remove()" [disabled]="busy()"><mat-icon>delete</mat-icon> {{ 'app.delete' | t }}</button>
           }
         }
-        @if (i.status === 'Posted' && auth.can('pur.invoices:post')) {
+        @if ((i.status === 'Posted' || i.status === 'PartiallyPaid') && !i.whtAmount && auth.can('pur.invoices:post')) {
+          <button mat-stroked-button (click)="debitNote(i)" [disabled]="busy()"><mat-icon>assignment_return</mat-icon> {{ 'pdn.new' | t }}</button>
+        }
+        @if (i.status === 'Posted' && !i.debitedAmount && auth.can('pur.invoices:post')) {
           <button mat-button (click)="reverse()" [disabled]="busy()"><mat-icon>undo</mat-icon> {{ 'doc.reverse' | t }}</button>
         }
         @if ((i.status === 'Posted' || i.status === 'PartiallyPaid') && auth.can('pur.payments:post')) {
@@ -421,6 +527,9 @@ export class InvoiceFormPage implements OnInit {
             <div class="hint">{{ 'pinv.whtHint' | t }}</div></mat-card>
         }
         <mat-card appearance="outlined" class="stat"><div class="label">{{ 'pinv.paid' | t }}</div><div class="value ltr">{{ i.paidAmount | money }}</div></mat-card>
+        @if (i.debitedAmount) {
+          <mat-card appearance="outlined" class="stat"><div class="label">{{ 'pdn.debited' | t }}</div><div class="value ltr">{{ i.debitedAmount | money }}</div></mat-card>
+        }
         <mat-card appearance="outlined" class="stat"><div class="label">{{ 'pinv.open' | t }}</div><div class="value ltr">{{ i.openAmount | money }}</div></mat-card>
       </div>
       <div class="table-wrap">
@@ -458,6 +567,39 @@ export class InvoiceFormPage implements OnInit {
           <tr mat-row *matRowDef="let row; columns: columns"></tr>
         </table>
       </div>
+      @if (debitNotes().length) {
+        <div class="section-title">{{ 'pdn.title' | t }}</div>
+        <div class="table-wrap">
+          <table mat-table [dataSource]="debitNotes()">
+            <ng-container matColumnDef="no">
+              <th mat-header-cell *matHeaderCellDef>{{ 'pdn.no' | t }}</th>
+              <td mat-cell *matCellDef="let n"><span class="ltr">{{ n.debitNoteNo }}</span> <span class="secondary ltr">{{ n.noteDate | d }}</span></td>
+            </ng-container>
+            <ng-container matColumnDef="reason">
+              <th mat-header-cell *matHeaderCellDef>{{ 'app.reason' | t }}</th>
+              <td mat-cell *matCellDef="let n">{{ n.reason }}</td>
+            </ng-container>
+            <ng-container matColumnDef="total">
+              <th mat-header-cell *matHeaderCellDef class="num">{{ 'po.total' | t }}</th>
+              <td mat-cell *matCellDef="let n" class="num ltr">{{ n.total | money }}</td>
+            </ng-container>
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>{{ 'app.status' | t }}</th>
+              <td mat-cell *matCellDef="let n"><span class="chip" [class.ok]="n.status === 'Posted'">{{ 'doc.status.' + n.status | t }}</span></td>
+            </ng-container>
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let n">
+                @if (n.status === 'Posted' && auth.can('pur.invoices:post')) {
+                  <button mat-icon-button (click)="reverseDebitNote(n)" [matTooltip]="'doc.reverse' | t"><mat-icon>undo</mat-icon></button>
+                }
+              </td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="['no', 'reason', 'total', 'status', 'actions']"></tr>
+            <tr mat-row *matRowDef="let row; columns: ['no', 'reason', 'total', 'status', 'actions']"></tr>
+          </table>
+        </div>
+      }
     } @else {
       <mat-progress-bar mode="indeterminate" />
     }
@@ -478,10 +620,34 @@ export class InvoiceDetailPage implements OnInit {
   protected readonly matchChip = matchChip;
   protected readonly columns = ['type', 'item', 'qty', 'price', 'variance', 'wht', 'amount'];
   protected readonly invoice = signal<SupplierInvoice | null>(null);
+  protected readonly debitNotes = signal<DebitNote[]>([]);
   protected readonly busy = signal(false);
 
   ngOnInit(): void {
+    this.load();
+  }
+
+  protected debitNote(i: SupplierInvoice): void {
+    this.dialog
+      .open(DebitNoteDialog, { data: { invoice: i }, width: '760px' })
+      .afterClosed()
+      .subscribe((n?: DebitNote) => n && this.load());
+  }
+
+  protected reverseDebitNote(n: DebitNote): void {
+    this.dialog
+      .open(ReverseDialog, { data: {} })
+      .afterClosed()
+      .pipe(
+        filter((x): x is ReverseResult => !!x),
+        switchMap((x) => this.trade.reverseDebitNote(n.id, x.date, x.reason))
+      )
+      .subscribe({ next: () => this.load(), error: (e) => this.notify.error(e) });
+  }
+
+  private load(): void {
     this.trade.invoice(this.id()).subscribe({ next: (i) => this.invoice.set(i), error: (e) => this.notify.error(e) });
+    this.trade.debitNotes({ supplierInvoiceId: this.id() }).subscribe((n) => this.debitNotes.set(n));
   }
 
   protected act(action: 'post' | 'approve-variance'): void {

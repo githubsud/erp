@@ -199,4 +199,67 @@ public sealed class PurchasingTests(ErpFixture fixture)
         wht.GetProperty("totalTax").GetDecimal().ShouldBe(500m);
         wht.GetProperty("rows")[0].GetProperty("rate").GetDecimal().ShouldBe(5m);
     }
+
+    [Fact]
+    public async Task Debit_notes_return_goods_and_take_allowances_keeping_stock_equal_to_the_ledger()
+    {
+        var t = await fixture.CreateTenantAsync();
+        var c = t.Client;
+        var (main, _, _) = await InventoryTests.DefaultsAsync(c);
+        var pipe = await InventoryTests.CreateItemAsync(c, "PIPE");
+        var supplier = await SupplierAsync(c, "S-RET");
+        var bank = (await c.GetAsync<List<FinanceTests.Account>>("/api/finance/accounts")).Single(a => a.Code == "1120").Id;
+        var po = await OrderAsync(c, supplier, main, (pipe, 10m, 100m));
+        var grn = await (await ReceiveAsync(c, po, 10m)).ReadAsync<Receipt>();
+        var invoice = await GoodsInvoiceAsync(c, supplier, "RET-1", grn, 10m, 100m);
+        invoice = await c.PostAsync<Invoice>($"/api/purchasing/invoices/{invoice.Id}/post", new { });
+        var lineId = (await c.GetAsync<JsonElement>($"/api/purchasing/invoices/{invoice.Id}")).GetProperty("lines")[0].GetProperty("id").GetGuid();
+        await (await c.PostJsonAsync("/api/inventory/adjustments", new
+        {
+            warehouseId = main, date = Today, reason = "Damage", lines = new[] { new { itemId = pipe, quantity = -2m } }
+        })).EnsureSuccessAsync();
+
+        // Three pipes go back at the invoice price; stock leaves at average cost (100), so no difference.
+        var ret = await c.PostAsync<JsonElement>("/api/purchasing/debit-notes", new
+        {
+            supplierInvoiceId = invoice.Id, date = Today, reason = "Wrong size",
+            lines = new[] { new { lineType = "Return", supplierInvoiceLineId = lineId, quantity = 3m } }
+        });
+        ret.GetProperty("total").GetDecimal().ShouldBe(300m);
+        ret.GetProperty("debitNoteNo").GetString()!.ShouldStartWith("PDN-");
+        (await ClosingAsync(c, "2110")).ShouldBe(-700m);
+        (await ClosingAsync(c, "1150")).ShouldBe(500m);
+
+        // A price allowance of 80: half the goods are still on hand, so 40 lowers stock and 40 goes to cost of sales.
+        await c.PostAsync<JsonElement>("/api/purchasing/debit-notes", new
+        {
+            supplierInvoiceId = invoice.Id, date = Today, reason = "Late delivery penalty",
+            lines = new[] { new { lineType = "Allowance", supplierInvoiceLineId = lineId, quantity = 1m, unitPrice = 80m } }
+        });
+        (await ClosingAsync(c, "1150")).ShouldBe(460m);
+        (await ClosingAsync(c, "5110")).ShouldBe(-40m);
+        (await c.GetAsync<Invoice>($"/api/purchasing/invoices/{invoice.Id}")).OpenAmount.ShouldBe(620m);
+        (await c.PostJsonAsync("/api/purchasing/debit-notes", new
+        {
+            supplierInvoiceId = invoice.Id, date = Today, reason = "Too much",
+            lines = new[] { new { lineType = "Return", supplierInvoiceLineId = lineId, quantity = 8m } }
+        })).StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity); // only 7 left to return
+
+        await c.PostAsync<Payment>("/api/purchasing/payments", new
+        {
+            supplierId = supplier, date = Today, paymentAccountId = bank, allocations = new[] { new { supplierInvoiceId = invoice.Id, amount = 620m } }
+        });
+        (await c.GetAsync<Invoice>($"/api/purchasing/invoices/{invoice.Id}")).Status.ShouldBe("Paid");
+        (await c.PostJsonAsync($"/api/purchasing/invoices/{invoice.Id}/reverse", new { date = Today, reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        // Reversing the return puts the goods back and the amount back on the invoice.
+        await c.PostAsync<JsonElement>($"/api/purchasing/debit-notes/{ret.GetProperty("id").GetGuid()}/reverse", new { date = Today, reason = "Supplier refused" });
+        (await c.GetAsync<Invoice>($"/api/purchasing/invoices/{invoice.Id}")).OpenAmount.ShouldBe(300m);
+        var valuation = await c.GetAsync<InventoryTests.Valuation>($"/api/inventory/reports/valuation?asOf={Today:yyyy-MM-dd}");
+        valuation.Difference.ShouldBe(0m);
+        var aging = await c.GetAsync<JsonElement>($"/api/purchasing/reports/aging?asOf={Today:yyyy-MM-dd}");
+        aging.GetProperty("total").GetDecimal().ShouldBe(aging.GetProperty("ledgerBalance").GetDecimal());
+        var tb = await c.GetAsync<FinanceTests.Tb>($"/api/finance/reports/trial-balance?from={Today:yyyy-MM-dd}&to={Today:yyyy-MM-dd}");
+        tb.IsBalanced.ShouldBeTrue();
+    }
 }

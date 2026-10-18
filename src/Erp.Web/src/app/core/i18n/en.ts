@@ -908,7 +908,14 @@ export const en = {
   'bank.expenseAccount': 'Charge to account',
   'bank.incomeAccount': 'Credit to account',
   'bank.deleteConfirm': 'Delete this statement and its matches?',
-  'bank.since': 'Counted from the first statement ({d}); earlier entries are covered by its opening balance.'
+  'bank.since': 'Counted from the first statement ({d}); earlier entries are covered by its opening balance.',
+  'pdn.title': 'Debit notes',
+  'pdn.new': 'Debit note',
+  'pdn.no': 'Debit note',
+  'pdn.hint': 'Return goods to the supplier or record a price allowance. The total cannot exceed what is still open on the invoice.',
+  'pdn.returns': 'Goods sent back',
+  'pdn.allowance': 'Allowance from the supplier',
+  'pdn.debited': 'Debit notes'
 } as const;
 
 export type TranslationKey = keyof typeof en;

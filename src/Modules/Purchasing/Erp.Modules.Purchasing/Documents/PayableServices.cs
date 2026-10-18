@@ -248,9 +248,9 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
         db.InTransactionAsync(async token =>
         {
             var invoice = await FindAsync(id, token);
-            if (invoice.Status is not (InvoiceStatus.Posted))
-                throw new ConflictException("pur.invoice_not_open", "Only posted, unpaid invoices can be reversed (reverse the payments first).",
-                    "يمكن عكس الفواتير المرحّلة غير المدفوعة فقط (اعكس الدفعات أولاً).");
+            if (invoice.Status is not InvoiceStatus.Posted || invoice.DebitedAmount != 0)
+                throw new ConflictException("pur.invoice_not_open", "Only posted invoices without payments or debit notes can be reversed (reverse those first).",
+                    "يمكن عكس الفواتير المرحّلة التي ليس عليها دفعات أو إشعارات مدينة فقط (اعكسها أولاً).");
             if (await (from c in db.Set<LandedCostCharge>()
                        join v in db.Set<LandedCostVoucher>() on c.LandedCostVoucherId equals v.Id
                        where c.SupplierInvoiceId == invoice.Id && v.Status == DocumentStatus.Posted
@@ -271,6 +271,12 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
             await db.SaveChangesAsync(token);
             return invoice;
         }, ct);
+
+    /// <summary>Paid once payments and debit notes cover the total; partly paid once anything has been settled.</summary>
+    internal static void RefreshPaymentStatus(SupplierInvoice invoice) =>
+        invoice.Status = invoice.PaidAmount + invoice.DebitedAmount >= invoice.Total ? InvoiceStatus.Paid
+            : invoice.PaidAmount + invoice.DebitedAmount > 0 ? InvoiceStatus.PartiallyPaid
+            : InvoiceStatus.Posted;
 
     private async Task<Dictionary<Guid, T>> LinesAsync<T>(IEnumerable<Guid?> ids, CancellationToken ct) where T : Entity
     {
@@ -433,7 +439,7 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
                 var wht = PurchasingRules.WhtOnPayment(invoice.Total, invoice.WhtAmount, invoice.WhtWithheld, invoice.OpenAmount, amount);
                 invoice.PaidAmount += amount;
                 invoice.WhtWithheld += wht;
-                invoice.Status = invoice.PaidAmount >= invoice.Total ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid;
+                SupplierInvoiceService.RefreshPaymentStatus(invoice);
                 payment.Allocations.Add(new SupplierPaymentAllocation
                 {
                     SupplierPaymentId = payment.Id, SupplierInvoiceId = invoice.Id, Amount = amount, WhtAmount = wht
@@ -484,7 +490,7 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
                 var invoice = invoices[a.SupplierInvoiceId];
                 invoice.PaidAmount -= a.Amount;
                 invoice.WhtWithheld -= a.WhtAmount;
-                invoice.Status = invoice.PaidAmount == 0 ? InvoiceStatus.Posted : InvoiceStatus.PartiallyPaid;
+                SupplierInvoiceService.RefreshPaymentStatus(invoice);
             }
             payment.Status = DocumentStatus.Reversed;
             await db.SaveChangesAsync(token);

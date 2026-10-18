@@ -3,7 +3,7 @@ import { ApiService } from './api.service';
 import { Paged } from './models';
 import {
   Adjustment, AgingReport, GoodsReceipt, GrniReport, Item, ItemLedger, LandedCost, Master, PurchaseOrder, PurchaseSettings, StockCount, StockRow,
-  Supplier, SupplierInvoice, SupplierPayment, Transfer, ValuationReport, WhtReport
+  Supplier, SupplierInvoice, SupplierPayment, Transfer, ValuationReport, WhtReport, DebitNote
 } from './trade.models';
 
 /** Inventory and purchasing endpoints. */
@@ -65,6 +65,9 @@ export class TradeApi {
   deleteInvoice = (id: string) => this.api.delete(`purchasing/invoices/${id}`);
   invoiceAction = (id: string, action: 'post' | 'approve-variance') => this.api.post<SupplierInvoice>(`purchasing/invoices/${id}/${action}`);
   reverseInvoice = (id: string, date: string, reason: string) => this.api.post<SupplierInvoice>(`purchasing/invoices/${id}/reverse`, { date, reason });
+  debitNotes = (params: { supplierId?: string; supplierInvoiceId?: string } = {}) => this.api.get<DebitNote[]>('purchasing/debit-notes', params);
+  createDebitNote = (body: unknown) => this.api.post<DebitNote>('purchasing/debit-notes', body);
+  reverseDebitNote = (id: string, date: string, reason: string) => this.api.post<DebitNote>(`purchasing/debit-notes/${id}/reverse`, { date, reason });
   landedCosts = () => this.api.get<LandedCost[]>('purchasing/landed-costs');
   createLandedCost = (body: unknown) => this.api.post<LandedCost>('purchasing/landed-costs', body);
   reverseLandedCost = (id: string, date: string, reason: string) => this.api.post<LandedCost>(`purchasing/landed-costs/${id}/reverse`, { date, reason });

@@ -255,6 +255,7 @@ export interface InvoiceLine {
   whtCategory: WhtCategory;
   whtRate: number;
   whtAmount: number;
+  quantityReturned: number;
 }
 
 export interface SupplierInvoice {
@@ -276,6 +277,27 @@ export interface SupplierInvoice {
   notes: string | null;
   journalEntryId: string | null;
   lines: InvoiceLine[];
+  isOpening: boolean;
+  debitedAmount: number;
+}
+
+export interface DebitNote {
+  id: string;
+  debitNoteNo: string;
+  supplierId: string;
+  supplierNameEn: string;
+  supplierNameAr: string;
+  supplierInvoiceId: string;
+  invoiceNo: string;
+  supplierRef: string;
+  noteDate: string;
+  warehouseId: string | null;
+  reason: string;
+  total: number;
+  status: 'Posted' | 'Reversed';
+  journalEntryId: string | null;
+  lines: { lineNo: number; lineType: 'Return' | 'Allowance'; supplierInvoiceLineId: string | null; itemId: string | null; sku: string | null;
+    description: string | null; quantity: number; unitPrice: number; amount: number; stockValue: number }[];
 }
 
 export type ChargeType = 'Freight' | 'Clearing' | 'CustomsDuty' | 'Insurance' | 'Other';

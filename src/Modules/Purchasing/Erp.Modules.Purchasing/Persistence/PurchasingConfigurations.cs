@@ -84,6 +84,7 @@ internal sealed class SupplierInvoiceLineConfiguration : IEntityTypeConfiguratio
         b.Property(x => x.UnitPrice).AsQuantity();
         b.Property(x => x.ReceiptUnitCost).AsQuantity();
         b.Property(x => x.WhtRate).HasPrecision(9, 4);
+        b.Property(x => x.QuantityReturned).AsQuantity();
     }
 }
 
@@ -123,4 +124,23 @@ internal sealed class SupplierPaymentConfiguration : IEntityTypeConfiguration<Su
 internal sealed class SupplierPaymentAllocationConfiguration : IEntityTypeConfiguration<SupplierPaymentAllocation>
 {
     public void Configure(EntityTypeBuilder<SupplierPaymentAllocation> b) => b.ToTable("supplier_payment_allocation", "pur");
+}
+
+internal sealed class DebitNoteConfiguration : IEntityTypeConfiguration<DebitNote>
+{
+    public void Configure(EntityTypeBuilder<DebitNote> b)
+    {
+        b.ToTable("debit_note", "pur");
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.DebitNoteId);
+    }
+}
+
+internal sealed class DebitNoteLineConfiguration : IEntityTypeConfiguration<DebitNoteLine>
+{
+    public void Configure(EntityTypeBuilder<DebitNoteLine> b)
+    {
+        b.ToTable("debit_note_line", "pur");
+        b.Property(x => x.Quantity).AsQuantity();
+        b.Property(x => x.UnitPrice).AsQuantity();
+    }
 }

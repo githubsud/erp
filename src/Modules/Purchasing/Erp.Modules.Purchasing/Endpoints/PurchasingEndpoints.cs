@@ -34,11 +34,18 @@ public sealed record ReceiptDto(Guid Id, string GrnNo, Guid PurchaseOrderId, str
 
 public sealed record InvoiceLineDto(Guid Id, int LineNo, string LineType, Guid? GoodsReceiptLineId, Guid? PurchaseOrderLineId, Guid? ItemId, string? Sku,
     string? Description, decimal Quantity, decimal UnitPrice, decimal Amount, decimal? ReceiptUnitCost, decimal Variance, string WhtCategory,
-    decimal WhtRate, decimal WhtAmount);
+    decimal WhtRate, decimal WhtAmount, decimal QuantityReturned);
 
 public sealed record InvoiceDto(Guid Id, string InvoiceNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr, string SupplierRef,
     DateOnly InvoiceDate, DateOnly DueDate, Guid? PurchaseOrderId, decimal Total, decimal WhtAmount, decimal PaidAmount, decimal OpenAmount,
-    string Status, string MatchStatus, string? Notes, Guid? JournalEntryId, IReadOnlyList<InvoiceLineDto> Lines, bool IsOpening);
+    string Status, string MatchStatus, string? Notes, Guid? JournalEntryId, IReadOnlyList<InvoiceLineDto> Lines, bool IsOpening, decimal DebitedAmount);
+
+public sealed record DebitNoteLineDto(int LineNo, string LineType, Guid? SupplierInvoiceLineId, Guid? ItemId, string? Sku, string? Description,
+    decimal Quantity, decimal UnitPrice, decimal Amount, decimal StockValue);
+
+public sealed record DebitNoteDto(Guid Id, string DebitNoteNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr, Guid SupplierInvoiceId,
+    string InvoiceNo, string SupplierRef, DateOnly NoteDate, Guid? WarehouseId, string Reason, decimal Total, string Status, Guid? JournalEntryId,
+    IReadOnlyList<DebitNoteLineDto> Lines);
 
 public sealed record ChargeDto(int LineNo, string ChargeType, string? Description, decimal Amount, Guid? SupplierInvoiceId);
 
@@ -171,6 +178,18 @@ internal static class PurchasingEndpoints
             return (await InvoicesAsync(db, t, inv, id, null, null, false, ct)).Single();
         }).RequirePermission(PurchasingPermissions.InvoicesPost);
 
+        g.MapGet("/debit-notes", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct, Guid? supplierId = null,
+            Guid? supplierInvoiceId = null) => await DebitNotesAsync(db, t, inv, null, supplierId, supplierInvoiceId, ct))
+            .RequirePermission(PurchasingPermissions.SuppliersRead);
+        g.MapPost("/debit-notes", async (DebitNoteRequest r, DebitNoteService s, ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
+            (await DebitNotesAsync(db, t, inv, (await s.CreateAsync(r, ct)).Id, null, null, ct)).Single()).RequirePermission(PurchasingPermissions.InvoicesPost);
+        g.MapPost("/debit-notes/{id:guid}/reverse", async (Guid id, ReverseRequest r, DebitNoteService s, ErpDbContext db, ITenantContext t, IInventoryQueries inv,
+            CancellationToken ct) =>
+        {
+            await s.ReverseAsync(id, r, ct);
+            return (await DebitNotesAsync(db, t, inv, id, null, null, ct)).Single();
+        }).RequirePermission(PurchasingPermissions.InvoicesPost);
+
         g.MapGet("/landed-costs", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) => await LandedCostsAsync(db, t, inv, null, ct))
             .RequirePermission(PurchasingPermissions.SuppliersRead);
         g.MapGet("/landed-costs/{id:guid}", async (Guid id, ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
@@ -265,7 +284,27 @@ internal static class PurchasingEndpoints
             i.Notes, i.JournalEntryId,
             i.Lines.OrderBy(l => l.LineNo).Select(l => new InvoiceLineDto(l.Id, l.LineNo, l.LineType.ToString(), l.GoodsReceiptLineId, l.PurchaseOrderLineId,
                 l.ItemId, l.ItemId is { } item ? items[item].Sku : null, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.ReceiptUnitCost, l.Variance,
-                l.WhtCategory.ToString(), l.WhtRate, l.WhtAmount)).ToList(), i.IsOpening)).ToList();
+                l.WhtCategory.ToString(), l.WhtRate, l.WhtAmount, l.QuantityReturned)).ToList(), i.IsOpening, i.DebitedAmount)).ToList();
+    }
+
+    private static async Task<List<DebitNoteDto>> DebitNotesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? supplierId,
+        Guid? invoiceId, CancellationToken ct)
+    {
+        var q = db.Set<DebitNote>().AsNoTracking().Include(n => n.Lines).Where(n => n.CompanyId == t.RequireCompanyId());
+        if (id is not null) q = q.Where(n => n.Id == id);
+        if (supplierId is not null) q = q.Where(n => n.SupplierId == supplierId);
+        if (invoiceId is not null) q = q.Where(n => n.SupplierInvoiceId == invoiceId);
+        var list = await q.OrderByDescending(n => n.NoteDate).ThenByDescending(n => n.DebitNoteNo).Take(500).ToListAsync(ct);
+        var suppliers = await SuppliersAsync(db, list.Select(n => n.SupplierId), ct);
+        var invoiceIds = list.Select(n => n.SupplierInvoiceId).Distinct().ToList();
+        var invoices = await db.Set<SupplierInvoice>().AsNoTracking().Where(i => invoiceIds.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id, i => new { i.InvoiceNo, i.SupplierRef }, ct);
+        var items = await inv.GetItemsAsync(list.SelectMany(n => n.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value)), ct);
+        return list.Select(n => new DebitNoteDto(n.Id, n.DebitNoteNo, n.SupplierId, suppliers[n.SupplierId].NameEn, suppliers[n.SupplierId].NameAr,
+            n.SupplierInvoiceId, invoices[n.SupplierInvoiceId].InvoiceNo, invoices[n.SupplierInvoiceId].SupplierRef, n.NoteDate, n.WarehouseId, n.Reason, n.Total,
+            n.Status.ToString(), n.JournalEntryId,
+            n.Lines.OrderBy(l => l.LineNo).Select(l => new DebitNoteLineDto(l.LineNo, l.LineType.ToString(), l.SupplierInvoiceLineId, l.ItemId,
+                l.ItemId is { } item ? items[item].Sku : null, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.StockValue)).ToList())).ToList();
     }
 
     private static async Task<List<LandedCostDto>> LandedCostsAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, CancellationToken ct)
@@ -326,7 +365,7 @@ internal static class PurchasingEndpoints
                           join s in db.Set<Supplier>() on i.SupplierId equals s.Id
                           where i.CompanyId == t.RequireCompanyId() && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.PartiallyPaid)
                                 && i.InvoiceDate <= date
-                          select new { s.Id, s.Code, s.NameEn, s.NameAr, i.DueDate, Open = i.Total - i.PaidAmount }).ToListAsync(ct);
+                          select new { s.Id, s.Code, s.NameEn, s.NameAr, i.DueDate, Open = i.Total - i.PaidAmount - i.DebitedAmount }).ToListAsync(ct);
         var rows = open.GroupBy(x => new { x.Id, x.Code, x.NameEn, x.NameAr }).Select(g =>
         {
             decimal Bucket(int from, int to) => g.Where(x => (date.DayNumber - x.DueDate.DayNumber) is var d && d >= from && d <= to).Sum(x => x.Open);
