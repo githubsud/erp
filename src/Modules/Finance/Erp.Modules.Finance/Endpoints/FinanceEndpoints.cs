@@ -1,5 +1,6 @@
 using Erp.Infrastructure.Persistence;
 using Erp.Infrastructure.Web;
+using Erp.Modules.Finance.Banking;
 using Erp.Modules.Finance.Domain;
 using Erp.Modules.Finance.Posting;
 using Erp.Modules.Finance.Provisioning;
@@ -68,6 +69,22 @@ internal static class FinanceEndpoints
             .RequirePermission(FinancePermissions.ReportsRead);
         g.MapGet("/reports/account-ledger", (Guid accountId, DateOnly from, DateOnly to, FinanceReports r, CancellationToken ct) =>
             r.AccountLedgerAsync(accountId, from, to, ct)).RequirePermission(FinancePermissions.ReportsRead);
+        g.MapGet("/reports/profit-and-loss", (DateOnly from, DateOnly to, FinancialStatements s, CancellationToken ct, DateOnly? compareFrom = null,
+            DateOnly? compareTo = null) => s.ProfitAndLossAsync(from, to, compareFrom, compareTo, ct)).RequirePermission(FinancePermissions.ReportsRead);
+        g.MapGet("/reports/profit-and-loss.pdf", async (DateOnly from, DateOnly to, StatementsPdf pdf, CancellationToken ct, DateOnly? compareFrom = null,
+            DateOnly? compareTo = null) =>
+        {
+            var (content, name) = await pdf.ProfitAndLossAsync(from, to, compareFrom, compareTo, ct);
+            return Results.File(content, "application/pdf", name);
+        }).RequirePermission(FinancePermissions.ReportsRead);
+        g.MapGet("/reports/balance-sheet", (DateOnly asOf, FinancialStatements s, CancellationToken ct, DateOnly? compareAsOf = null) =>
+            s.BalanceSheetAsync(asOf, compareAsOf, ct)).RequirePermission(FinancePermissions.ReportsRead);
+        g.MapGet("/reports/balance-sheet.pdf", async (DateOnly asOf, StatementsPdf pdf, CancellationToken ct, DateOnly? compareAsOf = null) =>
+        {
+            var (content, name) = await pdf.BalanceSheetAsync(asOf, compareAsOf, ct);
+            return Results.File(content, "application/pdf", name);
+        }).RequirePermission(FinancePermissions.ReportsRead);
+        BankEndpoints.Map(g);
         g.MapGet("/exports/journal.csv", async (DateOnly from, DateOnly to, FinanceReports r, CancellationToken ct) =>
                 Results.File(await r.ExportJournalCsvAsync(from, to, ct), "text/csv; charset=utf-8", $"journal_{from:yyyyMMdd}_{to:yyyyMMdd}.csv"))
             .RequirePermission(FinancePermissions.ReportsRead);

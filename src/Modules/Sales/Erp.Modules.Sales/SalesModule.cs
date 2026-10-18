@@ -23,6 +23,7 @@ public sealed class SalesModule : IModule
         services.AddScoped<SalesInvoiceService>();
         services.AddScoped<CreditNoteService>();
         services.AddScoped<CustomerReceiptService>();
+        services.AddScoped<CustomerOpeningService>();
         services.AddScoped<SalesPdfDocuments>();
         services.AddScoped<ITenantProvisioner, SalesProvisioner>();
         services.AddSingleton<IPermissionProvider, SalesPermissionProvider>();

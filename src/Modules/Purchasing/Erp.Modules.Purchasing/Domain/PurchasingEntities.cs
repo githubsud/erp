@@ -129,6 +129,9 @@ public sealed class SupplierInvoice : TenantEntity
     public MatchStatus MatchStatus { get; set; } = MatchStatus.NotApplicable;
     public Guid? VarianceApprovedBy { get; set; }
     public string? Notes { get; init; }
+
+    /// <summary>An unpaid invoice brought over from the previous system (debited to opening balance equity).</summary>
+    public bool IsOpening { get; init; }
     public Guid? JournalEntryId { get; set; }
     public uint Version { get; set; }
     public List<SupplierInvoiceLine> Lines { get; init; } = [];

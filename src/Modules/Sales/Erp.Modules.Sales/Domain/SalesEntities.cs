@@ -183,6 +183,9 @@ public sealed class SalesInvoice : TenantEntity
     public decimal CreditedAmount { get; set; }
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
     public string? Notes { get; init; }
+
+    /// <summary>An unpaid invoice brought over from the previous system (credited to opening balance equity, not revenue).</summary>
+    public bool IsOpening { get; init; }
     public Guid? EInvoiceUuid { get; set; }
     public DateTimeOffset? IssuedAt { get; set; }
     public Guid? JournalEntryId { get; set; }

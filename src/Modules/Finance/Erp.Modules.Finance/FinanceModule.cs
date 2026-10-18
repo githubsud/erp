@@ -1,4 +1,5 @@
 using Erp.Infrastructure.Web;
+using Erp.Modules.Finance.Banking;
 using Erp.Modules.Finance.Contracts;
 using Erp.Modules.Finance.Endpoints;
 using Erp.Modules.Finance.Posting;
@@ -23,6 +24,9 @@ public sealed class FinanceModule : IModule
         services.AddScoped<IPostingRuleRegistry, PostingRuleRegistry>();
         services.AddScoped<IFinanceQueries, FinanceQueries>();
         services.AddScoped<FinanceReports>();
+        services.AddScoped<FinancialStatements>();
+        services.AddScoped<StatementsPdf>();
+        services.AddScoped<BankReconciliationService>();
         services.AddScoped<JournalVoucherService>();
         services.AddScoped<ITenantProvisioner, FinanceProvisioner>();
         services.AddSingleton<IPermissionProvider, FinancePermissionProvider>();

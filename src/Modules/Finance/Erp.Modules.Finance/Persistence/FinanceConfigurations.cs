@@ -65,3 +65,22 @@ internal sealed class JournalVoucherConfiguration : IEntityTypeConfiguration<Jou
 {
     public void Configure(EntityTypeBuilder<JournalVoucher> b) => b.ToTable("journal_voucher", "fin");
 }
+
+internal sealed class BankStatementConfiguration : IEntityTypeConfiguration<BankStatement>
+{
+    public void Configure(EntityTypeBuilder<BankStatement> b)
+    {
+        b.ToTable("bank_statement", "fin");
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.BankStatementId);
+    }
+}
+
+internal sealed class BankStatementLineConfiguration : IEntityTypeConfiguration<BankStatementLine>
+{
+    public void Configure(EntityTypeBuilder<BankStatementLine> b) => b.ToTable("bank_statement_line", "fin");
+}
+
+internal sealed class BankMatchConfiguration : IEntityTypeConfiguration<BankMatch>
+{
+    public void Configure(EntityTypeBuilder<BankMatch> b) => b.ToTable("bank_match", "fin");
+}

@@ -69,7 +69,7 @@ internal static class ChartOfAccountsTemplate
         new("4220", "4", "Foreign Exchange Differences", "فروقات أسعار الصرف", I),
 
         new("5", null, "Expenses", "المصروفات", X, false),
-        new("51", "5", "Cost of Sales", "تكلفة المبيعات", X, false),
+        new("51", "5", "Cost of Sales", "تكلفة المبيعات", X, false, Subtype: "cost_of_sales"),
         new("5110", "51", "Cost of Goods Sold", "تكلفة البضاعة المباعة", X),
         new("5120", "51", "Inventory Adjustments", "تسويات المخزون", X),
         new("52", "5", "Staff Costs", "تكاليف الموظفين", X, false),

@@ -21,6 +21,7 @@ public sealed class PurchasingModule : IModule
         services.AddScoped<SupplierInvoiceService>();
         services.AddScoped<LandedCostService>();
         services.AddScoped<SupplierPaymentService>();
+        services.AddScoped<SupplierOpeningService>();
         services.AddScoped<ITenantProvisioner, PurchasingProvisioner>();
         services.AddSingleton<IPermissionProvider, PurchasingPermissionProvider>();
     }

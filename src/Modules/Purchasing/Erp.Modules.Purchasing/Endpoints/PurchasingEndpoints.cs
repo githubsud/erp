@@ -38,7 +38,7 @@ public sealed record InvoiceLineDto(Guid Id, int LineNo, string LineType, Guid? 
 
 public sealed record InvoiceDto(Guid Id, string InvoiceNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr, string SupplierRef,
     DateOnly InvoiceDate, DateOnly DueDate, Guid? PurchaseOrderId, decimal Total, decimal WhtAmount, decimal PaidAmount, decimal OpenAmount,
-    string Status, string MatchStatus, string? Notes, Guid? JournalEntryId, IReadOnlyList<InvoiceLineDto> Lines);
+    string Status, string MatchStatus, string? Notes, Guid? JournalEntryId, IReadOnlyList<InvoiceLineDto> Lines, bool IsOpening);
 
 public sealed record ChargeDto(int LineNo, string ChargeType, string? Description, decimal Amount, Guid? SupplierInvoiceId);
 
@@ -67,6 +67,9 @@ public sealed record WhtRow(DateOnly PaymentDate, string PaymentNo, string Suppl
     string InvoiceNo, string Categories, decimal Gross, decimal Rate, decimal Tax);
 
 public sealed record WhtReport(int Year, int Month, DateOnly FilingDeadline, IReadOnlyList<WhtRow> Rows, decimal TotalGross, decimal TotalTax);
+
+public sealed record OpeningInvoiceResult(Guid Id, string InvoiceNo, Guid PartyId, string Reference, DateOnly InvoiceDate, DateOnly DueDate,
+    decimal Amount);
 
 internal static class PurchasingEndpoints
 {
@@ -136,8 +139,12 @@ internal static class PurchasingEndpoints
             return (await ReceiptsAsync(db, t, inv, id, null, null, ct)).Single();
         }).RequirePermission(PurchasingPermissions.ReceiptsPost);
 
-        g.MapGet("/invoices", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct, Guid? supplierId = null, string? status = null, bool openOnly = false) =>
-            await InvoicesAsync(db, t, inv, null, supplierId, status, openOnly, ct)).RequirePermission(PurchasingPermissions.SuppliersRead);
+        g.MapGet("/invoices", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct, Guid? supplierId = null, string? status = null,
+            bool openOnly = false, bool? opening = null) => await InvoicesAsync(db, t, inv, null, supplierId, status, openOnly, ct, opening))
+            .RequirePermission(PurchasingPermissions.SuppliersRead);
+        g.MapPost("/opening-balances", async (SupplierOpeningRequest r, SupplierOpeningService s, CancellationToken ct) =>
+            (await s.CreateAsync(r, ct)).Select(i => new OpeningInvoiceResult(i.Id, i.InvoiceNo, i.SupplierId, i.SupplierRef, i.InvoiceDate, i.DueDate,
+                i.Total)).ToList()).RequirePermission(PurchasingPermissions.InvoicesPost);
         g.MapGet("/invoices/{id:guid}", async (Guid id, ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
             (await InvoicesAsync(db, t, inv, id, null, null, false, ct)).SingleOrDefault() ?? throw new NotFoundException("Supplier invoice", id))
             .RequirePermission(PurchasingPermissions.SuppliersRead);
@@ -242,9 +249,10 @@ internal static class PurchasingEndpoints
     }
 
     private static async Task<List<InvoiceDto>> InvoicesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? supplierId, string? status, bool openOnly,
-        CancellationToken ct)
+        CancellationToken ct, bool? opening = null)
     {
         var q = db.Set<SupplierInvoice>().AsNoTracking().Include(i => i.Lines).Where(i => i.CompanyId == t.RequireCompanyId());
+        if (opening is { } o) q = q.Where(i => i.IsOpening == o);
         if (id is not null) q = q.Where(i => i.Id == id);
         if (supplierId is not null) q = q.Where(i => i.SupplierId == supplierId);
         if (Enum.TryParse<InvoiceStatus>(status, true, out var st)) q = q.Where(i => i.Status == st);
@@ -257,7 +265,7 @@ internal static class PurchasingEndpoints
             i.Notes, i.JournalEntryId,
             i.Lines.OrderBy(l => l.LineNo).Select(l => new InvoiceLineDto(l.Id, l.LineNo, l.LineType.ToString(), l.GoodsReceiptLineId, l.PurchaseOrderLineId,
                 l.ItemId, l.ItemId is { } item ? items[item].Sku : null, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.ReceiptUnitCost, l.Variance,
-                l.WhtCategory.ToString(), l.WhtRate, l.WhtAmount)).ToList())).ToList();
+                l.WhtCategory.ToString(), l.WhtRate, l.WhtAmount)).ToList(), i.IsOpening)).ToList();
     }
 
     private static async Task<List<LandedCostDto>> LandedCostsAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, CancellationToken ct)

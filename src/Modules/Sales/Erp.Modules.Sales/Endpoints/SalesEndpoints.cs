@@ -48,7 +48,7 @@ public sealed record SalesInvoiceLineDto(Guid Id, int LineNo, string LineType, G
 public sealed record SalesInvoiceDto(Guid Id, string InvoiceNo, Guid CustomerId, string CustomerCode, string CustomerNameEn, string CustomerNameAr,
     DateOnly InvoiceDate, DateOnly DueDate, Guid? SalesOrderId, Guid? WarehouseId, string? CustomerRef, decimal Total, decimal DiscountTotal, decimal PaidAmount,
     decimal CreditedAmount, decimal OpenAmount, string Status, string? Notes, Guid? EInvoiceUuid, DateTimeOffset? IssuedAt, Guid? JournalEntryId,
-    IReadOnlyList<SalesInvoiceLineDto> Lines);
+    IReadOnlyList<SalesInvoiceLineDto> Lines, bool IsOpening);
 
 public sealed record CreditNoteLineDto(int LineNo, string LineType, Guid? SalesInvoiceLineId, Guid? ItemId, string? Sku, string? Description, decimal Quantity,
     decimal UnitPrice, decimal Amount, decimal Cost);
@@ -87,6 +87,9 @@ public sealed record SalesAnalysisRow(Guid? Id, string Code, string NameEn, stri
 
 public sealed record SalesAnalysisReport(DateOnly From, DateOnly To, string GroupBy, IReadOnlyList<SalesAnalysisRow> Rows, decimal NetRevenue, decimal Cost,
     decimal Margin);
+
+public sealed record OpeningInvoiceResult(Guid Id, string InvoiceNo, Guid PartyId, string Reference, DateOnly InvoiceDate, DateOnly DueDate,
+    decimal Amount);
 
 internal static class SalesEndpoints
 {
@@ -208,7 +211,11 @@ internal static class SalesEndpoints
 
         // Invoices
         g.MapGet("/invoices", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct, Guid? customerId = null, string? status = null,
-            bool openOnly = false) => await InvoicesAsync(db, t, inv, null, customerId, status, openOnly, ct)).RequirePermission(SalesPermissions.CustomersRead);
+            bool openOnly = false, bool? opening = null) => await InvoicesAsync(db, t, inv, null, customerId, status, openOnly, ct, opening))
+            .RequirePermission(SalesPermissions.CustomersRead);
+        g.MapPost("/opening-balances", async (CustomerOpeningRequest r, CustomerOpeningService s, CancellationToken ct) =>
+            (await s.CreateAsync(r, ct)).Select(i => new OpeningInvoiceResult(i.Id, i.InvoiceNo, i.CustomerId, i.CustomerRef ?? "", i.InvoiceDate, i.DueDate,
+                i.Total)).ToList()).RequirePermission(SalesPermissions.InvoicesPost);
         g.MapGet("/invoices/{id:guid}", (Guid id, ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) => InvoiceAsync(db, t, inv, id, ct))
             .RequirePermission(SalesPermissions.CustomersRead);
         g.MapPost("/invoices", async (InvoiceRequest r, SalesInvoiceService s, ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
@@ -356,9 +363,10 @@ internal static class SalesEndpoints
         (await InvoicesAsync(db, t, inv, id, null, null, false, ct)).SingleOrDefault() ?? throw new NotFoundException("Sales invoice", id);
 
     private static async Task<List<SalesInvoiceDto>> InvoicesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? customerId,
-        string? status, bool openOnly, CancellationToken ct)
+        string? status, bool openOnly, CancellationToken ct, bool? opening = null)
     {
         var q = db.Set<SalesInvoice>().AsNoTracking().Include(i => i.Lines).Where(i => i.CompanyId == t.RequireCompanyId());
+        if (opening is { } o) q = q.Where(i => i.IsOpening == o);
         if (id is not null) q = q.Where(i => i.Id == id);
         if (customerId is not null) q = q.Where(i => i.CustomerId == customerId);
         if (Enum.TryParse<InvoiceStatus>(status, true, out var st)) q = q.Where(i => i.Status == st);
@@ -371,7 +379,7 @@ internal static class SalesEndpoints
             i.CreditedAmount, i.OpenAmount, i.Status.ToString(), i.Notes, i.EInvoiceUuid, i.IssuedAt, i.JournalEntryId,
             i.Lines.OrderBy(l => l.LineNo).Select(l => new SalesInvoiceLineDto(l.Id, l.LineNo, l.LineType.ToString(), l.DeliveryNoteLineId, l.SalesOrderLineId,
                 l.ItemId, l.ItemId is { } a ? items[a].Sku : null, l.ItemId is { } b ? items[b].NameEn : null, l.ItemId is { } c ? items[c].NameAr : null,
-                l.Description, l.Quantity, l.UnitPrice, l.DiscountPercent, l.Amount, l.UnitCost, l.Cost, l.QuantityReturned)).ToList())).ToList();
+                l.Description, l.Quantity, l.UnitPrice, l.DiscountPercent, l.Amount, l.UnitCost, l.Cost, l.QuantityReturned)).ToList(), i.IsOpening)).ToList();
     }
 
     private static async Task<List<CreditNoteDto>> CreditNotesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? customerId,
@@ -493,7 +501,7 @@ internal static class SalesEndpoints
         var byCustomer = string.Equals(groupBy, "customer", StringComparison.OrdinalIgnoreCase);
         var sold = await (from l in db.Set<SalesInvoiceLine>().AsNoTracking()
                           join i in db.Set<SalesInvoice>() on l.SalesInvoiceId equals i.Id
-                          where i.CompanyId == companyId && i.Status != InvoiceStatus.Draft && i.Status != InvoiceStatus.Reversed
+                          where i.CompanyId == companyId && i.Status != InvoiceStatus.Draft && i.Status != InvoiceStatus.Reversed && !i.IsOpening
                                 && i.InvoiceDate >= start && i.InvoiceDate <= end
                           select new { i.CustomerId, l.ItemId, l.Quantity, l.Amount, l.Cost }).ToListAsync(ct);
         var returned = await (from l in db.Set<CreditNoteLine>().AsNoTracking()

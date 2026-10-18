@@ -113,6 +113,49 @@ public sealed class JournalLine : TenantEntity, IImmutable
     public string? Description { get; init; }
 }
 
+public enum BankStatementStatus { Open, Reconciled }
+
+public enum BankLineStatus { Unmatched, Matched, Ignored }
+
+/// <summary>A bank statement imported for one bank account, reconciled line by line against the ledger.</summary>
+public sealed class BankStatement : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public Guid AccountId { get; init; }
+    public required string StatementNo { get; init; }
+    public DateOnly DateFrom { get; init; }
+    public DateOnly DateTo { get; init; }
+    public decimal? OpeningBalance { get; init; }
+    public decimal? ClosingBalance { get; init; }
+    public string? FileName { get; init; }
+    public BankStatementStatus Status { get; set; } = BankStatementStatus.Open;
+    public List<BankStatementLine> Lines { get; init; } = [];
+}
+
+public sealed class BankStatementLine : TenantEntity
+{
+    public Guid BankStatementId { get; init; }
+    public int LineNo { get; init; }
+    public DateOnly TxnDate { get; init; }
+    public string? Description { get; init; }
+    public string? Reference { get; init; }
+
+    /// <summary>Signed from the company's point of view: money in is positive, money out negative.</summary>
+    public decimal Amount { get; init; }
+    public BankLineStatus Status { get; set; } = BankLineStatus.Unmatched;
+
+    /// <summary>Set when the ledger entry was created from this line (bank charges, interest, unrecorded receipts).</summary>
+    public Guid? JournalEntryId { get; set; }
+}
+
+/// <summary>Clears one ledger line on the bank account against a statement line.</summary>
+public sealed class BankMatch : TenantEntity
+{
+    public Guid BankStatementLineId { get; init; }
+    public Guid JournalLineId { get; init; }
+    public decimal Amount { get; init; }
+}
+
 /// <summary>Manual journal voucher document. Its lines live in the journal entry it posts.</summary>
 public sealed class JournalVoucher : TenantEntity
 {
