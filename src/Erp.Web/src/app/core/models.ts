@@ -245,6 +245,13 @@ export interface PayslipSummary {
   inWps: boolean;
   warnings: string | null;
   halfPayDays: number;
+  emailedAt: string | null;
+}
+
+export interface EmailPayslipsResult {
+  queued: number;
+  withoutEmail: number;
+  alreadySent: number;
 }
 
 export interface PayslipLine {

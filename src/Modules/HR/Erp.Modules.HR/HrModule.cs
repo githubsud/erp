@@ -34,6 +34,8 @@ public sealed class HrModule : IModule
         services.AddScoped<IOutboxHandler, DocumentExpiryEmailHandler>();
         services.AddScoped<IOutboxHandler, PayrollPostedEmailHandler>();
         services.AddScoped<IOutboxHandler, WpsDeadlineMissedEmailHandler>();
+        services.AddScoped<IOutboxHandler, PayslipEmailHandler>();
+        services.AddScoped<PayslipEmailService>();
         services.AddScoped<HrPdfDocuments>();
         services.AddScoped<ITenantProvisioner, HrProvisioner>();
         services.AddSingleton<IPermissionProvider, HrPermissionProvider>();

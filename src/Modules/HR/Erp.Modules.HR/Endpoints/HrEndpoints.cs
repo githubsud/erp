@@ -4,6 +4,7 @@ using Erp.Infrastructure.Web;
 using Erp.Modules.HR.Documents;
 using Erp.Modules.HR.Domain;
 using Erp.Modules.HR.Import;
+using Erp.Modules.HR.Notifications;
 using Erp.Modules.HR.Payroll;
 using Erp.Modules.HR.People;
 using Erp.Modules.HR.Wps;
@@ -58,7 +59,8 @@ public sealed record PayrollRunDto(Guid Id, string RunNo, int Year, int Month, D
     decimal TotalGratuityAccrual, decimal TotalLeaveAccrual, decimal TotalTicketAccrual, DateTimeOffset? CalculatedAt, DateTimeOffset? ApprovedAt, DateTimeOffset? PostedAt, DateOnly? PaymentDate,
     Guid? JournalEntryId, Guid? GratuityJournalEntryId, Guid? PaymentJournalEntryId);
 public sealed record PayslipSummaryDto(Guid Id, Guid EmployeeId, string EmpNo, string NameEn, string NameAr, decimal PaidDays,
-    decimal UnpaidDays, decimal Gross, decimal Deductions, decimal Net, bool InWps, string? Warnings, decimal HalfPayDays);
+    decimal UnpaidDays, decimal Gross, decimal Deductions, decimal Net, bool InWps, string? Warnings, decimal HalfPayDays,
+    DateTimeOffset? EmailedAt);
 public sealed record PayslipLineDto(int LineNo, string Code, string NameEn, string NameAr, string Kind, decimal? Quantity, decimal? Rate, decimal Amount);
 public sealed record PayslipDto(PayslipSummaryDto Summary, decimal BasicSalary, decimal OvertimeHours, IReadOnlyList<PayslipLineDto> Lines);
 public sealed record PayrollRunDetail(PayrollRunDto Run, IReadOnlyList<PayslipSummaryDto> Payslips);
@@ -179,6 +181,8 @@ internal static class HrEndpoints
             var (content, name) = await pdf.PayslipsAsync(id, payslipId, ct);
             return Results.File(content, "application/pdf", name);
         }).RequirePermission(HrPermissions.PayrollRead);
+        g.MapPost("/payroll-runs/{id:guid}/email-payslips", (Guid id, PayslipEmailService s, CancellationToken ct, bool resend = false) =>
+            s.QueueAsync(id, resend, ct)).RequirePermission(HrPermissions.PayrollPost);
         g.MapGet("/payroll-runs/{id:guid}/payslips.pdf", async (Guid id, HrPdfDocuments pdf, CancellationToken ct) =>
         {
             var (content, name) = await pdf.PayslipsAsync(id, null, ct);
@@ -414,7 +418,7 @@ internal static class HrEndpoints
     }
 
     private static PayslipSummaryDto ToSummary(Payslip p) =>
-        new(p.Id, p.EmployeeId, p.EmpNo, p.NameEn, p.NameAr, p.PaidDays, p.UnpaidDays, p.Gross, p.Deductions, p.Net, p.InWps, p.Warnings, p.HalfPayDays);
+        new(p.Id, p.EmployeeId, p.EmpNo, p.NameEn, p.NameAr, p.PaidDays, p.UnpaidDays, p.Gross, p.Deductions, p.Net, p.InWps, p.Warnings, p.HalfPayDays, p.EmailedAt);
 
     private static PayrollRunDto ToDto(PayrollRun r) => new(r.Id, r.RunNo, r.Year, r.Month, r.PeriodStart, r.PeriodEnd, r.DueDate, r.WpsDeadline,
         r.Status.ToString(), r.EmployeeCount, r.TotalGross, r.TotalDeductions, r.TotalNet, r.TotalGratuityAccrual, r.TotalLeaveAccrual, r.TotalTicketAccrual,

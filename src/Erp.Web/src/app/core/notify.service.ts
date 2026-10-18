@@ -14,6 +14,11 @@ export class NotifyService {
     this.snack.open(this.i18n.t(key), this.i18n.t('app.close'), { duration: 3000, panelClass: 'snack-success' });
   }
 
+  /** Toast with already-translated text. */
+  info(text: string): void {
+    this.snack.open(text, this.i18n.t('app.close'), { duration: 5000, panelClass: 'snack-success' });
+  }
+
   error(error: unknown): void {
     this.snack.open(this.message(error), this.i18n.t('app.close'), { duration: 8000, panelClass: 'snack-error' });
   }

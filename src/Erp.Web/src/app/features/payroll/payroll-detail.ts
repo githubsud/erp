@@ -8,7 +8,7 @@ import { daysBetween, todayIso } from '../../core/dates';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { PayrollRun, PayrollRunDetail, Payslip, PayslipSummary, WpsFile } from '../../core/models';
 import { NotifyService, problemErrors } from '../../core/notify.service';
-import { PaymentDialog, PaymentResult, ReverseDialog, ReverseResult } from '../../shared/dialogs';
+import { ConfirmDialog, PaymentDialog, PaymentResult, ReverseDialog, ReverseResult } from '../../shared/dialogs';
 import { SHARED } from '../../shared/shared';
 import { MONTHS_AR, MONTHS_EN, statusClass } from './payroll-list';
 
@@ -42,6 +42,9 @@ import { MONTHS_AR, MONTHS_EN, statusClass } from './payroll-list';
                 <button mat-button (click)="reverse()" [disabled]="busy()"><mat-icon>undo</mat-icon> {{ 'payroll.reverse' | t }}</button>
               }
             }
+          }
+          @if (d.payslips.length && (d.run.status === 'Posted' || d.run.status === 'Paid') && auth.can('hr.payroll:post')) {
+            <button mat-stroked-button (click)="emailPayslips()" [disabled]="busy()"><mat-icon>forward_to_inbox</mat-icon> {{ 'payroll.emailPayslips' | t }}</button>
           }
           @if (d.payslips.length) {
             <button mat-stroked-button (click)="allPayslips()"><mat-icon>picture_as_pdf</mat-icon> {{ 'payroll.payslipsPdf' | t }}</button>
@@ -124,6 +127,7 @@ import { MONTHS_AR, MONTHS_EN, statusClass } from './payroll-list';
               {{ p | bi }}
               @if (p.warnings) { <mat-icon class="warn-icon" [matTooltip]="p.warnings">warning</mat-icon> }
               @if (!p.inWps) { <span class="chip">WPS ✕</span> }
+              @if (p.emailedAt) { <mat-icon class="mail-icon" [matTooltip]="('payroll.emailed' | t) + ' ' + (p.emailedAt | d)">mark_email_read</mat-icon> }
             </td>
             <td mat-footer-cell *matFooterCellDef></td>
           </ng-container>
@@ -189,6 +193,7 @@ import { MONTHS_AR, MONTHS_EN, statusClass } from './payroll-list';
     .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .hint { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
     .secondary { color: var(--mat-sys-on-surface-variant); }
+    .mail-icon { color: var(--mat-sys-primary); font-size: 18px; width: 18px; height: 18px; vertical-align: middle; }
     .warn-icon { color: #b26a00; font-size: 18px; width: 18px; height: 18px; vertical-align: middle; }
     .payslip { margin-top: 16px; padding: 8px 20px 16px; }
     .lines { width: min(560px, 100%); border-collapse: collapse; }
@@ -267,6 +272,28 @@ export class PayrollDetailPage implements OnInit {
 
   protected payslipPdf(p: PayslipSummary): void {
     this.api.download(`hr/payroll-runs/${this.id()}/payslips/${p.id}/pdf`).subscribe({ error: (e) => this.notify.error(e) });
+  }
+
+  protected emailPayslips(resend = false): void {
+    this.busy.set(true);
+    this.api.emailPayslips(this.id(), resend).subscribe({
+      next: (r) => {
+        this.busy.set(false);
+        if (r.queued === 0 && r.alreadySent > 0 && !resend) {
+          this.dialog
+            .open(ConfirmDialog, { data: { title: 'payroll.emailPayslips', message: 'payroll.emailResend' } })
+            .afterClosed()
+            .subscribe((ok) => ok && this.emailPayslips(true));
+          return;
+        }
+        this.notify.info(this.i18n.t('payroll.emailQueued', { queued: r.queued, missing: r.withoutEmail }));
+        this.load();
+      },
+      error: (e) => {
+        this.busy.set(false);
+        this.notify.error(e);
+      }
+    });
   }
 
   protected allPayslips(): void {

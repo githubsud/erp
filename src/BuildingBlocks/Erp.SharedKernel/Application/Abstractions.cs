@@ -83,7 +83,10 @@ public interface ICompanyProfileProvider
     Task<CompanyProfile> GetAsync(CancellationToken ct = default);
 }
 
-public sealed record EmailMessage(IReadOnlyList<string> To, string Subject, string HtmlBody, string TextBody);
+public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);
+
+public sealed record EmailMessage(IReadOnlyList<string> To, string Subject, string HtmlBody, string TextBody,
+    IReadOnlyList<EmailAttachment>? Attachments = null);
 
 /// <summary>Sends email. Called from outbox handlers only, so delivery is retried and never blocks a business transaction.</summary>
 public interface IEmailSender

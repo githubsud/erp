@@ -1,6 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using Erp.Infrastructure.Email;
+using Erp.Infrastructure.Outbox;
 using Erp.IntegrationTests.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Erp.IntegrationTests;
 
@@ -17,12 +20,12 @@ public sealed class SettlementTests(ErpFixture fixture)
         decimal NetPayable, IReadOnlyList<Line> Lines);
 
     private static async Task<Guid> HireWithContractAsync(HttpClient c, string empNo, DateOnly joining, string qid, string account,
-        decimal? annualAirTicket = null)
+        decimal? annualAirTicket = null, string? email = null)
     {
         var e = await c.PostAsync<PayrollTests.Employee>("/api/hr/employees", new
         {
             empNo, nameEn = $"Employee {empNo}", nameAr = "موظف", nationality = "IN", gender = "Male", joiningDate = joining, qid,
-            iban = PayrollTests.Iban("CBQA", account)
+            iban = PayrollTests.Iban("CBQA", account), email
         });
         await c.PostAsync<JsonElement>($"/api/hr/employees/{e.Id}/contracts", new
         {
@@ -154,5 +157,46 @@ public sealed class SettlementTests(ErpFixture fixture)
 
         var all = await c.GetByteArrayAsync($"/api/hr/payroll-runs/{run.Id}/payslips.pdf");
         all.Length.ShouldBeGreaterThan(bytes.Length);
+    }
+
+    [Fact]
+    public async Task Posted_payslips_are_emailed_once_with_the_pdf_attached()
+    {
+        var t = await fixture.CreateTenantAsync();
+        var c = t.Client;
+        var mailbox = $"e001@{t.Code}.qa".ToLowerInvariant();
+        await HireWithContractAsync(c, "E001", new DateOnly(2025, 1, 1), "28435655555", "000000000005050505050", email: mailbox);
+        await HireWithContractAsync(c, "E002", new DateOnly(2025, 1, 1), "28435666666", "000000000006060606060");
+        var run = await c.PostAsync<PayrollTests.Run>("/api/hr/payroll-runs", new { year = MonthStart.Year, month = MonthStart.Month });
+        await c.PostAsync<PayrollTests.Run>($"/api/hr/payroll-runs/{run.Id}/calculate", new { });
+
+        // Not before posting.
+        (await c.PostJsonAsync($"/api/hr/payroll-runs/{run.Id}/email-payslips", new { })).StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+
+        await c.PostAsync<PayrollTests.Run>($"/api/hr/payroll-runs/{run.Id}/approve", new { });
+        await c.PostAsync<PayrollTests.Run>($"/api/hr/payroll-runs/{run.Id}/post", new { });
+        var result = await c.PostAsync<JsonElement>($"/api/hr/payroll-runs/{run.Id}/email-payslips", new { });
+        result.GetProperty("queued").GetInt32().ShouldBe(1);
+        result.GetProperty("withoutEmail").GetInt32().ShouldBe(1);
+
+        var dispatcher = fixture.Factory.Services.GetRequiredService<OutboxDispatcher>();
+        while (await dispatcher.DispatchBatchAsync(CancellationToken.None) > 0) { }
+
+        var mail = fixture.Factory.Services.GetRequiredService<CapturingEmailSender>().Sent.Single(m => m.To.Contains(mailbox));
+        mail.Subject.ShouldContain("Your payslip for");
+        var attachment = mail.Attachments.ShouldNotBeNull().ShouldHaveSingleItem();
+        attachment.ContentType.ShouldBe("application/pdf");
+        attachment.FileName.ShouldContain("E001");
+        System.Text.Encoding.ASCII.GetString(attachment.Content, 0, 5).ShouldBe("%PDF-");
+
+        // Second request skips already-emailed payslips unless resend is asked for.
+        var again = await c.PostAsync<JsonElement>($"/api/hr/payroll-runs/{run.Id}/email-payslips", new { });
+        again.GetProperty("queued").GetInt32().ShouldBe(0);
+        again.GetProperty("alreadySent").GetInt32().ShouldBe(1);
+        (await c.PostAsync<JsonElement>($"/api/hr/payroll-runs/{run.Id}/email-payslips?resend=true", new { }))
+            .GetProperty("queued").GetInt32().ShouldBe(1);
+
+        var detail = await c.GetAsync<JsonElement>($"/api/hr/payroll-runs/{run.Id}");
+        detail.GetProperty("payslips").EnumerateArray().Count(p => p.GetProperty("emailedAt").ValueKind != JsonValueKind.Null).ShouldBe(1);
     }
 }
