@@ -38,7 +38,10 @@ public sealed class JwtOptions
     }
 }
 
+/// <summary><see cref="Email"/> may also be a username (employees sign in with their employee number).</summary>
 public sealed record LoginRequest(string TenantCode, string Email, string Password);
+
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public sealed record MfaVerifyRequest(string MfaToken, string Code);
 
@@ -62,9 +65,11 @@ public sealed record LoginResponse(
     string? RefreshToken = null,
     bool MfaRequired = false,
     string? MfaToken = null,
-    bool MfaEnabled = false);
+    bool MfaEnabled = false,
+    bool MustChangePassword = false);
 
-public sealed record UserInfo(Guid Id, Guid TenantId, Guid? CompanyId, string Email, string DisplayNameEn, string DisplayNameAr, string PreferredLanguage);
+public sealed record UserInfo(Guid Id, Guid TenantId, Guid? CompanyId, string? Email, string DisplayNameEn, string DisplayNameAr, string PreferredLanguage,
+    string? Username = null);
 
 public sealed class AuthService(
     ErpDbContext db,
@@ -93,11 +98,13 @@ public sealed class AuthService(
         // From here on every query is scoped to this tenant (filters + row-level security).
         tenantContext.Set(tenant.Id, null, null);
 
-        var email = (request.Email ?? "").Trim().ToLowerInvariant();
-        var user = await db.Set<AppUser>().SingleOrDefaultAsync(u => u.Email == email, ct);
+        var login = (request.Email ?? "").Trim().ToLowerInvariant();
+        var user = login.Contains('@')
+            ? await db.Set<AppUser>().SingleOrDefaultAsync(u => u.Email == login, ct)
+            : await db.Set<AppUser>().SingleOrDefaultAsync(u => u.Username == login, ct);
         if (user is null || !user.IsActive)
         {
-            hasher.HashPassword(new AppUser { Email = email, DisplayNameEn = "", DisplayNameAr = "" }, request.Password ?? "");
+            hasher.HashPassword(new AppUser { Email = login, DisplayNameEn = "", DisplayNameAr = "" }, request.Password ?? "");
             throw InvalidCredentials();
         }
 
@@ -197,7 +204,7 @@ public sealed class AuthService(
         var secret = Totp.NewSecret();
         user.MfaPendingSecret = secret;
         await db.SaveChangesAsync(ct);
-        return new MfaSetup(secret, Totp.ProvisioningUri(secret, user.Email, Issuer));
+        return new MfaSetup(secret, Totp.ProvisioningUri(secret, user.Email ?? user.Username ?? user.Id.ToString(), Issuer));
     }
 
     public async Task<MfaStatus> EnableMfaAsync(MfaCodeRequest request, CancellationToken ct)
@@ -227,8 +234,25 @@ public sealed class AuthService(
         return new MfaStatus(false);
     }
 
+    /// <summary>Replaces the signed-in user's password (and clears a temporary password).</summary>
+    public async Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct)
+    {
+        var user = await CurrentUserAsync(ct);
+        if (hasher.VerifyHashedPassword(user, user.PasswordHash, request.CurrentPassword ?? "") == PasswordVerificationResult.Failed)
+            throw new BusinessRuleException("auth.wrong_password", "The current password is not correct.", "كلمة المرور الحالية غير صحيحة.");
+        var next = request.NewPassword ?? "";
+        if (next.Length < Provisioning.TenantProvisioningService.MinPasswordLength)
+            throw new BusinessRuleException("auth.weak_password", $"Password must be at least {Provisioning.TenantProvisioningService.MinPasswordLength} characters.",
+                $"يجب ألا تقل كلمة المرور عن {Provisioning.TenantProvisioningService.MinPasswordLength} أحرف.");
+        if (next == request.CurrentPassword)
+            throw new BusinessRuleException("auth.same_password", "Choose a password different from the current one.", "اختر كلمة مرور مختلفة عن الحالية.");
+        user.PasswordHash = hasher.HashPassword(user, next);
+        user.MustChangePassword = false;
+        await db.SaveChangesAsync(ct);
+    }
+
     public static UserInfo ToInfo(AppUser user, Guid? companyId) =>
-        new(user.Id, user.TenantId, companyId, user.Email, user.DisplayNameEn, user.DisplayNameAr, user.PreferredLanguage);
+        new(user.Id, user.TenantId, companyId, user.Email, user.DisplayNameEn, user.DisplayNameAr, user.PreferredLanguage, user.Username);
 
     // ----------------------------------------------------------------------------------------------------
 
@@ -271,7 +295,7 @@ public sealed class AuthService(
             Subject = new ClaimsIdentity(
             [
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email ?? ""),
                 new Claim(ErpClaims.Tenant, tenantId.ToString()),
                 new Claim(ErpClaims.Company, companyId?.ToString() ?? ""),
                 new Claim(ErpClaims.Language, user.PreferredLanguage)
@@ -279,7 +303,8 @@ public sealed class AuthService(
         });
 
         var granted = await permissions.GetPermissionsAsync(user.Id, ct);
-        return new LoginResponse(token, expires, ToInfo(user, companyId), granted.Order().ToList(), refreshValue, MfaEnabled: user.MfaEnabled);
+        return new LoginResponse(token, expires, ToInfo(user, companyId), granted.Order().ToList(), refreshValue, MfaEnabled: user.MfaEnabled,
+            MustChangePassword: user.MustChangePassword);
     }
 
     private string CreateMfaChallenge(Guid tenantId, Guid userId) =>

@@ -25,6 +25,19 @@ export class AuthService {
   readonly isAuthenticated = computed(() => !!this.session()?.refreshToken || this.accessTokenValid());
   private readonly permissions = computed(() => new Set(this.session()?.permissions ?? []));
 
+  /** Employees using self-service hold only "ess." permissions; they get the phone layout under /me. */
+  readonly isEmployeeOnly = computed(() => {
+    const p = this.session()?.permissions ?? [];
+    return p.length > 0 && p.every((x) => x.startsWith('ess.'));
+  });
+  readonly mustChangePassword = computed(() => !!this.session()?.mustChangePassword);
+
+  /** Where a signed-in user lands. */
+  home(): string {
+    if (this.mustChangePassword()) return '/change-password';
+    return this.isEmployeeOnly() ? '/me' : '/dashboard';
+  }
+
   get token(): string | null {
     return this.session()?.accessToken ?? null;
   }
@@ -70,6 +83,15 @@ export class AuthService {
   can(permission: string): boolean {
     const set = this.permissions();
     return set.has('*') || set.has(permission);
+  }
+
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return this.http.post<void>(this.url('password'), { currentPassword, newPassword }).pipe(
+      tap(() => {
+        const s = this.session();
+        if (s) this.store({ ...s, mustChangePassword: false }, false);
+      })
+    );
   }
 
   setMfaEnabled(enabled: boolean): void {
@@ -134,10 +156,23 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   );
 };
 
+/** Staff screens: signed in, password chosen, and not a self-service-only employee. */
 export const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
-  return auth.isAuthenticated() ? true : inject(Router).createUrlTree(['/login']);
+  if (!auth.isAuthenticated()) return inject(Router).createUrlTree(['/login']);
+  return auth.mustChangePassword() || auth.isEmployeeOnly() ? inject(Router).createUrlTree([auth.home()]) : true;
 };
+
+/** Self-service screens under /me. */
+export const selfServiceGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  if (!auth.isAuthenticated()) return inject(Router).createUrlTree(['/login']);
+  if (auth.mustChangePassword()) return inject(Router).createUrlTree(['/change-password']);
+  return auth.can('ess.self:use') ? true : inject(Router).createUrlTree(['/']);
+};
+
+/** Any signed-in user (the change-password page). */
+export const sessionGuard: CanActivateFn = () => (inject(AuthService).isAuthenticated() ? true : inject(Router).createUrlTree(['/login']));
 
 export function permissionGuard(permission: string): CanActivateFn {
   return () => {

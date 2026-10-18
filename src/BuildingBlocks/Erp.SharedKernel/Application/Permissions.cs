@@ -13,6 +13,9 @@ public static class DefaultRoles
     public const string Storekeeper = "storekeeper";
     public const string Salesperson = "salesperson";
 
+    /// <summary>Employees using self-service: their own payslips, leave and documents only.</summary>
+    public const string Employee = "employee";
+
     /// <summary>Grants every permission.</summary>
     public const string Wildcard = "*";
 }

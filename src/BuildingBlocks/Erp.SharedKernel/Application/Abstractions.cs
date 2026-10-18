@@ -94,6 +94,18 @@ public interface IEmailSender
     Task SendAsync(EmailMessage message, CancellationToken ct = default);
 }
 
+public sealed record PortalAccount(Guid UserId, string Username, string TemporaryPassword);
+
+/// <summary>Creates sign-ins for people who are not staff users (employees using self-service) without referencing Core.</summary>
+public interface IUserAccounts
+{
+    /// <summary>Creates the user (or resets an existing one) with a temporary password that must be changed at first sign-in.</summary>
+    Task<PortalAccount> CreateOrResetAsync(Guid? existingUserId, string username, string? email, string nameEn, string nameAr, string language,
+        string roleCode, CancellationToken ct = default);
+
+    Task SetActiveAsync(Guid userId, bool active, CancellationToken ct = default);
+}
+
 /// <summary>Finds the people to notify for the current tenant.</summary>
 public interface IUserDirectory
 {

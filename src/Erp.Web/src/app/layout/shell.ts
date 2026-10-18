@@ -130,7 +130,11 @@ const NAV: NavGroup[] = [
           </button>
           <button mat-icon-button [matMenuTriggerFor]="userMenu"><mat-icon>account_circle</mat-icon></button>
           <mat-menu #userMenu="matMenu">
-            <div class="menu-user">{{ auth.user()?.email }}</div>
+            <div class="menu-user">{{ auth.user()?.email ?? auth.user()?.username }}</div>
+            <a mat-menu-item routerLink="/change-password">
+              <mat-icon>password</mat-icon>
+              <span>{{ 'password.change' | t }}</span>
+            </a>
             <button mat-menu-item (click)="auth.logout()">
               <mat-icon>logout</mat-icon>
               <span>{{ 'app.logout' | t }}</span>

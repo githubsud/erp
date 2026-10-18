@@ -55,6 +55,11 @@ internal static class CoreEndpoints
             return Results.NoContent();
         }).AllowAnonymous();
         auth.MapGet("/me", GetMe).RequireAuthorization();
+        auth.MapPost("/password", async (ChangePasswordRequest request, AuthService service, CancellationToken ct) =>
+        {
+            await service.ChangePasswordAsync(request, ct);
+            return Results.NoContent();
+        }).RequireAuthorization();
         auth.MapGet("/mfa", (AuthService service, CancellationToken ct) => service.MfaStatusAsync(ct)).RequireAuthorization();
         auth.MapPost("/mfa/setup", (AuthService service, CancellationToken ct) => service.SetupMfaAsync(ct)).RequireAuthorization();
         auth.MapPost("/mfa/enable", (MfaCodeRequest request, AuthService service, CancellationToken ct) => service.EnableMfaAsync(request, ct))
@@ -141,11 +146,11 @@ internal static class CoreEndpoints
 
     private static async Task<List<UserDto>> ListUsers(ErpDbContext db, CancellationToken ct)
     {
-        var users = await db.Set<AppUser>().AsNoTracking().OrderBy(u => u.Email).ToListAsync(ct);
+        var users = await db.Set<AppUser>().AsNoTracking().OrderBy(u => u.Email ?? u.Username).ToListAsync(ct);
         var roles = await (from ur in db.Set<UserRole>()
                            join r in db.Set<Role>() on ur.RoleId equals r.Id
                            select new { ur.UserId, r.Code }).ToListAsync(ct);
-        return users.Select(u => new UserDto(u.Id, u.Email, u.DisplayNameEn, u.DisplayNameAr, u.PreferredLanguage, u.IsActive, u.LastLoginAt,
+        return users.Select(u => new UserDto(u.Id, u.Email ?? u.Username ?? "", u.DisplayNameEn, u.DisplayNameAr, u.PreferredLanguage, u.IsActive, u.LastLoginAt,
             roles.Where(r => r.UserId == u.Id).Select(r => r.Code).Order().ToList())).ToList();
     }
 
@@ -169,7 +174,7 @@ internal static class CoreEndpoints
         var roleIds = await ResolveRolesAsync(db, request.Roles, ct);
         db.AddRange(roleIds.Select(r => new UserRole { UserId = user.Id, RoleId = r.Id }));
         await db.SaveChangesAsync(ct);
-        return new UserDto(user.Id, user.Email, user.DisplayNameEn, user.DisplayNameAr, user.PreferredLanguage, true, null,
+        return new UserDto(user.Id, user.Email!, user.DisplayNameEn, user.DisplayNameAr, user.PreferredLanguage, true, null,
             roleIds.Select(r => r.Code).Order().ToList());
     }
 

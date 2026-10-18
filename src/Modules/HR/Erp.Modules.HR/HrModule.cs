@@ -1,3 +1,4 @@
+using Erp.Modules.HR.SelfService;
 using Erp.Infrastructure.Web;
 using Erp.Modules.HR.Documents;
 using Erp.Modules.HR.Endpoints;
@@ -38,6 +39,7 @@ public sealed class HrModule : IModule
         services.AddScoped<IOutboxHandler, PayslipEmailHandler>();
         services.AddScoped<PayslipEmailService>();
         services.AddScoped<HrPdfDocuments>();
+        services.AddScoped<PortalService>();
         services.AddScoped<ITenantProvisioner, HrProvisioner>();
         services.AddSingleton<IPermissionProvider, HrPermissionProvider>();
 
@@ -46,5 +48,9 @@ public sealed class HrModule : IModule
             services.AddHostedService(sp => sp.GetRequiredService<DocumentExpiryJob>());
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder app) => HrEndpoints.Map(app);
+    public void MapEndpoints(IEndpointRouteBuilder app)
+    {
+        HrEndpoints.Map(app);
+        SelfServiceEndpoints.Map(app);
+    }
 }

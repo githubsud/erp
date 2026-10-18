@@ -54,7 +54,9 @@ public sealed class Branch : TenantEntity
 
 public sealed class AppUser : TenantEntity
 {
-    public required string Email { get; init; }
+    /// <summary>Staff sign in with their email; employees using self-service may have only a <see cref="Username"/>.</summary>
+    public string? Email { get; init; }
+    public string? Username { get; init; }
     public required string DisplayNameEn { get; set; }
     public required string DisplayNameAr { get; set; }
 
@@ -63,6 +65,9 @@ public sealed class AppUser : TenantEntity
 
     public string PreferredLanguage { get; set; } = "ar";
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Set for temporary passwords handed out by HR; cleared when the user chooses their own.</summary>
+    public bool MustChangePassword { get; set; }
     public Guid? DefaultCompanyId { get; set; }
     public int FailedLoginCount { get; set; }
     public DateTimeOffset? LockoutUntil { get; set; }

@@ -30,8 +30,9 @@ const LAST_COMPANY = 'erp.lastCompany';
             </mat-form-field>
             <mat-form-field>
               <mat-label>{{ 'login.email' | t }}</mat-label>
-              <input matInput type="email" formControlName="email" autocomplete="username" dir="ltr" />
-              <mat-icon matSuffix>mail</mat-icon>
+              <input matInput formControlName="email" autocomplete="username" autocapitalize="none" dir="ltr" />
+              <mat-icon matSuffix>person</mat-icon>
+              <mat-hint>{{ 'login.emailHint' | t }}</mat-hint>
             </mat-form-field>
             <mat-form-field>
               <mat-label>{{ 'login.password' | t }}</mat-label>
@@ -85,7 +86,7 @@ export class LoginPage {
   protected readonly mfaForm = new FormGroup({ code: this.code });
   protected readonly form = inject(FormBuilder).nonNullable.group({
     tenantCode: [localStorage.getItem(LAST_COMPANY) ?? '', Validators.required],
-    email: ['', [Validators.required, Validators.email]],
+    email: ['', Validators.required],
     password: ['', Validators.required]
   });
 
@@ -100,7 +101,7 @@ export class LoginPage {
           this.busy.set(false);
           this.mfaToken.set(r.mfaToken);
         } else {
-          void this.router.navigate(['/dashboard']);
+          void this.router.navigateByUrl(this.auth.home());
         }
       },
       error: (e) => this.fail(e)
@@ -112,7 +113,7 @@ export class LoginPage {
     if (!token || this.code.invalid) return;
     this.start();
     this.auth.verifyMfa(token, this.code.value).subscribe({
-      next: () => void this.router.navigate(['/dashboard']),
+      next: () => void this.router.navigateByUrl(this.auth.home()),
       error: (e) => {
         this.code.reset();
         this.fail(e);

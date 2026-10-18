@@ -19,6 +19,9 @@ public static class HrPermissions
     public const string PayrollPrepare = "hr.payroll:prepare";
     public const string PayrollApprove = "hr.payroll:approve";
     public const string PayrollPost = "hr.payroll:post";
+
+    /// <summary>Employee self-service: the signed-in employee's own payslips, leave and documents.</summary>
+    public const string SelfService = "ess.self:use";
 }
 
 internal sealed class HrPermissionProvider : IPermissionProvider
@@ -36,6 +39,7 @@ internal sealed class HrPermissionProvider : IPermissionProvider
         new(HrPermissions.PayrollRead, "View payroll", "عرض الرواتب", HrManager, PayrollOfficer, GeneralManager, Accountant, Auditor),
         new(HrPermissions.PayrollPrepare, "Prepare and calculate payroll", "إعداد واحتساب الرواتب", HrManager, PayrollOfficer),
         new(HrPermissions.PayrollApprove, "Approve payroll", "اعتماد الرواتب", GeneralManager),
-        new(HrPermissions.PayrollPost, "Post payroll, generate WPS files and record payment", "ترحيل الرواتب وإنشاء ملفات حماية الأجور وتسجيل الصرف", Accountant)
+        new(HrPermissions.PayrollPost, "Post payroll, generate WPS files and record payment", "ترحيل الرواتب وإنشاء ملفات حماية الأجور وتسجيل الصرف", Accountant),
+        new(HrPermissions.SelfService, "Use employee self-service", "استخدام الخدمة الذاتية للموظف", Employee)
     ];
 }

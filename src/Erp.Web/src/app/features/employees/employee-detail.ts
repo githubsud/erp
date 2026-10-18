@@ -1,4 +1,7 @@
 import { Component, inject, input, OnInit, signal } from '@angular/core';
+import { MatDialog, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { filter, switchMap } from 'rxjs';
+import { ConfirmDialog } from '../../shared/dialogs';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { Employee } from '../../core/models';
@@ -28,6 +31,20 @@ const TABS = ['profile', 'contract', 'documents', 'leave', 'advances', 'settleme
           </div>
         </div>
         @if (auth.can('hr.employees:manage')) {
+          @if (e.status === 'Active') {
+            <button mat-stroked-button [matMenuTriggerFor]="portalMenu">
+              <mat-icon>phone_iphone</mat-icon> {{ 'portal.button' | t }}
+              @if (e.hasPortalAccess) { <span class="chip ok">{{ 'portal.on' | t }}</span> }
+            </button>
+            <mat-menu #portalMenu="matMenu">
+              <button mat-menu-item (click)="grant(e)">
+                <mat-icon>key</mat-icon><span>{{ (e.hasPortalAccess ? 'portal.reset' : 'portal.grant') | t }}</span>
+              </button>
+              @if (e.hasPortalAccess) {
+                <button mat-menu-item (click)="revoke(e)"><mat-icon>block</mat-icon><span>{{ 'portal.revoke' | t }}</span></button>
+              }
+            </mat-menu>
+          }
           <a mat-stroked-button [routerLink]="['/employees', e.id, 'edit']"><mat-icon>edit</mat-icon> {{ 'app.edit' | t }}</a>
         }
       </div>
@@ -94,6 +111,7 @@ export class EmployeeDetailPage implements OnInit {
   private readonly api = inject(ApiService);
   private readonly notify = inject(NotifyService);
   private readonly i18n = inject(I18nService);
+  private readonly dialog = inject(MatDialog);
 
   protected readonly employee = signal<Employee | null>(null);
   protected readonly tabIndex = signal(0);
@@ -108,8 +126,80 @@ export class EmployeeDetailPage implements OnInit {
     this.api.employee(this.id()).subscribe({ next: (e) => this.employee.set(e), error: (e) => this.notify.error(e) });
   }
 
+  grant(e: Employee): void {
+    const run = () =>
+      this.api.grantPortalAccess(e.id).subscribe({
+        next: (access) => {
+          this.dialog.open(PortalAccessDialog, { data: { ...access, name: this.i18n.pick(e) }, width: '440px', disableClose: true });
+          this.reload();
+        },
+        error: (err) => this.notify.error(err)
+      });
+    if (!e.hasPortalAccess) {
+      run();
+      return;
+    }
+    this.dialog
+      .open(ConfirmDialog, { data: { title: 'portal.reset', message: 'portal.resetConfirm' } })
+      .afterClosed()
+      .pipe(filter(Boolean))
+      .subscribe(() => run());
+  }
+
+  revoke(e: Employee): void {
+    this.dialog
+      .open(ConfirmDialog, { data: { title: 'portal.revoke', message: 'portal.revokeConfirm' } })
+      .afterClosed()
+      .pipe(filter(Boolean), switchMap(() => this.api.revokePortalAccess(e.id)))
+      .subscribe({ next: () => { this.notify.success(); this.reload(); }, error: (err) => this.notify.error(err) });
+  }
+
   protected nationality(code: string): string {
     const n = NATIONALITIES.find((x) => x.code === code);
     return n ? (this.i18n.isArabic() ? n.ar : n.en) : code;
+  }
+}
+
+/** Shows the sign-in details once; the temporary password is not stored anywhere readable. */
+@Component({
+  selector: 'app-portal-access-dialog',
+  imports: [...SHARED],
+  template: `
+    <h2 mat-dialog-title>{{ 'portal.title' | t }}</h2>
+    <mat-dialog-content>
+      <p>{{ 'portal.giveTo' | t: { name: data.name } }}</p>
+      <dl>
+        <dt>{{ 'login.companyCode' | t }}</dt><dd class="ltr">{{ companyCode }}</dd>
+        <dt>{{ 'portal.username' | t }}</dt><dd class="ltr"><strong>{{ data.username }}</strong></dd>
+        <dt>{{ 'portal.password' | t }}</dt><dd class="ltr"><strong class="pw">{{ data.temporaryPassword }}</strong></dd>
+        <dt>{{ 'portal.address' | t }}</dt><dd class="ltr">{{ address }}</dd>
+      </dl>
+      <p class="muted">{{ 'portal.oneTime' | t }}</p>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="copy()"><mat-icon>content_copy</mat-icon> {{ 'portal.copy' | t }}</button>
+      <button mat-flat-button mat-dialog-close>{{ 'app.close' | t }}</button>
+    </mat-dialog-actions>
+  `,
+  styles: `
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; padding: 12px; border-radius: 12px; background: var(--mat-sys-surface-container); }
+    dt { color: var(--mat-sys-on-surface-variant); }
+    dd { margin: 0; }
+    .pw { font-family: monospace; font-size: 18px; letter-spacing: 0.08em; }
+    .muted { color: var(--mat-sys-on-surface-variant); font-size: 13px; }
+  `
+})
+export class PortalAccessDialog {
+  protected readonly data = inject<{ username: string; temporaryPassword: string; name: string }>(MAT_DIALOG_DATA);
+  private readonly i18n = inject(I18nService);
+  private readonly notify = inject(NotifyService);
+  protected readonly companyCode = localStorage.getItem('erp.lastCompany') ?? '';
+  protected readonly address = `${location.origin}/me`;
+
+  copy(): void {
+    const text = this.i18n.t('portal.copyText', {
+      name: this.data.name, address: this.address, company: this.companyCode, username: this.data.username, password: this.data.temporaryPassword
+    });
+    void navigator.clipboard?.writeText(text).then(() => this.notify.success('portal.copied'));
   }
 }

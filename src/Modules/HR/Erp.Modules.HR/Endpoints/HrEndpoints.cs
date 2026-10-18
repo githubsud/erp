@@ -6,6 +6,7 @@ using Erp.Modules.HR.Domain;
 using Erp.Modules.HR.Import;
 using Erp.Modules.HR.Notifications;
 using Erp.Modules.HR.Payroll;
+using Erp.Modules.HR.SelfService;
 using Erp.Modules.HR.People;
 using Erp.Modules.HR.Wps;
 using Erp.SharedKernel.Application;
@@ -40,7 +41,7 @@ public sealed record EmployeeDto(
     Guid Id, string EmpNo, string NameEn, string NameAr, string Nationality, string Gender, DateOnly? DateOfBirth, DateOnly JoiningDate,
     string Status, DateOnly? TerminationDate, Guid? DepartmentId, Guid? BranchId, Guid? CostCenterId, string? JobTitleEn, string? JobTitleAr,
     string? Mobile, string? Email, string? Qid, string? VisaId, string? PassportNo, string? BankShortName, string? Iban, bool InWps,
-    string SocialInsuranceScheme, decimal? OpeningGratuityLiability, bool SensitiveMasked);
+    string SocialInsuranceScheme, decimal? OpeningGratuityLiability, bool SensitiveMasked, bool HasPortalAccess = false);
 
 public sealed record ContractDto(Guid Id, DateOnly StartDate, DateOnly? EndDate, string ContractType, int ProbationMonths,
     bool AccommodationProvided, bool FoodProvided, decimal? GratuityDaysPerYear, string GratuityBasis, int? AnnualLeaveDays, string Status,
@@ -130,6 +131,13 @@ internal static class HrEndpoints
             return (await ContractsOf(db, id, ct)).Single(c => c.Id == contract.Id);
         }).RequirePermission(HrPermissions.ContractsManage);
 
+        g.MapPost("/employees/{id:guid}/portal-access", (Guid id, PortalService s, CancellationToken ct) => s.GrantAsync(id, ct))
+            .RequirePermission(HrPermissions.EmployeesManage);
+        g.MapDelete("/employees/{id:guid}/portal-access", async (Guid id, PortalService s, CancellationToken ct) =>
+        {
+            await s.RevokeAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(HrPermissions.EmployeesManage);
         g.MapGet("/employees/{id:guid}/documents", ListEmployeeDocuments).RequirePermission(HrPermissions.EmployeesRead);
         g.MapPost("/employees/{id:guid}/documents", async (Guid id, EmployeeDocumentRequest r, DocumentService s, CancellationToken ct) =>
             ToDto(await s.AddEmployeeDocumentAsync(id, r, ct))).RequirePermission(HrPermissions.DocumentsManage);
@@ -340,7 +348,7 @@ internal static class HrEndpoints
     private static EmployeeDto ToDto(Employee e, bool showSensitive) => new(e.Id, e.EmpNo, e.NameEn, e.NameAr, e.Nationality, e.Gender.ToString(),
         e.DateOfBirth, e.JoiningDate, e.Status.ToString(), e.TerminationDate, e.DepartmentId, e.BranchId, e.CostCenterId, e.JobTitleEn, e.JobTitleAr,
         e.Mobile, e.Email, Mask(e.Qid, showSensitive), e.VisaId, Mask(e.PassportNo, showSensitive), e.BankShortName, Mask(e.Iban, showSensitive),
-        e.InWps, e.SocialInsuranceScheme.ToString(), showSensitive ? e.OpeningGratuityLiability : null, !showSensitive);
+        e.InWps, e.SocialInsuranceScheme.ToString(), showSensitive ? e.OpeningGratuityLiability : null, !showSensitive, e.UserId is not null);
 
     internal static string? Mask(string? value, bool show) =>
         value is null || show ? value : value.Length <= 4 ? new string('•', value.Length) : new string('•', value.Length - 4) + value[^4..];
@@ -430,7 +438,7 @@ internal static class HrEndpoints
             p.Lines.OrderBy(l => l.LineNo).Select(l => new PayslipLineDto(l.LineNo, l.Code, l.NameEn, l.NameAr, l.Kind.ToString(), l.Quantity, l.Rate, l.Amount)).ToList());
     }
 
-    private static PayslipSummaryDto ToSummary(Payslip p) =>
+    internal static PayslipSummaryDto ToSummary(Payslip p) =>
         new(p.Id, p.EmployeeId, p.EmpNo, p.NameEn, p.NameAr, p.PaidDays, p.UnpaidDays, p.Gross, p.Deductions, p.Net, p.InWps, p.Warnings, p.HalfPayDays, p.EmailedAt);
 
     private static PayrollRunDto ToDto(PayrollRun r) => new(r.Id, r.RunNo, r.Year, r.Month, r.PeriodStart, r.PeriodEnd, r.DueDate, r.WpsDeadline,

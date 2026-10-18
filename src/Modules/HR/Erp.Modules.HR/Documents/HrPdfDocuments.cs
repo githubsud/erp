@@ -1,3 +1,4 @@
+using System.Globalization;
 using Erp.Infrastructure.Pdf;
 using Erp.Infrastructure.Persistence;
 using Erp.Modules.HR.Domain;
@@ -108,8 +109,8 @@ internal sealed class HrPdfDocuments(ErpDbContext db, ITenantContext tenant, ICo
                     PdfKit.Field(t, "Employee No.", e.EmpNo, "الرقم الوظيفي");
                     PdfKit.Field(t, "Name", e.NameEn, "الاسم");
                     PdfKit.Field(t, "Name (Arabic)", e.NameAr, "الاسم بالعربية");
-                    PdfKit.Field(t, "Joining date", s.JoiningDate.ToString("dd/MM/yyyy"), "تاريخ الالتحاق");
-                    PdfKit.Field(t, "Last working day", s.LastWorkingDay.ToString("dd/MM/yyyy"), "آخر يوم عمل");
+                    PdfKit.Field(t, "Joining date", s.JoiningDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), "تاريخ الالتحاق");
+                    PdfKit.Field(t, "Last working day", s.LastWorkingDay.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), "آخر يوم عمل");
                     PdfKit.Field(t, "Service", $"{s.ServiceDays} days ({years:0.00} years)", "مدة الخدمة");
                     if (s.ExcludedDays > 0) PdfKit.Field(t, "Unpaid leave excluded", $"{s.ExcludedDays} days", "إجازة بدون راتب مستبعدة");
                     PdfKit.Field(t, "Reason", $"{reasonEn} · {reasonAr}", "سبب انتهاء الخدمة");
@@ -151,6 +152,98 @@ internal sealed class HrPdfDocuments(ErpDbContext db, ITenantContext tenant, ICo
 
         return (bytes, $"final_settlement_{s.SettlementNo}.pdf");
     }
+
+    /// <summary>
+    /// Salary certificate for banks, embassies and landlords: the employee's identity, job and current contract salary, in both languages.
+    /// Identity numbers are printed in full because the recipient needs them.
+    /// </summary>
+    public async Task<(byte[] Content, string FileName)> SalaryCertificateAsync(Guid employeeId, string? addressedTo, CancellationToken ct)
+    {
+        var e = await db.Set<Employee>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == employeeId && x.CompanyId == tenant.RequireCompanyId(), ct)
+            ?? throw new NotFoundException("Employee", employeeId);
+        var contract = await db.Set<EmploymentContract>().AsNoTracking().Include(c => c.Components)
+            .Where(c => c.EmployeeId == e.Id && c.Status == ContractStatus.Active).OrderByDescending(c => c.StartDate).FirstOrDefaultAsync(ct)
+            ?? throw new BusinessRuleException("hr.no_active_contract", "There is no active contract to certify a salary from.",
+                "لا يوجد عقد ساري لإصدار شهادة الراتب.");
+        var componentIds = contract.Components.Select(c => c.PayComponentId).ToList();
+        var components = await db.Set<PayComponent>().AsNoTracking().Where(c => componentIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
+        var lines = contract.Components.Where(c => c.Amount != 0).OrderBy(c => components[c.PayComponentId].Code)
+            .Select(c => new PdfLine(components[c.PayComponentId].NameEn, components[c.PayComponentId].NameAr, null, c.Amount)).ToList();
+        var total = lines.Sum(l => l.Amount);
+        var company = await companies.GetAsync(ct);
+        var today = clock.Today;
+        var reference = $"SC-{e.EmpNo}-{today:yyyyMMdd}";
+        var to = string.IsNullOrWhiteSpace(addressedTo) ? null : addressedTo.Trim();
+
+        PdfKit.EnsureInitialised();
+        var bytes = Document.Create(container => container.Page(page =>
+        {
+            PdfKit.ApplyPage(page);
+            page.Header().Element(c => PdfKit.Header(c, company, "Salary Certificate", "شهادة راتب", reference));
+            page.Content().PaddingTop(16).Column(col =>
+            {
+                col.Spacing(12);
+                col.Item().Row(row =>
+                {
+                    row.RelativeItem().Text($"Date: {Dmy(today)}");
+                    row.RelativeItem().AlignRight().Text($"التاريخ: {Dmy(today)}");
+                });
+                col.Item().Row(row =>
+                {
+                    row.RelativeItem().Text($"To: {to ?? "Whom it may concern"}").Bold();
+                    row.RelativeItem().ContentFromRightToLeft().Text($"إلى: {to ?? "من يهمه الأمر"}").Bold();
+                });
+                col.Item().Row(row =>
+                {
+                    row.RelativeItem().Text(
+                        $"This is to certify that the employee named below has been working with {company.NameEn} since " +
+                        $"{Dmy(e.JoiningDate)} and is still in our service. The monthly salary is as follows:");
+                    row.ConstantItem(16);
+                    row.RelativeItem().ContentFromRightToLeft().Text(
+                        $"نشهد بأن الموظف المذكور أدناه يعمل لدى {company.NameAr} منذ ‎{Dmy(e.JoiningDate)}‎ ولا يزال على رأس عمله، " +
+                        "وراتبه الشهري كما يلي:");
+                });
+                col.Item().Table(t =>
+                {
+                    ThreeColumns(t);
+                    PdfKit.Field(t, "Name", e.NameEn, "الاسم");
+                    PdfKit.Field(t, "Name (Arabic)", e.NameAr, "الاسم بالعربية");
+                    PdfKit.Field(t, "Employee No.", e.EmpNo, "الرقم الوظيفي");
+                    PdfKit.Field(t, "Nationality", e.Nationality, "الجنسية");
+                    if (e.Qid is not null) PdfKit.Field(t, "QID", e.Qid, "الرقم الشخصي");
+                    if (e.PassportNo is not null) PdfKit.Field(t, "Passport No.", e.PassportNo, "رقم الجواز");
+                    PdfKit.Field(t, "Job title", JoinTitle(e.JobTitleEn, e.JobTitleAr), "المسمى الوظيفي");
+                    PdfKit.Field(t, "Joining date", e.JoiningDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), "تاريخ الالتحاق");
+                });
+                col.Item().Element(c => LinesTable(c, "Monthly salary", "الراتب الشهري", lines));
+                col.Item().AlignRight().Width(300).Background(PdfKit.Shade).Padding(4).Row(row =>
+                {
+                    row.RelativeItem().Text("Total monthly salary").Bold();
+                    row.AutoItem().Text($"QAR {PdfKit.Amount(total)}").Bold().FontColor(PdfKit.Primary);
+                    row.RelativeItem().AlignRight().Text("إجمالي الراتب الشهري").Bold();
+                });
+                col.Item().Element(c => Words(c, total));
+                col.Item().Row(row =>
+                {
+                    row.RelativeItem().Text("This certificate is issued at the employee's request without any liability on the company.").FontSize(8);
+                    row.ConstantItem(16);
+                    row.RelativeItem().ContentFromRightToLeft().Text("أُصدرت هذه الشهادة بناءً على طلب الموظف دون أدنى مسؤولية على الشركة.").FontSize(8);
+                });
+                col.Item().PaddingTop(36).Row(row =>
+                {
+                    row.RelativeItem();
+                    row.ConstantItem(24);
+                    Signature(row.RelativeItem(), "Authorised signatory and stamp", "التوقيع المعتمد والختم");
+                });
+            });
+            page.Footer().Element(c => PdfKit.Footer(c, clock.UtcNow));
+        })).GeneratePdf();
+
+        return (bytes, $"salary_certificate_{e.EmpNo}_{today:yyyyMMdd}.pdf");
+    }
+
+    // '/' in a format string is the culture's date separator; documents always use dd/MM/yyyy.
+    private static string Dmy(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
     private static void ThreeColumns(TableDescriptor t) => t.ColumnsDefinition(c =>
     {

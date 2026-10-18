@@ -12,5 +12,5 @@ internal sealed class UserDirectory(ErpDbContext db) : IUserDirectory
                join ur in db.Set<UserRole>() on u.Id equals ur.UserId
                join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
                where u.IsActive && (rp.Permission == permission || rp.Permission == DefaultRoles.Wildcard)
-               select u.Email).Distinct().ToListAsync(ct);
+               select u.Email!).Where(e => e != null).Distinct().ToListAsync(ct);
 }

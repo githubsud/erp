@@ -30,7 +30,7 @@ public sealed class PayrollTests(ErpFixture fixture)
         return $"QA{98 - (int)(BigInteger.Parse(numeric) % 97):D2}{bban}";
     }
 
-    private static async Task ConfigureWpsAsync(HttpClient client)
+    internal static async Task ConfigureWpsAsync(HttpClient client)
     {
         var settings = await client.GetAsync<JsonElement>("/api/hr/settings");
         var body = JsonSerializer.Deserialize<Dictionary<string, object?>>(settings.GetRawText(), ErpFixture.Json)!;
@@ -41,7 +41,7 @@ public sealed class PayrollTests(ErpFixture fixture)
         (await client.PutAsJsonAsync("/api/hr/settings", body, ErpFixture.Json)).EnsureSuccessStatusCode();
     }
 
-    private static Task<Employee> HireAsync(HttpClient client, string empNo, string name, string nationality, DateOnly joining, string qid,
+    internal static Task<Employee> HireAsync(HttpClient client, string empNo, string name, string nationality, DateOnly joining, string qid,
         string bankAccount, string scheme = "None") =>
         client.PostAsync<Employee>("/api/hr/employees", new
         {
@@ -55,7 +55,7 @@ public sealed class PayrollTests(ErpFixture fixture)
             socialInsuranceScheme = scheme
         });
 
-    private static Task ContractAsync(HttpClient client, Guid employeeId, DateOnly start, params (string Code, decimal Amount)[] components) =>
+    internal static Task ContractAsync(HttpClient client, Guid employeeId, DateOnly start, params (string Code, decimal Amount)[] components) =>
         client.PostAsync<JsonElement>($"/api/hr/employees/{employeeId}/contracts", new
         {
             startDate = start,

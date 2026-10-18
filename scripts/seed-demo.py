@@ -7,6 +7,7 @@ Records are left in different states (draft / pending / posted / paid / reversed
     python scripts/seed-demo.py --company acme --api http://localhost:5080
     python scripts/seed-demo.py --sales-only        # add the sales scenario to an already seeded company
     python scripts/seed-demo.py --finance-only      # add opening balances and a bank statement to reconcile
+    python scripts/seed-demo.py --ess-only          # give employee E003 a self-service sign-in
 
 The company is provisioned if it does not exist yet. Run it once per company: business keys (employee numbers,
 SKUs, supplier codes) are unique, so a second run stops at the first duplicate.
@@ -26,6 +27,7 @@ p.add_argument("--api", default="http://localhost:5080")
 p.add_argument("--company", default="demo")
 p.add_argument("--sales-only", action="store_true", help="only add customers, quotations, orders, invoices and receipts")
 p.add_argument("--finance-only", action="store_true", help="only add opening balances and a bank statement to reconcile")
+p.add_argument("--ess-only", action="store_true", help="only give employee E003 a self-service sign-in")
 args = p.parse_args()
 API = args.api.rstrip("/")
 token = None
@@ -229,6 +231,27 @@ def seed_finance():
     result = upload(f"/api/finance/bank-statements/import?accountId={accounts['1120']}", "qnb_october_2026.csv", "\n".join(lines) + "\n")
     print(f"  {result['lines']} lines imported, {result['autoMatched']} matched automatically")
 
+
+def seed_ess():
+    """Employee self-service: E003 signs in with the employee number, chooses the demo password and asks for leave."""
+    global token
+    step("Self-service sign-in for E003 (Ramesh Kumar)")
+    employee = next(e for e in get("/api/hr/employees?search=E003")["items"] if e["empNo"] == "E003")
+    access = post(f"/api/hr/employees/{employee['id']}/portal-access")
+    staff_token = token
+    r = call("POST", "/api/auth/login", {"tenantCode": args.company, "email": access["username"], "password": access["temporaryPassword"]},
+             auth=False)
+    token = r["accessToken"]
+    post("/api/auth/password", {"currentPassword": access["temporaryPassword"], "newPassword": PASSWORD})
+    post("/api/me/leave", {"leaveTypeCode": "ANNUAL", "fromDate": "2026-12-20", "toDate": "2026-12-31", "reason": "Family visit to Kerala"})
+    token = staff_token
+    print(f"  Sign in as employee: company '{args.company}', username {access['username']} / {PASSWORD} (phone layout at /me)")
+
+
+if args.ess_only:
+    seed_ess()
+    print(f"\n✓ Self-service sign-in added to '{args.company}'.")
+    sys.exit(0)
 
 if args.sales_only:
     seed_sales()
@@ -535,6 +558,7 @@ put(f"/api/inventory/counts/{count['id']}/lines", [{"itemId": i, "countedQuantit
 
 seed_sales()
 seed_finance()
+seed_ess()
 
 print(f"\n✓ Done. Sign in at http://localhost:4200 with company '{args.company}', owner@demo.qa / {PASSWORD}")
 print("  Other users (same password): hr@ payroll@ accounts@ store@ buyer@ gm@ sales@ demo.qa")

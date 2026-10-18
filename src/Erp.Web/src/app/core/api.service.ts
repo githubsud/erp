@@ -78,6 +78,8 @@ export class ApiService {
   employee = (id: string) => this.get<Employee>(`hr/employees/${id}`);
   createEmployee = (body: EmployeeRequest) => this.post<Employee>('hr/employees', body);
   updateEmployee = (id: string, body: EmployeeRequest) => this.put<Employee>(`hr/employees/${id}`, body);
+  grantPortalAccess = (id: string) => this.post<{ username: string; temporaryPassword: string }>(`hr/employees/${id}/portal-access`);
+  revokePortalAccess = (id: string) => this.delete(`hr/employees/${id}/portal-access`);
 
   contracts = (employeeId: string) => this.get<Contract[]>(`hr/employees/${employeeId}/contracts`);
   createContract = (employeeId: string, body: unknown) => this.post<Contract>(`hr/employees/${employeeId}/contracts`, body);

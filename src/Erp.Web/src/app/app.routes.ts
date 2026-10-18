@@ -1,9 +1,19 @@
 import { Routes } from '@angular/router';
-import { authGuard, permissionGuard } from './core/auth.service';
+import { authGuard, permissionGuard, selfServiceGuard, sessionGuard } from './core/auth.service';
 import { Shell } from './layout/shell';
 
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./features/login/login').then((m) => m.LoginPage) },
+  {
+    path: 'change-password',
+    canActivate: [sessionGuard],
+    loadComponent: () => import('./features/login/change-password').then((m) => m.ChangePasswordPage)
+  },
+  {
+    path: 'me',
+    canActivate: [selfServiceGuard],
+    loadChildren: () => import('./features/me/me.routes').then((m) => m.ME_ROUTES)
+  },
   {
     path: '',
     component: Shell,

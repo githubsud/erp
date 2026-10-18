@@ -154,6 +154,9 @@ public sealed class Employee : TenantEntity
 
     /// <summary>Gratuity liability already recognised before go-live (from the legacy system).</summary>
     public decimal OpeningGratuityLiability { get; set; }
+
+    /// <summary>The self-service sign-in HR created for this employee (a Core user), if any.</summary>
+    public Guid? UserId { get; set; }
     public uint Version { get; private set; }
 }
 

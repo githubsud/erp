@@ -4,7 +4,8 @@ export interface UserInfo {
   id: string;
   tenantId: string;
   companyId: string | null;
-  email: string;
+  email: string | null;
+  username?: string | null;
   displayNameEn: string;
   displayNameAr: string;
   preferredLanguage: 'ar' | 'en';
@@ -19,6 +20,8 @@ export interface LoginResponse {
   mfaRequired: boolean;
   mfaToken: string | null;
   mfaEnabled: boolean;
+  /** Temporary password from HR: the user must choose their own before anything else. */
+  mustChangePassword?: boolean;
 }
 
 export interface Paged<T> {
@@ -66,6 +69,7 @@ export interface Employee {
   socialInsuranceScheme: SocialInsuranceScheme;
   openingGratuityLiability: number | null;
   sensitiveMasked: boolean;
+  hasPortalAccess: boolean;
 }
 
 export interface EmployeeRequest {

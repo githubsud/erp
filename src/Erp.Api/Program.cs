@@ -1,3 +1,4 @@
+using System.Globalization;
 using Erp.Api;
 using Erp.Infrastructure;
 using Erp.Infrastructure.Persistence;
@@ -15,6 +16,10 @@ if (args.Contains("--healthcheck"))
     try { return (await http.GetAsync($"http://localhost:{port}/health")).IsSuccessStatusCode ? 0 : 1; }
     catch { return 1; }
 }
+
+// Documents and messages format dates/numbers explicitly (dd/MM/yyyy, N2); the server's regional settings must not change them.
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 
