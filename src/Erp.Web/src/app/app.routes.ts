@@ -57,6 +57,101 @@ export const routes: Routes = [
         loadComponent: () => import('./features/payroll/attendance').then((m) => m.AttendancePage)
       },
       {
+        path: 'inventory/items',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/inventory/items').then((m) => m.ItemsPage)
+      },
+      {
+        path: 'inventory/items/:id',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/inventory/item-detail').then((m) => m.ItemDetailPage)
+      },
+      {
+        path: 'inventory/stock',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/inventory/stock').then((m) => m.StockPage)
+      },
+      {
+        path: 'inventory/adjustments',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/inventory/stock-documents').then((m) => m.AdjustmentsPage)
+      },
+      {
+        path: 'inventory/transfers',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/inventory/stock-documents').then((m) => m.TransfersPage)
+      },
+      {
+        path: 'inventory/counts',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/inventory/counts').then((m) => m.CountsPage)
+      },
+      {
+        path: 'inventory/counts/:id',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/inventory/counts').then((m) => m.CountDetailPage)
+      },
+      {
+        path: 'purchasing/suppliers',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/suppliers').then((m) => m.SuppliersPage)
+      },
+      {
+        path: 'purchasing/orders',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/orders').then((m) => m.OrdersPage)
+      },
+      {
+        path: 'purchasing/orders/new',
+        canActivate: [permissionGuard('pur.orders:manage')],
+        loadComponent: () => import('./features/purchasing/orders').then((m) => m.OrderFormPage)
+      },
+      {
+        path: 'purchasing/orders/:id/edit',
+        canActivate: [permissionGuard('pur.orders:manage')],
+        loadComponent: () => import('./features/purchasing/orders').then((m) => m.OrderFormPage)
+      },
+      {
+        path: 'purchasing/orders/:id',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/orders').then((m) => m.OrderDetailPage)
+      },
+      {
+        path: 'purchasing/invoices',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/invoices').then((m) => m.InvoicesPage)
+      },
+      {
+        path: 'purchasing/invoices/new',
+        canActivate: [permissionGuard('pur.invoices:post')],
+        loadComponent: () => import('./features/purchasing/invoices').then((m) => m.InvoiceFormPage)
+      },
+      {
+        path: 'purchasing/invoices/:id',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/invoices').then((m) => m.InvoiceDetailPage)
+      },
+      {
+        path: 'purchasing/payments',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/payables').then((m) => m.PaymentsPage)
+      },
+      {
+        path: 'purchasing/landed-costs',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/payables').then((m) => m.LandedCostsPage)
+      },
+      {
+        path: 'purchasing/reports',
+        canActivate: [permissionGuard('pur.reports:read')],
+        loadComponent: () => import('./features/purchasing/reports').then((m) => m.PurchasingReportsPage)
+      },
+      {
+        path: 'settings/trade',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/settings/trade-settings').then((m) => m.TradeSettingsPage)
+      },
+      {
         path: 'leave',
         canActivate: [permissionGuard('hr.employees:read')],
         loadComponent: () => import('./features/leave/leave-list').then((m) => m.LeaveListPage)

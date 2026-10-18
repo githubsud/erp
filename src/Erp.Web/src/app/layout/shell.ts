@@ -38,6 +38,22 @@ const NAV: NavGroup[] = [
     ]
   },
   {
+    label: 'nav.trade',
+    items: [
+      { icon: 'local_shipping', label: 'nav.suppliers', link: '/purchasing/suppliers', permission: 'pur.suppliers:read' },
+      { icon: 'shopping_cart', label: 'nav.orders', link: '/purchasing/orders', permission: 'pur.suppliers:read' },
+      { icon: 'request_quote', label: 'nav.invoices', link: '/purchasing/invoices', permission: 'pur.suppliers:read' },
+      { icon: 'price_check', label: 'nav.supplierPayments', link: '/purchasing/payments', permission: 'pur.suppliers:read' },
+      { icon: 'sailing', label: 'nav.landedCosts', link: '/purchasing/landed-costs', permission: 'pur.suppliers:read' },
+      { icon: 'category', label: 'nav.items', link: '/inventory/items', permission: 'inv.items:read' },
+      { icon: 'warehouse', label: 'nav.stock', link: '/inventory/stock', permission: 'inv.items:read' },
+      { icon: 'tune', label: 'nav.adjustments', link: '/inventory/adjustments', permission: 'inv.items:read' },
+      { icon: 'swap_horiz', label: 'nav.transfers', link: '/inventory/transfers', permission: 'inv.items:read' },
+      { icon: 'fact_check', label: 'nav.counts', link: '/inventory/counts', permission: 'inv.items:read' },
+      { icon: 'query_stats', label: 'nav.purchasingReports', link: '/purchasing/reports', permission: 'pur.reports:read' }
+    ]
+  },
+  {
     label: 'nav.finance',
     items: [
       { icon: 'account_tree', label: 'nav.accounts', link: '/finance/accounts', permission: 'fin.accounts:read' },
@@ -49,6 +65,7 @@ const NAV: NavGroup[] = [
     label: 'nav.settings',
     items: [
       { icon: 'tune', label: 'nav.hrSettings', link: '/settings/payroll', permission: 'hr.payroll:read' },
+      { icon: 'inventory_2', label: 'nav.tradeSettings', link: '/settings/trade', permission: 'inv.items:read' },
       { icon: 'apartment', label: 'nav.company', link: '/settings/company' },
       { icon: 'shield_lock', label: 'nav.security', link: '/settings/security' },
       { icon: 'group', label: 'nav.users', link: '/settings/users', permission: 'core.users:read' }

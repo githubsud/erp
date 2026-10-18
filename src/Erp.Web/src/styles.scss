@@ -117,3 +117,20 @@ td.ltr, th.ltr { display: table-cell; direction: inherit; unicode-bidi: normal; 
 .snack-error { --mat-snack-bar-container-color: #8c1d18; }
 
 mat-dialog-content .form-grid { min-width: min(560px, 80vw); }
+
+.secondary { color: var(--mat-sys-on-surface-variant); font-size: 12px; }
+span.secondary, b + .secondary { margin-inline-start: 6px; }
+.form-card { padding: 8px 20px 16px; margin-block-end: 16px; }
+
+// Editable document lines (orders, invoices, adjustments): compact fields in a table.
+.line-editor {
+  width: 100%;
+  border-collapse: collapse;
+  th { text-align: start; font: var(--mat-sys-label-large); color: var(--mat-sys-on-surface-variant); padding: 4px 6px; }
+  td { padding: 2px 6px; vertical-align: middle; }
+  mat-form-field { width: 100%; }
+  .mat-mdc-form-field-subscript-wrapper { display: none; }
+  .narrow { width: 120px; }
+  .total-row td { font-weight: 700; padding-block: 10px; }
+}
+.facts { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; margin-block-end: 12px; }
