@@ -179,6 +179,9 @@ public static class HttpExtensions
     public static async Task<T> PostAsync<T>(this HttpClient client, string url, object body) =>
         await (await client.PostAsJsonAsync(url, body, ErpFixture.Json)).ReadAsync<T>();
 
+    public static async Task<T> PutAsync<T>(this HttpClient client, string url, object body) =>
+        await (await client.PutAsJsonAsync(url, body, ErpFixture.Json)).ReadAsync<T>();
+
     public static Task<HttpResponseMessage> PostJsonAsync(this HttpClient client, string url, object body) =>
         client.PostAsJsonAsync(url, body, ErpFixture.Json);
 

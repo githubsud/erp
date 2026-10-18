@@ -17,6 +17,10 @@
   <Folder Name="/src/Modules/HR/">
     <Project Path="src/Modules/HR/Erp.Modules.HR/Erp.Modules.HR.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Inventory/">
+    <Project Path="src/Modules/Inventory/Erp.Modules.Inventory.Contracts/Erp.Modules.Inventory.Contracts.csproj" />
+    <Project Path="src/Modules/Inventory/Erp.Modules.Inventory/Erp.Modules.Inventory.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Erp.IntegrationTests/Erp.IntegrationTests.csproj" />
     <Project Path="tests/Erp.UnitTests/Erp.UnitTests.csproj" />

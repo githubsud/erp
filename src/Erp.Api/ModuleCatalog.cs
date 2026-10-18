@@ -2,6 +2,7 @@ using Erp.Infrastructure.Web;
 using Erp.Modules.Core;
 using Erp.Modules.Finance;
 using Erp.Modules.HR;
+using Erp.Modules.Inventory;
 
 namespace Erp.Api;
 
@@ -12,6 +13,7 @@ public static class ModuleCatalog
     [
         new CoreModule(),
         new FinanceModule(),
-        new HrModule()
+        new HrModule(),
+        new InventoryModule()
     ];
 }

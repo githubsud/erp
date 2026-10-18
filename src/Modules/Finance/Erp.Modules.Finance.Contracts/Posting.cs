@@ -91,4 +91,18 @@ public static class AccountRoles
     public const string AirTicketProvision = "hr.air_ticket_provision";
     public const string SocialInsuranceExpense = "hr.social_insurance_expense";
     public const string SocialInsurancePayable = "hr.social_insurance_payable";
+
+    /// <summary>Stock value; keyed by item group.</summary>
+    public const string Inventory = "inv.inventory";
+    /// <summary>Cost of goods sold; keyed by item group.</summary>
+    public const string CostOfSales = "inv.cogs";
+    public const string StockAdjustment = "inv.adjustment";
+
+    public const string GoodsReceivedNotInvoiced = "pur.grni";
+    public const string AccountsPayable = "pur.payable";
+    public const string WithholdingTaxPayable = "pur.wht_payable";
+    /// <summary>Freight, clearing and customs invoices waiting to be allocated to receipts by a landed cost voucher.</summary>
+    public const string LandedCostClearing = "pur.landed_cost_clearing";
+    /// <summary>Non-stock purchases (services, supplies); keyed by item group.</summary>
+    public const string PurchaseExpense = "pur.expense";
 }

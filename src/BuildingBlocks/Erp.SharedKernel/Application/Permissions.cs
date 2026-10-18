@@ -9,6 +9,8 @@ public static class DefaultRoles
     public const string HrManager = "hr_manager";
     public const string PayrollOfficer = "payroll_officer";
     public const string Auditor = "auditor";
+    public const string Purchaser = "purchaser";
+    public const string Storekeeper = "storekeeper";
 
     /// <summary>Grants every permission.</summary>
     public const string Wildcard = "*";

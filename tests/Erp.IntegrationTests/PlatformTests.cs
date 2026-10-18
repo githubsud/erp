@@ -6,7 +6,7 @@ namespace Erp.IntegrationTests;
 [Collection(ErpCollection.Name)]
 public sealed class PlatformTests(ErpFixture fixture)
 {
-    private static readonly string[] TenantSchemas = ["core", "fin", "hr"];
+    private static readonly string[] TenantSchemas = ["core", "fin", "hr", "inv"];
     private static readonly string[] PlatformTables = ["core.tenant"];
 
     [Fact]

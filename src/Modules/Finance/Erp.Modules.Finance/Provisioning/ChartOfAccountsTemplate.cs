@@ -35,6 +35,7 @@ internal static class ChartOfAccountsTemplate
         new("1160", "11", "Employee Advances and Loans", "سلف وقروض الموظفين", A, Control: ControlSubledger.Employee),
         new("1170", "11", "Prepaid Expenses", "مصروفات مدفوعة مقدماً", A),
         new("1180", "11", "Refundable Deposits", "تأمينات مستردة", A),
+        new("1190", "11", "Landed Cost Clearing", "حساب وسيط تكاليف الاستيراد", A),
         new("12", "1", "Non-current Assets", "الأصول غير المتداولة", A, false),
         new("1210", "12", "Property, Plant and Equipment", "الممتلكات والمنشآت والمعدات", A),
         new("1220", "12", "Accumulated Depreciation", "مجمع الإهلاك", A, Normal: NormalBalance.Credit),
@@ -43,6 +44,7 @@ internal static class ChartOfAccountsTemplate
         new("21", "2", "Current Liabilities", "الالتزامات المتداولة", L, false),
         new("2110", "21", "Accounts Payable", "الذمم الدائنة", L, Control: ControlSubledger.Supplier),
         new("2120", "21", "Post-dated Cheques Payable", "شيكات آجلة مستحقة الدفع", L),
+        new("2125", "21", "Goods Received Not Invoiced", "بضاعة مستلمة لم تصل فواتيرها", L),
         new("2130", "21", "Accrued Expenses", "مصروفات مستحقة", L),
         new("2140", "21", "Salaries Payable", "رواتب مستحقة الدفع", L),
         new("2150", "21", "Leave Salary Provision", "مخصص رواتب الإجازات", L),
@@ -88,6 +90,7 @@ internal static class ChartOfAccountsTemplate
         new("5330", "53", "Government Fees and Renewals", "الرسوم الحكومية والتجديدات", X),
         new("5340", "53", "Bank Charges", "الرسوم البنكية", X),
         new("5350", "53", "Depreciation", "الإهلاك", X),
+        new("5360", "53", "Purchased Services and Supplies", "خدمات ومستلزمات مشتراة", X),
         new("5390", "53", "Rounding Differences", "فروقات التقريب", X)
     ];
 
@@ -110,7 +113,15 @@ internal static class ChartOfAccountsTemplate
         (AccountRoles.AirTicketExpense, "5290"),
         (AccountRoles.AirTicketProvision, "2160"),
         (AccountRoles.SocialInsuranceExpense, "5295"),
-        (AccountRoles.SocialInsurancePayable, "2180")
+        (AccountRoles.SocialInsurancePayable, "2180"),
+        (AccountRoles.Inventory, "1150"),
+        (AccountRoles.CostOfSales, "5110"),
+        (AccountRoles.StockAdjustment, "5120"),
+        (AccountRoles.GoodsReceivedNotInvoiced, "2125"),
+        (AccountRoles.AccountsPayable, "2110"),
+        (AccountRoles.WithholdingTaxPayable, "2170"),
+        (AccountRoles.LandedCostClearing, "1190"),
+        (AccountRoles.PurchaseExpense, "5360")
     ];
 
     public static NormalBalance DefaultNormal(AccountType type) =>

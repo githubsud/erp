@@ -13,5 +13,6 @@
     <ProjectReference Include="..\Modules\Core\Erp.Modules.Core\Erp.Modules.Core.csproj" />
     <ProjectReference Include="..\Modules\Finance\Erp.Modules.Finance\Erp.Modules.Finance.csproj" />
     <ProjectReference Include="..\Modules\HR\Erp.Modules.HR\Erp.Modules.HR.csproj" />
+    <ProjectReference Include="..\Modules\Inventory\Erp.Modules.Inventory\Erp.Modules.Inventory.csproj" />
   </ItemGroup>
 </Project>

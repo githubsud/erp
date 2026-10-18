@@ -36,6 +36,8 @@ internal static class DefaultRoleNames
         (Accountant, "Accountant", "المحاسب"),
         (HrManager, "HR Manager", "مدير الموارد البشرية"),
         (PayrollOfficer, "Payroll Officer", "مسؤول الرواتب"),
+        (Purchaser, "Purchasing Officer", "مسؤول المشتريات"),
+        (Storekeeper, "Storekeeper", "أمين المخزن"),
         (Auditor, "Auditor (read-only)", "المدقق (قراءة فقط)")
     ];
 }
