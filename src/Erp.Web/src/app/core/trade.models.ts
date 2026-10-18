@@ -29,6 +29,7 @@ export interface Item {
   quantityOnHand: number;
   averageCost: number;
   stockValue: number;
+  trackBatches: boolean;
 }
 
 /** A unit an item is bought or sold in; one holds `factor` base units (the base unit has factor 1). */

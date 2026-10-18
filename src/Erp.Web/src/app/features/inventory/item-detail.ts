@@ -1,3 +1,4 @@
+import { ItemBatches } from './batches';
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { FormControl, Validators } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
@@ -24,7 +25,7 @@ export const SOURCE_LABELS: Record<string, string> = {
 
 @Component({
   selector: 'app-item-detail',
-  imports: [...SHARED],
+  imports: [...SHARED, ItemBatches],
   template: `
     @if (item(); as i) {
       <div class="page-header">
@@ -51,6 +52,13 @@ export const SOURCE_LABELS: Record<string, string> = {
           @if (i.reorderLevel !== null) { <div class="hint">{{ 'item.reorderLevel' | t }}: <span class="ltr">{{ i.reorderLevel }}</span></div> }
         </mat-card>
       </div>
+
+      @if (i.trackBatches) {
+        <mat-card appearance="outlined" class="form-card units">
+          <div class="section-title">{{ 'batch.title' | t }}</div>
+          <app-item-batches [itemId]="i.id" />
+        </mat-card>
+      }
 
       <mat-card appearance="outlined" class="form-card units">
         <div class="section-title">{{ 'units.title' | t }}</div>

@@ -17,7 +17,10 @@ public sealed record MasterDto(Guid Id, string Code, string NameEn, string NameA
 
 public sealed record ItemDto(Guid Id, string Sku, string NameEn, string NameAr, string ItemType, Guid ItemGroupId, Guid UomId, string UomCode,
     string? Barcode, decimal? ReorderLevel, decimal? PurchasePrice, decimal? SalesPrice, string? HsCode, bool IsActive,
-    decimal QuantityOnHand, decimal AverageCost, decimal StockValue);
+    decimal QuantityOnHand, decimal AverageCost, decimal StockValue, bool TrackBatches = false);
+
+public sealed record BatchRow(Guid BatchId, Guid ItemId, string Sku, string NameEn, string NameAr, string BatchNo, DateOnly? ExpiryDate, Guid WarehouseId,
+    string WarehouseCode, decimal Quantity, int? DaysLeft);
 
 public sealed record StockRow(Guid ItemId, string Sku, string NameEn, string NameAr, string UomCode, Guid ItemGroupId, decimal Quantity,
     decimal AverageCost, decimal Value, decimal? ReorderLevel, bool BelowReorder);
@@ -116,6 +119,10 @@ internal static class InventoryEndpoints
 
         g.MapGet("/stock", StockAsync).RequirePermission(InventoryPermissions.ItemsRead);
         g.MapGet("/reports/valuation", ValuationAsync).RequirePermission(InventoryPermissions.ReportsRead);
+        g.MapGet("/batches", (ErpDbContext db, ITenantContext t, IClock clock, CancellationToken ct, Guid? itemId = null, Guid? warehouseId = null) =>
+            BatchesAsync(db, t, clock, itemId, warehouseId, null, ct)).RequirePermission(InventoryPermissions.ItemsRead);
+        g.MapGet("/reports/expiry", (ErpDbContext db, ITenantContext t, IClock clock, CancellationToken ct, int withinDays = 90, Guid? warehouseId = null) =>
+            BatchesAsync(db, t, clock, null, warehouseId, Math.Clamp(withinDays, 0, 3650), ct)).RequirePermission(InventoryPermissions.ItemsRead);
 
         g.MapGet("/adjustments", async (ErpDbContext db, ITenantContext t, CancellationToken ct) => await AdjustmentsAsync(db, t, null, ct))
             .RequirePermission(InventoryPermissions.ItemsRead);
@@ -178,6 +185,26 @@ internal static class InventoryEndpoints
 
     private static MasterDto Group(ItemGroup x) => new(x.Id, x.Code, x.NameEn, x.NameAr, x.IsActive);
 
+    /// <summary>Batches with stock, soonest expiry first; with <paramref name="withinDays"/> only those expiring by then (expired included).</summary>
+    private static async Task<List<BatchRow>> BatchesAsync(ErpDbContext db, ITenantContext t, IClock clock, Guid? itemId, Guid? warehouseId, int? withinDays,
+        CancellationToken ct)
+    {
+        var today = clock.Today;
+        var limit = withinDays is { } d ? today.AddDays(d) : (DateOnly?)null;
+        var rows = await (from s in db.Set<BatchStock>().AsNoTracking()
+                          join b in db.Set<Batch>() on s.BatchId equals b.Id
+                          join i in db.Set<Item>() on b.ItemId equals i.Id
+                          join w in db.Set<Warehouse>() on s.WarehouseId equals w.Id
+                          where b.CompanyId == t.RequireCompanyId() && s.Quantity != 0
+                                && (itemId == null || b.ItemId == itemId) && (warehouseId == null || s.WarehouseId == warehouseId)
+                                && (limit == null || (b.ExpiryDate != null && b.ExpiryDate <= limit))
+                          select new { b, i, w, s.Quantity }).ToListAsync(ct);
+        return rows
+            .Select(x => new BatchRow(x.b.Id, x.i.Id, x.i.Sku, x.i.NameEn, x.i.NameAr, x.b.BatchNo, x.b.ExpiryDate, x.w.Id, x.w.Code, x.Quantity,
+                x.b.ExpiryDate is { } e ? e.DayNumber - today.DayNumber : null))
+            .OrderBy(x => x.ExpiryDate ?? DateOnly.MaxValue).ThenBy(x => x.Sku).ThenBy(x => x.BatchNo).ToList();
+    }
+
     private static MasterDto Wh(Warehouse x) => new(x.Id, x.Code, x.NameEn, x.NameAr, x.IsActive, x.BranchId);
 
     private static IQueryable<ItemDto> ItemsQuery(ErpDbContext db, ITenantContext t, Func<IQueryable<Item>, IQueryable<Item>>? filter = null) =>
@@ -187,7 +214,8 @@ internal static class InventoryEndpoints
         from v in vals.DefaultIfEmpty()
         orderby i.Sku
         select new ItemDto(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType.ToString(), i.ItemGroupId, i.UomId, u.Code, i.Barcode, i.ReorderLevel,
-            i.PurchasePrice, i.SalesPrice, i.HsCode, i.IsActive, v == null ? 0 : v.Quantity, v == null ? 0 : v.AverageCost, v == null ? 0 : v.Value);
+            i.PurchasePrice, i.SalesPrice, i.HsCode, i.IsActive, v == null ? 0 : v.Quantity, v == null ? 0 : v.AverageCost, v == null ? 0 : v.Value,
+            i.TrackBatches);
 
     private static async Task<PagedResult<ItemDto>> ListItems(ErpDbContext db, ITenantContext t, CancellationToken ct, string? search = null,
         string? type = null, Guid? groupId = null, bool? active = null, int page = 1, int pageSize = 50)

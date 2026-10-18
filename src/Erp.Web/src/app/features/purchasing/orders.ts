@@ -337,7 +337,8 @@ export class OrderFormPage implements OnInit {
         </mat-form-field>
       </form>
       <table class="line-editor">
-        <thead><tr><th>{{ 'po.item' | t }}</th><th class="num">{{ 'po.qty' | t }}</th><th class="num">{{ 'grn.remaining' | t }}</th><th class="narrow">{{ 'grn.now' | t }}</th></tr></thead>
+        <thead><tr><th>{{ 'po.item' | t }}</th><th class="num">{{ 'po.qty' | t }}</th><th class="num">{{ 'grn.remaining' | t }}</th><th class="narrow">{{ 'grn.now' | t }}</th>
+          @if (anyBatches()) { <th class="narrow">{{ 'batch.no' | t }}</th><th class="narrow">{{ 'batch.expiry' | t }}</th> }</tr></thead>
         <tbody>
           @for (l of open; track l.id) {
             <tr>
@@ -345,6 +346,10 @@ export class OrderFormPage implements OnInit {
               <td class="num ltr">{{ l.quantity }}</td>
               <td class="num ltr">{{ l.quantity - l.quantityReceived }}</td>
               <td class="narrow"><mat-form-field><input matInput type="number" min="0" [max]="l.quantity - l.quantityReceived" [formControl]="qty[l.id]" dir="ltr" /></mat-form-field></td>
+              @if (anyBatches()) {
+                <td class="narrow">@if (tracked().has(l.itemId)) { <mat-form-field><input matInput [formControl]="batch[l.id]" dir="ltr" /></mat-form-field> }</td>
+                <td class="narrow">@if (tracked().has(l.itemId)) { <mat-form-field><input matInput type="date" [formControl]="expiry[l.id]" dir="ltr" /></mat-form-field> }</td>
+              }
             </tr>
           }
         </tbody>
@@ -366,10 +371,20 @@ export class ReceiveDialog {
   protected readonly qty: Record<string, FormControl<number | null>> = Object.fromEntries(
     this.open.map((l) => [l.id, new FormControl<number | null>(l.quantity - l.quantityReceived)])
   );
+  protected readonly batch: Record<string, FormControl<string>> = Object.fromEntries(this.open.map((l) => [l.id, new FormControl('', { nonNullable: true })]));
+  protected readonly expiry: Record<string, FormControl<string>> = Object.fromEntries(this.open.map((l) => [l.id, new FormControl('', { nonNullable: true })]));
+  /** Items of the order that are tracked by batch (they need a batch number when received). */
+  protected readonly tracked = signal(new Set<string>());
+  protected readonly anyBatches = computed(() => this.tracked().size > 0);
   protected readonly form = inject(FormBuilder).nonNullable.group({
     receiptDate: [todayIso(), Validators.required],
     supplierDeliveryNote: ['']
   });
+
+  constructor() {
+    this.trade.items({ type: 'Stock', active: true, pageSize: 500 }).subscribe((r) =>
+      this.tracked.set(new Set(r.items.filter((i) => i.trackBatches).map((i) => i.id))));
+  }
 
   protected anything(): boolean {
     return Object.values(this.qty).some((c) => Number(c.value) > 0);
@@ -381,7 +396,10 @@ export class ReceiveDialog {
       .createReceipt({
         purchaseOrderId: this.data.order.id,
         ...this.form.getRawValue(),
-        lines: this.open.filter((l) => Number(this.qty[l.id].value) > 0).map((l) => ({ purchaseOrderLineId: l.id, quantity: Number(this.qty[l.id].value) }))
+        lines: this.open.filter((l) => Number(this.qty[l.id].value) > 0).map((l) => ({
+          purchaseOrderLineId: l.id, quantity: Number(this.qty[l.id].value),
+          batchNo: this.batch[l.id].value.trim() || null, expiryDate: this.expiry[l.id].value || null
+        }))
       })
       .subscribe({
         next: (r) => {

@@ -4,7 +4,10 @@ namespace Erp.Modules.Inventory.Contracts;
 public enum ItemType { Stock, Service }
 
 public sealed record ItemInfo(Guid Id, string Sku, string NameEn, string NameAr, ItemType Type, Guid ItemGroupId, string UomCode, bool IsActive,
-    decimal? SalesPrice = null);
+    decimal? SalesPrice = null, bool TrackBatches = false);
+
+/// <summary>Part of a movement in one batch. <see cref="Quantity"/> is positive (base unit); expiry is given when receiving a new batch.</summary>
+public sealed record BatchQuantity(string BatchNo, decimal Quantity, DateOnly? ExpiryDate = null);
 
 /// <summary>A unit an item can be bought or sold in, and how many base units one of it holds (the base unit itself has factor 1).</summary>
 public sealed record ItemUnitInfo(Guid ItemId, Guid UomId, string UomCode, decimal Factor, bool IsBase);
@@ -14,14 +17,21 @@ public sealed record WarehouseInfo(Guid Id, string Code, string NameEn, string N
 /// <summary>
 /// One stock movement to record. <see cref="Quantity"/> is signed (+ in, − out) in the item's base unit.
 /// Receipts need <see cref="UnitCost"/>; issues are valued at the weighted-average cost unless a cost or an exact
-/// <see cref="Value"/> (signed) is given.
+/// <see cref="Value"/> (signed) is given. For batch-tracked items <see cref="Batches"/> splits the quantity; issues without it take
+/// the batches that expire first (FEFO), receipts without it go to the item's <c>NO-BATCH</c> batch.
 /// </summary>
-public sealed record StockLine(Guid ItemId, Guid WarehouseId, decimal Quantity, decimal? UnitCost = null, Guid? SourceLineId = null, decimal? Value = null);
+public sealed record StockLine(Guid ItemId, Guid WarehouseId, decimal Quantity, decimal? UnitCost = null, Guid? SourceLineId = null, decimal? Value = null,
+    IReadOnlyList<BatchQuantity>? Batches = null);
 
-public sealed record StockPosting(string SourceType, Guid SourceId, string SourceNo, DateOnly Date, IReadOnlyList<StockLine> Lines);
+/// <summary>
+/// <see cref="IssueExpired"/>: the document may take stock from expired batches (write-offs, returns to supplier, moves to quarantine).
+/// Otherwise expired batches are only issued by users with the <c>inv.expired:issue</c> permission.
+/// </summary>
+public sealed record StockPosting(string SourceType, Guid SourceId, string SourceNo, DateOnly Date, IReadOnlyList<StockLine> Lines, bool IssueExpired = false);
 
 /// <summary>What a movement did. <see cref="Value"/> is signed like the quantity; the caller posts it to the ledger.</summary>
-public sealed record StockLineResult(Guid ItemId, Guid ItemGroupId, Guid? WarehouseId, Guid? SourceLineId, decimal Quantity, decimal Value);
+public sealed record StockLineResult(Guid ItemId, Guid ItemGroupId, Guid? WarehouseId, Guid? SourceLineId, decimal Quantity, decimal Value,
+    IReadOnlyList<BatchQuantity>? Batches = null);
 
 /// <summary>A cost added to (or removed from) goods already received: landed cost or an invoice price difference.</summary>
 public sealed record RevaluationLine(Guid ItemId, decimal Amount, decimal ReceivedQuantity, Guid? SourceLineId = null);

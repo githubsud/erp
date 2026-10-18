@@ -52,8 +52,34 @@ public sealed class Item : TenantEntity
     public decimal? PurchasePrice { get; set; }
     public decimal? SalesPrice { get; set; }
     public string? HsCode { get; set; }
+
+    /// <summary>Quantities are kept per batch with an expiry date (food, chemicals, medicines).</summary>
+    public bool TrackBatches { get; set; }
     public bool IsActive { get; set; } = true;
     public uint Version { get; set; }
+}
+
+public sealed class Batch : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public Guid ItemId { get; init; }
+    public required string BatchNo { get; init; }
+    public DateOnly? ExpiryDate { get; set; }
+}
+
+public sealed class BatchStock : TenantEntity, INotAudited
+{
+    public Guid BatchId { get; init; }
+    public Guid WarehouseId { get; init; }
+    public decimal Quantity { get; set; }
+}
+
+/// <summary>Insert-only split of a stock movement over batches (signed like the movement).</summary>
+public sealed class StockMovementBatch : TenantEntity, IImmutable, INotAudited
+{
+    public Guid MovementId { get; init; }
+    public Guid BatchId { get; init; }
+    public decimal Quantity { get; init; }
 }
 
 /// <summary>An alternative unit of an item: one of <see cref="UomId"/> holds <see cref="Factor"/> base units.</summary>

@@ -114,7 +114,7 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
                 if (note.WarehouseId is not { } warehouseId)
                     throw new BusinessRuleException("pur.return_warehouse", "Choose the warehouse the goods leave from.", "اختر المستودع الذي تخرج منه البضاعة.");
                 var results = await stock.PostAsync(new StockPosting(SourceType, note.Id, note.DebitNoteNo, r.Date,
-                    returns.Select(x => new StockLine(x.ItemId!.Value, warehouseId, -x.Quantity, SourceLineId: x.Id)).ToList()), token);
+                    returns.Select(x => new StockLine(x.ItemId!.Value, warehouseId, -x.Quantity, SourceLineId: x.Id)).ToList(), IssueExpired: true), token);
                 foreach (var x in results)
                 {
                     var line = returns.Single(rl => rl.Id == x.SourceLineId);

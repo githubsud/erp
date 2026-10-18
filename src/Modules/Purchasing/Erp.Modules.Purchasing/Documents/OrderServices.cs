@@ -20,7 +20,8 @@ public sealed record OrderLineRequest(Guid ItemId, string? Description, decimal 
 public sealed record OrderRequest(Guid SupplierId, DateOnly OrderDate, DateOnly? ExpectedDate, Guid WarehouseId, string? Notes,
     IReadOnlyList<OrderLineRequest> Lines, string? Currency = null, decimal? ExchangeRate = null);
 
-public sealed record ReceiptLineRequest(Guid PurchaseOrderLineId, decimal Quantity);
+/// <summary>Batch-tracked items need the supplier's batch (lot) number and, where printed, the expiry date.</summary>
+public sealed record ReceiptLineRequest(Guid PurchaseOrderLineId, decimal Quantity, string? BatchNo = null, DateOnly? ExpiryDate = null);
 
 /// <summary>Goods are costed at the order's exchange rate unless a rate for the receipt date is given.</summary>
 public sealed record ReceiptRequest(Guid PurchaseOrderId, DateOnly ReceiptDate, Guid? WarehouseId, string? SupplierDeliveryNote,
@@ -307,6 +308,9 @@ internal sealed class GoodsReceiptService(ErpDbContext db, ITenantContext tenant
                     throw new BusinessRuleException("pur.over_receipt",
                         $"Line {poLine.LineNo}: only {poLine.Quantity - poLine.QuantityReceived:0.##} left to receive.",
                         $"السطر {poLine.LineNo}: المتبقي للاستلام {poLine.Quantity - poLine.QuantityReceived:0.##} فقط.");
+                if (items[poLine.ItemId].TrackBatches && string.IsNullOrWhiteSpace(l.BatchNo))
+                    throw new BusinessRuleException("pur.batch_required", $"Line {poLine.LineNo}: enter the batch number of {items[poLine.ItemId].Sku}.",
+                        $"السطر {poLine.LineNo}: أدخل رقم الدفعة للصنف {items[poLine.ItemId].Sku}.");
                 poLine.QuantityReceived += l.Quantity;
                 receipt.Lines.Add(new GoodsReceiptLine
                 {
@@ -316,8 +320,11 @@ internal sealed class GoodsReceiptService(ErpDbContext db, ITenantContext tenant
             }
             db.Add(receipt);
 
+            var requested = r.Lines.ToList();
             var results = await stock.PostAsync(new StockPosting(SourceType, receipt.Id, receipt.GrnNo, r.ReceiptDate,
-                receipt.Lines.Select(l => new StockLine(l.ItemId, warehouseId, l.Quantity, l.UnitCost, l.Id)).ToList()), token);
+                receipt.Lines.OrderBy(l => l.LineNo).Select((l, i) => new StockLine(l.ItemId, warehouseId, l.Quantity, l.UnitCost, l.Id,
+                    Batches: string.IsNullOrWhiteSpace(requested[i].BatchNo) ? null : [new BatchQuantity(requested[i].BatchNo!, l.Quantity, requested[i].ExpiryDate)]))
+                    .ToList()), token);
             foreach (var x in results) receipt.Lines.Single(l => l.Id == x.SourceLineId).Value = x.Value;
             receipt.TotalValue = results.Sum(x => x.Value);
 

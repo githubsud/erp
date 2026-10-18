@@ -1071,5 +1071,19 @@ export const ar: Record<TranslationKey, string> = {
   'pr.status.PendingApproval': 'بانتظار الاعتماد',
   'pr.status.Approved': 'معتمد',
   'pr.status.Ordered': 'تم الطلب',
-  'pr.status.Cancelled': 'ملغى'
+  'pr.status.Cancelled': 'ملغى',
+  'item.trackBatches': 'تتبع الدفعات وتواريخ الانتهاء',
+  'nav.expiry': 'تقرير الصلاحية',
+  'batch.title': 'الدفعات',
+  'batch.no': 'رقم الدفعة',
+  'batch.expiry': 'تاريخ الانتهاء',
+  'batch.expired': 'منتهية',
+  'batch.daysLeft': 'متبقي {n} يوم',
+  'batch.fefo': 'الأقرب انتهاءً',
+  'batch.report': 'تقرير الصلاحية',
+  'batch.within': 'تنتهي خلال',
+  'batch.days': '{n} يوماً',
+  'batch.noneExpiring': 'لا توجد دفعات تنتهي في هذه الفترة.',
+  'batch.reportHint': 'لا تُصرف الدفعات المنتهية للعملاء تلقائياً. انقلها إلى مستودع حجر أو اشطبها بتسوية مخزون (السبب: انتهاء الصلاحية).',
+  'batch.warehouse': 'المستودع'
 };

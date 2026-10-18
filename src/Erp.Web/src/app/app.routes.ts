@@ -93,6 +93,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/inventory/stock').then((m) => m.StockPage)
       },
       {
+        path: 'inventory/expiry',
+        canActivate: [permissionGuard('inv.items:read')],
+        loadComponent: () => import('./features/inventory/batches').then((m) => m.ExpiryReportPage)
+      },
+      {
         path: 'inventory/adjustments',
         canActivate: [permissionGuard('inv.items:read')],
         loadComponent: () => import('./features/inventory/stock-documents').then((m) => m.AdjustmentsPage)

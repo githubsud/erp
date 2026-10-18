@@ -10,6 +10,9 @@ public static class InventoryPermissions
     public const string StockPost = "inv.stock:post";
     public const string ReportsRead = "inv.reports:read";
     public const string SettingsManage = "inv.settings:manage";
+
+    /// <summary>Delivering or selling goods from an expired batch.</summary>
+    public const string IssueExpired = "inv.expired:issue";
 }
 
 internal sealed class InventoryPermissionProvider : IPermissionProvider
@@ -20,6 +23,7 @@ internal sealed class InventoryPermissionProvider : IPermissionProvider
         new(InventoryPermissions.ItemsManage, "Create and edit items", "إضافة وتعديل الأصناف", Storekeeper, Purchaser),
         new(InventoryPermissions.StockPost, "Post stock adjustments, transfers and counts", "ترحيل تسويات المخزون والتحويلات والجرد", Storekeeper, Accountant),
         new(InventoryPermissions.ReportsRead, "View stock valuation", "عرض تقييم المخزون", Accountant, GeneralManager, Auditor, Storekeeper),
-        new(InventoryPermissions.SettingsManage, "Manage warehouses and inventory settings", "إدارة المستودعات وإعدادات المخزون", Accountant, GeneralManager)
+        new(InventoryPermissions.SettingsManage, "Manage warehouses and inventory settings", "إدارة المستودعات وإعدادات المخزون", Accountant, GeneralManager),
+        new(InventoryPermissions.IssueExpired, "Issue goods from expired batches", "صرف بضاعة من دفعات منتهية الصلاحية", GeneralManager)
     ];
 }

@@ -14,6 +14,8 @@ type LineGroup = FormGroup<{
   itemId: FormControl<string>;
   quantity: FormControl<number | null>;
   unitCost: FormControl<number | null>;
+  batchNo: FormControl<string>;
+  expiryDate: FormControl<string>;
 }>;
 
 /** Shared bits of the adjustment and transfer pages: stock items, warehouses, a line editor. */
@@ -23,6 +25,7 @@ abstract class StockDocumentPage {
   protected readonly notify = inject(NotifyService);
   protected readonly dialog = inject(MatDialog);
   protected readonly fb = inject(FormBuilder).nonNullable;
+  protected readonly Number = Number;
 
   protected readonly items = signal<Item[]>([]);
   protected readonly warehouses = signal<Master[]>([]);
@@ -52,7 +55,9 @@ abstract class StockDocumentPage {
       this.fb.group({
         itemId: this.fb.control('', Validators.required),
         quantity: this.fb.control<number | null>(null, Validators.required),
-        unitCost: this.fb.control<number | null>(null)
+        unitCost: this.fb.control<number | null>(null),
+        batchNo: this.fb.control(''),
+        expiryDate: this.fb.control('')
       }) as LineGroup
     );
   }
@@ -109,7 +114,8 @@ abstract class StockDocumentPage {
         </form>
         <p class="secondary">{{ 'adj.hint' | t }}</p>
         <table class="line-editor">
-          <thead><tr><th>{{ 'item.name' | t }}</th><th class="narrow">{{ 'stock.quantity' | t }}</th><th class="narrow">{{ 'adj.unitCost' | t }}</th><th></th></tr></thead>
+          <thead><tr><th>{{ 'item.name' | t }}</th><th class="narrow">{{ 'stock.quantity' | t }}</th><th class="narrow">{{ 'adj.unitCost' | t }}</th>
+            <th class="narrow">{{ 'batch.no' | t }}</th><th class="narrow">{{ 'batch.expiry' | t }}</th><th></th></tr></thead>
           <tbody>
             @for (line of lines.controls; track line; let i = $index) {
               <tr [formGroup]="line">
@@ -122,6 +128,10 @@ abstract class StockDocumentPage {
                 </td>
                 <td class="narrow"><mat-form-field><input matInput type="number" formControlName="quantity" dir="ltr" /></mat-form-field></td>
                 <td class="narrow"><mat-form-field><input matInput type="number" min="0" formControlName="unitCost" dir="ltr" /></mat-form-field></td>
+                <td class="narrow">@if (item(line.value.itemId ?? '')?.trackBatches) {
+                  <mat-form-field><input matInput formControlName="batchNo" dir="ltr" [placeholder]="(Number(line.value.quantity) < 0 ? 'batch.fefo' : '') | t" /></mat-form-field> }</td>
+                <td class="narrow">@if (item(line.value.itemId ?? '')?.trackBatches && Number(line.value.quantity) > 0) {
+                  <mat-form-field><input matInput type="date" formControlName="expiryDate" dir="ltr" /></mat-form-field> }</td>
                 <td><button mat-icon-button type="button" (click)="removeLine(i)" [disabled]="lines.length === 1"><mat-icon>delete</mat-icon></button></td>
               </tr>
             }
@@ -235,7 +245,9 @@ export class AdjustmentsPage extends StockDocumentPage {
         lines: this.lines.getRawValue().map((l) => ({
           itemId: l.itemId,
           quantity: Number(l.quantity),
-          unitCost: Number(l.quantity) > 0 && l.unitCost !== null ? Number(l.unitCost) : null
+          unitCost: Number(l.quantity) > 0 && l.unitCost !== null ? Number(l.unitCost) : null,
+          batchNo: l.batchNo.trim() || null,
+          expiryDate: Number(l.quantity) > 0 && l.expiryDate ? l.expiryDate : null
         }))
       })
       .subscribe({

@@ -13,7 +13,7 @@ namespace Erp.Modules.Inventory.Stock;
 /// Receipts add quantity × cost; issues take the current average (the last unit takes whatever value remains, so
 /// no residue is left behind); revaluations change value only. Every change writes an insert-only movement.
 /// </summary>
-internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant) : IStockService
+internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant, IPermissionService permissions) : IStockService
 {
     public async Task<IReadOnlyList<StockLineResult>> PostAsync(StockPosting posting, CancellationToken ct = default)
     {
@@ -54,7 +54,10 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant) : ISto
             var movement = Movement(posting.SourceType, posting.SourceId, posting.SourceNo, posting.Date, item, line.WarehouseId, line.Quantity, value,
                 valuation, line.SourceLineId, null);
             db.Add(movement);
-            results.Add(new StockLineResult(item.Id, item.ItemGroupId, line.WarehouseId, line.SourceLineId, line.Quantity, value));
+            if (!item.TrackBatches && line.Batches is { Count: > 0 })
+                throw new BusinessRuleException("inv.not_batch_item", $"{item.Sku} is not tracked by batch.", $"الصنف {item.Sku} لا يُتتبع بالدفعات.");
+            var batches = item.TrackBatches ? await AllocateBatchesAsync(posting, line, item, movement, allowNegative, ct) : null;
+            results.Add(new StockLineResult(item.Id, item.ItemGroupId, line.WarehouseId, line.SourceLineId, line.Quantity, value, batches));
         }
         await db.SaveChangesAsync(ct);
         return results;
@@ -115,13 +118,151 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant) : ISto
                 stock.Quantity += quantity;
             }
             Apply(valuation, quantity, -original.Value);
-            db.Add(Movement(original.SourceType, original.SourceId, original.SourceNo, date, item, original.WarehouseId, quantity, -original.Value,
-                valuation, original.SourceLineId, original.Id));
-            results.Add(new StockLineResult(item.Id, item.ItemGroupId, original.WarehouseId, original.SourceLineId, quantity, -original.Value));
+            var mirror = Movement(original.SourceType, original.SourceId, original.SourceNo, date, item, original.WarehouseId, quantity, -original.Value,
+                valuation, original.SourceLineId, original.Id);
+            db.Add(mirror);
+            var batches = await MirrorBatchesAsync(original, mirror, item, allowNegative, ct);
+            results.Add(new StockLineResult(item.Id, item.ItemGroupId, original.WarehouseId, original.SourceLineId, quantity, -original.Value, batches));
         }
         await db.SaveChangesAsync(ct);
         return results;
     }
+
+    public const string NoBatch = "NO-BATCH";
+
+    /// <summary>
+    /// Splits a movement over batches. Receipts go to the given batches (created on first use with their expiry); issues take the
+    /// given batches or, when none are given, the batches that expire first. Expired batches are skipped unless the document may
+    /// issue them (write-offs, returns, quarantine moves) or the user holds <see cref="InventoryPermissions.IssueExpired"/>.
+    /// </summary>
+    private async Task<IReadOnlyList<BatchQuantity>> AllocateBatchesAsync(StockPosting posting, StockLine line, Item item, StockMovement movement,
+        bool allowNegative, CancellationToken ct)
+    {
+        var quantity = Math.Abs(line.Quantity);
+        var given = line.Batches?.Where(b => b.Quantity != 0).ToList() ?? [];
+        if (given.Any(b => b.Quantity < 0 || string.IsNullOrWhiteSpace(b.BatchNo)))
+            throw new BusinessRuleException("inv.batch_values", "Each batch needs a number and a positive quantity.", "تحتاج كل دفعة إلى رقم وكمية موجبة.");
+        if (given.Count > 0 && given.Sum(b => b.Quantity) != quantity)
+            throw new BusinessRuleException("inv.batch_total", $"The batch quantities of {item.Sku} must add up to {quantity:0.######}.",
+                $"يجب أن يساوي مجموع كميات الدفعات للصنف {item.Sku} {quantity:0.######}.");
+
+        var allocation = new List<(Batch Batch, decimal Quantity)>();
+        if (line.Quantity > 0)
+        {
+            if (given.Count == 0) given = [new BatchQuantity(NoBatch, quantity)];
+            foreach (var b in given) allocation.Add((await BatchAsync(item, b.BatchNo.Trim().ToUpperInvariant(), b.ExpiryDate, create: true, ct), b.Quantity));
+        }
+        else
+        {
+            var canIssueExpired = posting.IssueExpired || await permissions.HasAsync(InventoryPermissions.IssueExpired, ct);
+            if (given.Count > 0)
+            {
+                foreach (var b in given)
+                {
+                    var batch = await BatchAsync(item, b.BatchNo.Trim().ToUpperInvariant(), null, create: false, ct);
+                    if (batch.ExpiryDate < posting.Date && !canIssueExpired) throw Expired(item, batch);
+                    var available = (await BatchStockAsync(batch.Id, line.WarehouseId, ct)).Quantity;
+                    if (!allowNegative && available < b.Quantity) throw InsufficientStock(item, available, b.Quantity);
+                    allocation.Add((batch, b.Quantity));
+                }
+            }
+            else
+            {
+                var candidates = await (from s in db.Set<BatchStock>().AsNoTracking()
+                                        join b in db.Set<Batch>() on s.BatchId equals b.Id
+                                        where b.ItemId == item.Id && s.WarehouseId == line.WarehouseId && s.Quantity > 0
+                                        select b).ToListAsync(ct);
+                var remaining = quantity;
+                var skippedExpired = false;
+                foreach (var candidate in candidates.OrderBy(b => b.ExpiryDate ?? DateOnly.MaxValue).ThenBy(b => b.BatchNo))
+                {
+                    if (remaining == 0) break;
+                    if (candidate.ExpiryDate < posting.Date && !canIssueExpired)
+                    {
+                        skippedExpired = true;
+                        continue;
+                    }
+                    var batch = await BatchAsync(item, candidate.BatchNo, null, create: false, ct);
+                    var available = (await BatchStockAsync(batch.Id, line.WarehouseId, ct)).Quantity;
+                    var take = Math.Min(available, remaining);
+                    if (take <= 0) continue;
+                    allocation.Add((batch, take));
+                    remaining -= take;
+                }
+                if (remaining > 0)
+                {
+                    if (skippedExpired && !allowNegative)
+                        throw new BusinessRuleException("inv.batch_expired",
+                            $"Only expired batches of {item.Sku} are left in this warehouse; write them off instead of issuing them.",
+                            $"لم يتبقَّ من الصنف {item.Sku} في هذا المستودع إلا دفعات منتهية الصلاحية؛ قم بشطبها بدلاً من صرفها.");
+                    allocation.Add((await BatchAsync(item, NoBatch, null, create: true, ct), remaining));
+                }
+            }
+        }
+
+        var sign = Math.Sign(line.Quantity);
+        foreach (var (batch, q) in allocation)
+        {
+            (await BatchStockAsync(batch.Id, line.WarehouseId, ct)).Quantity += sign * q;
+            db.Add(new StockMovementBatch { MovementId = movement.Id, BatchId = batch.Id, Quantity = sign * q });
+        }
+        return allocation.Select(a => new BatchQuantity(a.Batch.BatchNo, a.Quantity, a.Batch.ExpiryDate)).ToList();
+    }
+
+    private async Task<IReadOnlyList<BatchQuantity>?> MirrorBatchesAsync(StockMovement original, StockMovement mirror, Item item, bool allowNegative,
+        CancellationToken ct)
+    {
+        if (original.WarehouseId is not { } warehouseId) return null;
+        var parts = await (from p in db.Set<StockMovementBatch>().AsNoTracking()
+                           join b in db.Set<Batch>() on p.BatchId equals b.Id
+                           where p.MovementId == original.Id
+                           select new { p.Quantity, b.BatchNo, b.Id, b.ExpiryDate }).ToListAsync(ct);
+        if (parts.Count == 0) return null;
+        foreach (var p in parts)
+        {
+            var stock = await BatchStockAsync(p.Id, warehouseId, ct);
+            if (!allowNegative && stock.Quantity - p.Quantity < 0) throw InsufficientStock(item, stock.Quantity, p.Quantity);
+            stock.Quantity -= p.Quantity;
+            db.Add(new StockMovementBatch { MovementId = mirror.Id, BatchId = p.Id, Quantity = -p.Quantity });
+        }
+        return parts.Select(p => new BatchQuantity(p.BatchNo, Math.Abs(p.Quantity), p.ExpiryDate)).ToList();
+    }
+
+    private async Task<Batch> BatchAsync(Item item, string batchNo, DateOnly? expiry, bool create, CancellationToken ct)
+    {
+        var batch = db.ChangeTracker.Entries<Batch>().Select(e => e.Entity).FirstOrDefault(b => b.ItemId == item.Id && b.BatchNo == batchNo)
+                    ?? await db.Set<Batch>().SingleOrDefaultAsync(b => b.ItemId == item.Id && b.BatchNo == batchNo, ct);
+        if (batch is null)
+        {
+            if (!create)
+                throw new BusinessRuleException("inv.batch_unknown", $"Batch {batchNo} of {item.Sku} does not exist.", $"الدفعة {batchNo} للصنف {item.Sku} غير موجودة.");
+            batch = new Batch { CompanyId = tenant.RequireCompanyId(), ItemId = item.Id, BatchNo = batchNo, ExpiryDate = expiry };
+            db.Add(batch);
+        }
+        else if (expiry is not null && batch.ExpiryDate != expiry)
+        {
+            if (batch.ExpiryDate is not null)
+                throw new BusinessRuleException("inv.batch_expiry", $"Batch {batchNo} of {item.Sku} already has expiry {batch.ExpiryDate:dd/MM/yyyy}.",
+                    $"الدفعة {batchNo} للصنف {item.Sku} لها تاريخ انتهاء {batch.ExpiryDate:dd/MM/yyyy} مسجل مسبقاً.");
+            batch.ExpiryDate = expiry;
+        }
+        return batch;
+    }
+
+    private async Task<BatchStock> BatchStockAsync(Guid batchId, Guid warehouseId, CancellationToken ct)
+    {
+        var tracked = db.ChangeTracker.Entries<BatchStock>().Select(e => e.Entity).FirstOrDefault(s => s.BatchId == batchId && s.WarehouseId == warehouseId);
+        if (tracked is not null) return tracked;
+        var stock = await db.Set<BatchStock>().SingleOrDefaultAsync(s => s.BatchId == batchId && s.WarehouseId == warehouseId, ct);
+        if (stock is not null) return stock;
+        stock = new BatchStock { BatchId = batchId, WarehouseId = warehouseId };
+        db.Add(stock);
+        return stock;
+    }
+
+    private static BusinessRuleException Expired(Item item, Batch batch) =>
+        new("inv.batch_expired", $"Batch {batch.BatchNo} of {item.Sku} expired on {batch.ExpiryDate:dd/MM/yyyy}.",
+            $"انتهت صلاحية الدفعة {batch.BatchNo} للصنف {item.Sku} في {batch.ExpiryDate:dd/MM/yyyy}.");
 
     private static decimal CurrentAverage(ItemValuation v) => v.Quantity > 0 ? v.Value / v.Quantity : v.AverageCost;
 
@@ -213,7 +354,7 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
         return await (from i in db.Set<Item>().AsNoTracking()
                       join u in db.Set<Uom>() on i.UomId equals u.Id
                       where list.Contains(i.Id) && i.CompanyId == companyId
-                      select new ItemInfo(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType, i.ItemGroupId, u.Code, i.IsActive, i.SalesPrice))
+                      select new ItemInfo(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType, i.ItemGroupId, u.Code, i.IsActive, i.SalesPrice, i.TrackBatches))
             .ToDictionaryAsync(i => i.Id, ct);
     }
 

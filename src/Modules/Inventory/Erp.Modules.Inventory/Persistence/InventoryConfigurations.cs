@@ -131,3 +131,26 @@ internal sealed class ItemUnitConfiguration : IEntityTypeConfiguration<ItemUnit>
         b.Property(x => x.Factor).AsQuantity();
     }
 }
+
+internal sealed class BatchConfiguration : IEntityTypeConfiguration<Batch>
+{
+    public void Configure(EntityTypeBuilder<Batch> b) => b.ToTable("batch", "inv");
+}
+
+internal sealed class BatchStockConfiguration : IEntityTypeConfiguration<BatchStock>
+{
+    public void Configure(EntityTypeBuilder<BatchStock> b)
+    {
+        b.ToTable("batch_stock", "inv");
+        b.Property(x => x.Quantity).AsQuantity();
+    }
+}
+
+internal sealed class StockMovementBatchConfiguration : IEntityTypeConfiguration<StockMovementBatch>
+{
+    public void Configure(EntityTypeBuilder<StockMovementBatch> b)
+    {
+        b.ToTable("stock_movement_batch", "inv");
+        b.Property(x => x.Quantity).AsQuantity();
+    }
+}

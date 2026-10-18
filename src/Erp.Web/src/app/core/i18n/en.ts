@@ -1069,7 +1069,21 @@ export const en = {
   'pr.status.PendingApproval': 'Waiting for approval',
   'pr.status.Approved': 'Approved',
   'pr.status.Ordered': 'Ordered',
-  'pr.status.Cancelled': 'Cancelled'
+  'pr.status.Cancelled': 'Cancelled',
+  'item.trackBatches': 'Track batches and expiry dates',
+  'nav.expiry': 'Expiry report',
+  'batch.title': 'Batches',
+  'batch.no': 'Batch no.',
+  'batch.expiry': 'Expiry',
+  'batch.expired': 'Expired',
+  'batch.daysLeft': '{n} days left',
+  'batch.fefo': 'Earliest expiry',
+  'batch.report': 'Expiry report',
+  'batch.within': 'Expiring within',
+  'batch.days': '{n} days',
+  'batch.noneExpiring': 'No batches expire in this period.',
+  'batch.reportHint': 'Expired batches are never issued to customers automatically. Move them to a quarantine warehouse or write them off with a stock adjustment (reason: Expiry).',
+  'batch.warehouse': 'Warehouse'
 } as const;
 
 export type TranslationKey = keyof typeof en;

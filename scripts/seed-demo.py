@@ -9,6 +9,7 @@ Records are left in different states (draft / pending / posted / paid / reversed
     python scripts/seed-demo.py --finance-only      # add opening balances and a bank statement to reconcile
     python scripts/seed-demo.py --ess-only          # give employee E003 a self-service sign-in
     python scripts/seed-demo.py --approvals-only    # a purchase request and a purchase order waiting for the GM
+    python scripts/seed-demo.py --batches-only      # a batch-tracked item (tile adhesive) with expiring stock
 
 The company is provisioned if it does not exist yet. Run it once per company: business keys (employee numbers,
 SKUs, supplier codes) are unique, so a second run stops at the first duplicate.
@@ -28,6 +29,7 @@ p.add_argument("--api", default="http://localhost:5080")
 p.add_argument("--company", default="demo")
 p.add_argument("--sales-only", action="store_true", help="only add customers, quotations, orders, invoices and receipts")
 p.add_argument("--finance-only", action="store_true", help="only add opening balances and a bank statement to reconcile")
+p.add_argument("--batches-only", action="store_true", help="only add a batch-tracked item with expiring stock")
 p.add_argument("--approvals-only", action="store_true", help="only add a purchase request and an order waiting for approval")
 p.add_argument("--ess-only", action="store_true", help="only give employee E003 a self-service sign-in")
 args = p.parse_args()
@@ -283,6 +285,28 @@ def seed_approvals():
     po = as_user("buyer@demo.qa", big_order)
     print(f"  {po['poNo']} ({po['total']:,.2f} QAR) waits for gm@demo.qa in Approvals")
 
+
+def seed_batches():
+    """Tile adhesive has a shelf life: three batches, one already expired and one expiring this month."""
+    step("Batch-tracked item: tile adhesive with expiring batches")
+    warehouse = next(w["id"] for w in get("/api/inventory/warehouses") if w["code"] == "MAIN")
+    group = get("/api/inventory/item-groups")[0]["id"]
+    bag = next(u["id"] for u in get("/api/inventory/uoms") if u["code"] in ("BAG", "PCS"))
+    adhesive = post("/api/inventory/items", {"sku": "ADH-25", "nameEn": "Tile adhesive 25 kg", "nameAr": "لاصق بلاط 25 كغ", "itemType": "Stock",
+                                             "itemGroupId": group, "uomId": bag, "purchasePrice": 21, "salesPrice": 32, "reorderLevel": 40,
+                                             "trackBatches": True})
+    post("/api/inventory/adjustments", {"warehouseId": warehouse, "date": "2026-10-01", "reason": "Opening", "notes": "Adhesive stock count",
+                                        "lines": [
+                                            {"itemId": adhesive["id"], "quantity": 12, "unitCost": 20, "batchNo": "MPA-2604", "expiryDate": "2026-10-15"},
+                                            {"itemId": adhesive["id"], "quantity": 60, "unitCost": 21, "batchNo": "MPA-2607", "expiryDate": "2026-11-05"},
+                                            {"itemId": adhesive["id"], "quantity": 80, "unitCost": 21, "batchNo": "MPA-2609", "expiryDate": "2027-03-20"}]})
+    print("  ADH-25: batch MPA-2604 expired, MPA-2607 expires in November (see Inventory → Expiry report)")
+
+
+if args.batches_only:
+    seed_batches()
+    print(f"\n✓ Batch example added to '{args.company}'.")
+    sys.exit(0)
 
 if args.approvals_only:
     seed_approvals()
@@ -601,6 +625,7 @@ seed_sales()
 seed_finance()
 seed_ess()
 seed_approvals()
+seed_batches()
 
 print(f"\n✓ Done. Sign in at http://localhost:4200 with company '{args.company}', owner@demo.qa / {PASSWORD}")
 print("  Other users (same password): hr@ payroll@ accounts@ store@ buyer@ gm@ sales@ demo.qa")
