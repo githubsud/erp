@@ -11,10 +11,12 @@ namespace Erp.Modules.Inventory.Documents;
 public sealed record MasterRequest(string Code, string? NameEn, string? NameAr, bool IsActive = true, Guid? BranchId = null);
 
 public sealed record ItemRequest(string Sku, string? NameEn, string? NameAr, ItemType ItemType, Guid ItemGroupId, Guid UomId, string? Barcode,
-    decimal? ReorderLevel, decimal? PurchasePrice, decimal? SalesPrice, string? HsCode, bool IsActive = true, bool TrackBatches = false);
+    decimal? ReorderLevel, decimal? PurchasePrice, decimal? SalesPrice, string? HsCode, bool IsActive = true, bool TrackBatches = false,
+    bool TrackSerials = false);
 
 /// <summary>For batch-tracked items: the batch added to (with its expiry), or taken from (first to expire when omitted).</summary>
-public sealed record AdjustmentLineRequest(Guid ItemId, decimal Quantity, decimal? UnitCost, string? BatchNo = null, DateOnly? ExpiryDate = null);
+public sealed record AdjustmentLineRequest(Guid ItemId, decimal Quantity, decimal? UnitCost, string? BatchNo = null, DateOnly? ExpiryDate = null,
+    IReadOnlyList<string>? Serials = null);
 
 public sealed record AdjustmentRequest(Guid WarehouseId, DateOnly Date, AdjustmentReason Reason, string? Notes, IReadOnlyList<AdjustmentLineRequest> Lines);
 
@@ -120,7 +122,8 @@ internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext ten
                 if (item.ItemType != r.ItemType && await db.Set<StockMovement>().AnyAsync(m => m.ItemId == item.Id, token))
                     throw new BusinessRuleException("inv.item_type_locked", "The item type cannot change once the item has stock movements.",
                         "لا يمكن تغيير نوع الصنف بعد وجود حركات مخزون عليه.");
-                if (item.TrackBatches != r.TrackBatches && await db.Set<ItemValuation>().AnyAsync(v => v.ItemId == item.Id && v.Quantity != 0, token))
+                if ((item.TrackBatches != (r.TrackBatches || r.TrackSerials) || item.TrackSerials != r.TrackSerials)
+                    && await db.Set<ItemValuation>().AnyAsync(v => v.ItemId == item.Id && v.Quantity != 0, token))
                     throw new BusinessRuleException("inv.batches_locked", "Batch tracking can only be switched while the item has no stock.",
                         "لا يمكن تغيير تتبع الدفعات إلا عندما يكون رصيد الصنف صفراً.");
             }
@@ -135,7 +138,8 @@ internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext ten
             item.PurchasePrice = r.PurchasePrice;
             item.SalesPrice = r.SalesPrice;
             item.HsCode = string.IsNullOrWhiteSpace(r.HsCode) ? null : r.HsCode.Trim();
-            item.TrackBatches = r.ItemType == ItemType.Stock && r.TrackBatches;
+            item.TrackSerials = r.ItemType == ItemType.Stock && r.TrackSerials;
+            item.TrackBatches = item.TrackSerials || (r.ItemType == ItemType.Stock && r.TrackBatches);
             item.IsActive = r.IsActive;
             await db.SaveChangesAsync(token);
             return item;
@@ -189,7 +193,8 @@ internal sealed class StockAdjustmentService(ErpDbContext db, ITenantContext ten
             var ordered = adjustment.Lines.OrderBy(l => l.LineNo).ToList();
             var results = await stock.PostAsync(new StockPosting(SourceType, adjustment.Id, adjustment.AdjustmentNo, r.Date,
                 ordered.Select((l, i) => new StockLine(l.ItemId, r.WarehouseId, l.Quantity, l.UnitCost, l.Id,
-                    Batches: string.IsNullOrWhiteSpace(requested[i].BatchNo) ? null : [new BatchQuantity(requested[i].BatchNo!, Math.Abs(l.Quantity), requested[i].ExpiryDate)]))
+                    Batches: Serials.AsBatches(requested[i].Serials)
+                             ?? (string.IsNullOrWhiteSpace(requested[i].BatchNo) ? null : [new BatchQuantity(requested[i].BatchNo!, Math.Abs(l.Quantity), requested[i].ExpiryDate)])))
                     .ToList(), IssueExpired: true), token);
             foreach (var result in results) adjustment.Lines.Single(l => l.Id == result.SourceLineId).Value = result.Value;
             adjustment.TotalValue = results.Sum(x => x.Value);

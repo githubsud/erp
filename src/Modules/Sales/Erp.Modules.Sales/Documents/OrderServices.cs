@@ -24,7 +24,8 @@ public sealed record ConvertQuotationRequest(Guid WarehouseId, DateOnly? OrderDa
 public sealed record SalesOrderRequest(Guid CustomerId, DateOnly OrderDate, DateOnly? ExpectedDate, Guid WarehouseId, string? CustomerRef, string? Notes,
     IReadOnlyList<SalesLineRequest> Lines, string? Currency = null, decimal? ExchangeRate = null);
 
-public sealed record DeliveryLineRequest(Guid SalesOrderLineId, decimal Quantity);
+/// <summary><see cref="Serials"/>: the units handed over, for serial-numbered items (otherwise taken in serial order).</summary>
+public sealed record DeliveryLineRequest(Guid SalesOrderLineId, decimal Quantity, IReadOnlyList<string>? Serials = null);
 
 public sealed record DeliveryRequest(Guid SalesOrderId, DateOnly DeliveryDate, Guid? WarehouseId, string? DeliveryAddress, string? VehicleNo, string? Notes,
     IReadOnlyList<DeliveryLineRequest> Lines);
@@ -348,7 +349,8 @@ internal sealed class DeliveryNoteService(ErpDbContext db, ITenantContext tenant
             db.Add(note);
 
             var results = await stock.PostAsync(new StockPosting(SourceType, note.Id, note.DnNo, r.DeliveryDate,
-                note.Lines.Select(l => new StockLine(l.ItemId, warehouseId, -l.Quantity, SourceLineId: l.Id)).ToList()), token);
+                note.Lines.OrderBy(l => l.LineNo).Select((l, i) => new StockLine(l.ItemId, warehouseId, -l.Quantity, SourceLineId: l.Id,
+                    Batches: Serials.AsBatches(r.Lines[i].Serials))).ToList()), token);
             var builder = new PostingBuilder();
             foreach (var x in results)
             {

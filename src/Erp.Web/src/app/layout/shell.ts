@@ -77,6 +77,7 @@ const NAV: NavGroup[] = [
       { icon: 'category', label: 'nav.items', link: '/inventory/items', permission: 'inv.items:read' },
       { icon: 'warehouse', label: 'nav.stock', link: '/inventory/stock', permission: 'inv.items:read' },
       { icon: 'event_busy', label: 'nav.expiry', link: '/inventory/expiry', permission: 'inv.items:read' },
+      { icon: 'qr_code_scanner', label: 'nav.serials', link: '/inventory/serials', permission: 'inv.items:read' },
       { icon: 'tune', label: 'nav.adjustments', link: '/inventory/adjustments', permission: 'inv.items:read' },
       { icon: 'swap_horiz', label: 'nav.transfers', link: '/inventory/transfers', permission: 'inv.items:read' },
       { icon: 'fact_check', label: 'nav.counts', link: '/inventory/counts', permission: 'inv.items:read' },

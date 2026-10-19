@@ -1,4 +1,5 @@
 import { ItemBatches } from './batches';
+import { ItemBins, ItemSerials } from './serials';
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { FormControl, Validators } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
@@ -25,7 +26,7 @@ export const SOURCE_LABELS: Record<string, string> = {
 
 @Component({
   selector: 'app-item-detail',
-  imports: [...SHARED, ItemBatches],
+  imports: [...SHARED, ItemBatches, ItemBins, ItemSerials],
   template: `
     @if (item(); as i) {
       <div class="page-header">
@@ -53,7 +54,16 @@ export const SOURCE_LABELS: Record<string, string> = {
         </mat-card>
       </div>
 
-      @if (i.trackBatches) {
+      <mat-card appearance="outlined" class="form-card units">
+        <div class="section-title">{{ 'bin.title' | t }}</div>
+        <app-item-bins [itemId]="i.id" />
+      </mat-card>
+      @if (i.trackSerials) {
+        <mat-card appearance="outlined" class="form-card units">
+          <div class="section-title">{{ 'serial.onHand' | t }}</div>
+          <app-item-serials [itemId]="i.id" />
+        </mat-card>
+      } @else if (i.trackBatches) {
         <mat-card appearance="outlined" class="form-card units">
           <div class="section-title">{{ 'batch.title' | t }}</div>
           <app-item-batches [itemId]="i.id" />

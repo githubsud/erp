@@ -28,5 +28,9 @@ public sealed class InventoryModule : IModule
         services.AddSingleton<IPermissionProvider, InventoryPermissionProvider>();
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder app) => InventoryEndpoints.Map(app);
+    public void MapEndpoints(IEndpointRouteBuilder app)
+    {
+        InventoryEndpoints.Map(app);
+        SerialAndBinEndpoints.Map(app);
+    }
 }

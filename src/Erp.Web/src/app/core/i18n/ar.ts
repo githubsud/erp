@@ -1601,5 +1601,15 @@ export const ar: Record<TranslationKey, string> = {
   'src.remaining': 'المتبقي',
   'src.releaseQty': 'اطلب الآن',
   'src.release': 'إصدار أمر شراء',
-  'src.releases': 'أوامر الشراء الصادرة'
+  'src.releases': 'أوامر الشراء الصادرة',
+  'nav.serials': 'الأرقام التسلسلية',
+  'item.trackSerials': 'تتبع الأرقام التسلسلية',
+  'serial.title': 'البحث برقم تسلسلي',
+  'serial.no': 'الرقم التسلسلي',
+  'serial.enter': 'الأرقام التسلسلية مفصولة بفواصل',
+  'serial.onHand': 'الأرقام التسلسلية في المخزون',
+  'serial.inStock': 'في المخزون',
+  'serial.out': 'خارج المخزون',
+  'serial.document': 'المستند',
+  'bin.title': 'مواقع التخزين'
 };

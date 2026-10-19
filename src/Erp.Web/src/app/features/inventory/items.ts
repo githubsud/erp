@@ -73,6 +73,7 @@ import { SHARED } from '../../shared/shared';
         </mat-form-field>
         @if (form.value.itemType === 'Stock') {
           <mat-slide-toggle formControlName="trackBatches">{{ 'item.trackBatches' | t }}</mat-slide-toggle>
+          <mat-slide-toggle formControlName="trackSerials">{{ 'item.trackSerials' | t }}</mat-slide-toggle>
         }
         <mat-slide-toggle formControlName="isActive">{{ 'item.active' | t }}</mat-slide-toggle>
       </form>
@@ -104,7 +105,8 @@ export class ItemDialog {
     salesPrice: [this.data.item?.salesPrice ?? (null as number | null)],
     hsCode: [this.data.item?.hsCode ?? ''],
     isActive: [this.data.item?.isActive ?? true],
-    trackBatches: [this.data.item?.trackBatches ?? false]
+    trackBatches: [this.data.item?.trackBatches ?? false],
+    trackSerials: [this.data.item?.trackSerials ?? false]
   });
 
   constructor() {

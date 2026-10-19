@@ -140,6 +140,7 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant, IPermi
     {
         var quantity = Math.Abs(line.Quantity);
         var given = line.Batches?.Where(b => b.Quantity != 0).ToList() ?? [];
+        if (item.TrackSerials) await CheckSerialsAsync(line, item, given, ct);
         if (given.Any(b => b.Quantity < 0 || string.IsNullOrWhiteSpace(b.BatchNo)))
             throw new BusinessRuleException("inv.batch_values", "Each batch needs a number and a positive quantity.", "تحتاج كل دفعة إلى رقم وكمية موجبة.");
         if (given.Count > 0 && given.Sum(b => b.Quantity) != quantity)
@@ -189,6 +190,7 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant, IPermi
                     allocation.Add((batch, take));
                     remaining -= take;
                 }
+                if (remaining > 0 && item.TrackSerials) throw InsufficientStock(item, quantity - remaining, quantity);
                 if (remaining > 0)
                 {
                     if (skippedExpired && !allowNegative)
@@ -207,6 +209,44 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant, IPermi
             db.Add(new StockMovementBatch { MovementId = movement.Id, BatchId = batch.Id, Quantity = sign * q });
         }
         return allocation.Select(a => new BatchQuantity(a.Batch.BatchNo, a.Quantity, a.Batch.ExpiryDate)).ToList();
+    }
+
+    /// <summary>
+    /// Serial-numbered items move in whole units, one unit per serial. A received serial must not already be in stock; an issued one must
+    /// be in this warehouse. Issues without serials take the units in serial order.
+    /// </summary>
+    private async Task CheckSerialsAsync(StockLine line, Item item, List<BatchQuantity> given, CancellationToken ct)
+    {
+        var quantity = Math.Abs(line.Quantity);
+        if (quantity != decimal.Truncate(quantity))
+            throw new BusinessRuleException("inv.serial_whole", $"{item.Sku} is counted by serial number: use whole units.", $"الصنف {item.Sku} يُتتبع بالرقم التسلسلي: استخدم وحدات كاملة.");
+        if (given.Any(b => b.Quantity != 1 || b.BatchNo.Trim().ToUpperInvariant() == NoBatch)
+            || given.Select(b => b.BatchNo.Trim().ToUpperInvariant()).Distinct().Count() != given.Count)
+            throw new BusinessRuleException("inv.serial_values", "Enter each serial number once.", "أدخل كل رقم تسلسلي مرة واحدة.");
+        if (line.Quantity > 0)
+        {
+            if (given.Count != quantity)
+                throw new BusinessRuleException("inv.serials_required", $"Enter {quantity:0} serial number(s) for {item.Sku}.",
+                    $"أدخل {quantity:0} رقم تسلسلي للصنف {item.Sku}.");
+            var numbers = given.Select(b => b.BatchNo.Trim().ToUpperInvariant()).ToList();
+            var inStock = await (from s in db.Set<BatchStock>().AsNoTracking()
+                                 join b in db.Set<Batch>() on s.BatchId equals b.Id
+                                 where b.ItemId == item.Id && numbers.Contains(b.BatchNo) && s.Quantity > 0
+                                 select b.BatchNo).FirstOrDefaultAsync(ct);
+            if (inStock is not null)
+                throw new BusinessRuleException("inv.serial_in_stock", $"Serial {inStock} of {item.Sku} is already in stock.", $"الرقم التسلسلي {inStock} للصنف {item.Sku} موجود في المخزون.");
+        }
+        else if (given.Count > 0)
+        {
+            // Even where negative stock is allowed, a serial can only leave the warehouse that holds it.
+            var numbers = given.Select(b => b.BatchNo.Trim().ToUpperInvariant()).ToList();
+            var here = await (from s in db.Set<BatchStock>().AsNoTracking()
+                              join b in db.Set<Batch>() on s.BatchId equals b.Id
+                              where b.ItemId == item.Id && numbers.Contains(b.BatchNo) && s.WarehouseId == line.WarehouseId && s.Quantity > 0
+                              select b.BatchNo).ToListAsync(ct);
+            var missing = numbers.Except(here).FirstOrDefault();
+            if (missing is not null) throw InsufficientStock(item, 0, 1);
+        }
     }
 
     private async Task<IReadOnlyList<BatchQuantity>?> MirrorBatchesAsync(StockMovement original, StockMovement mirror, Item item, bool allowNegative,
@@ -354,7 +394,7 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
         return await (from i in db.Set<Item>().AsNoTracking()
                       join u in db.Set<Uom>() on i.UomId equals u.Id
                       where list.Contains(i.Id) && i.CompanyId == companyId
-                      select new ItemInfo(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType, i.ItemGroupId, u.Code, i.IsActive, i.SalesPrice, i.TrackBatches))
+                      select new ItemInfo(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType, i.ItemGroupId, u.Code, i.IsActive, i.SalesPrice, i.TrackBatches, i.TrackSerials))
             .ToDictionaryAsync(i => i.Id, ct);
     }
 

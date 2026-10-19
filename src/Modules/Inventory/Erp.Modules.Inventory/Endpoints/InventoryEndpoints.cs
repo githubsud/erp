@@ -17,7 +17,7 @@ public sealed record MasterDto(Guid Id, string Code, string NameEn, string NameA
 
 public sealed record ItemDto(Guid Id, string Sku, string NameEn, string NameAr, string ItemType, Guid ItemGroupId, Guid UomId, string UomCode,
     string? Barcode, decimal? ReorderLevel, decimal? PurchasePrice, decimal? SalesPrice, string? HsCode, bool IsActive,
-    decimal QuantityOnHand, decimal AverageCost, decimal StockValue, bool TrackBatches = false);
+    decimal QuantityOnHand, decimal AverageCost, decimal StockValue, bool TrackBatches = false, bool TrackSerials = false);
 
 public sealed record BatchRow(Guid BatchId, Guid ItemId, string Sku, string NameEn, string NameAr, string BatchNo, DateOnly? ExpiryDate, Guid WarehouseId,
     string WarehouseCode, decimal Quantity, int? DaysLeft);
@@ -215,7 +215,7 @@ internal static class InventoryEndpoints
         orderby i.Sku
         select new ItemDto(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType.ToString(), i.ItemGroupId, i.UomId, u.Code, i.Barcode, i.ReorderLevel,
             i.PurchasePrice, i.SalesPrice, i.HsCode, i.IsActive, v == null ? 0 : v.Quantity, v == null ? 0 : v.AverageCost, v == null ? 0 : v.Value,
-            i.TrackBatches);
+            i.TrackBatches, i.TrackSerials);
 
     private static async Task<PagedResult<ItemDto>> ListItems(ErpDbContext db, ITenantContext t, CancellationToken ct, string? search = null,
         string? type = null, Guid? groupId = null, bool? active = null, int page = 1, int pageSize = 50)

@@ -11,6 +11,7 @@ import { TradeApi } from '../../core/trade.api';
 import { CURRENCIES, GoodsReceipt, Item, ItemUnit, Master, OrderStatus, PurchaseOrder, Supplier } from '../../core/trade.models';
 import { ApprovalDecisionDialog, ApprovalTrail } from '../../shared/approvals';
 import { ConfirmDialog, ReverseDialog, ReverseResult } from '../../shared/dialogs';
+import { splitSerials } from '../inventory/stock-documents';
 import { SHARED } from '../../shared/shared';
 
 export const ORDER_STATUSES: OrderStatus[] = ['Draft', 'PendingApproval', 'Approved', 'PartiallyReceived', 'Received', 'Closed', 'Cancelled'];
@@ -347,8 +348,9 @@ export class OrderFormPage implements OnInit {
               <td class="num ltr">{{ l.quantity - l.quantityReceived }}</td>
               <td class="narrow"><mat-form-field><input matInput type="number" min="0" [max]="l.quantity - l.quantityReceived" [formControl]="qty[l.id]" dir="ltr" /></mat-form-field></td>
               @if (anyBatches()) {
-                <td class="narrow">@if (tracked().has(l.itemId)) { <mat-form-field><input matInput [formControl]="batch[l.id]" dir="ltr" /></mat-form-field> }</td>
-                <td class="narrow">@if (tracked().has(l.itemId)) { <mat-form-field><input matInput type="date" [formControl]="expiry[l.id]" dir="ltr" /></mat-form-field> }</td>
+                <td class="narrow">@if (tracked().has(l.itemId)) { <mat-form-field><input matInput [formControl]="batch[l.id]" dir="ltr"
+                  [placeholder]="(serialItems().has(l.itemId) ? 'serial.enter' : '') | t" /></mat-form-field> }</td>
+                <td class="narrow">@if (tracked().has(l.itemId) && !serialItems().has(l.itemId)) { <mat-form-field><input matInput type="date" [formControl]="expiry[l.id]" dir="ltr" /></mat-form-field> }</td>
               }
             </tr>
           }
@@ -376,14 +378,17 @@ export class ReceiveDialog {
   /** Items of the order that are tracked by batch (they need a batch number when received). */
   protected readonly tracked = signal(new Set<string>());
   protected readonly anyBatches = computed(() => this.tracked().size > 0);
+  protected readonly serialItems = signal(new Set<string>());
   protected readonly form = inject(FormBuilder).nonNullable.group({
     receiptDate: [todayIso(), Validators.required],
     supplierDeliveryNote: ['']
   });
 
   constructor() {
-    this.trade.items({ type: 'Stock', active: true, pageSize: 500 }).subscribe((r) =>
-      this.tracked.set(new Set(r.items.filter((i) => i.trackBatches).map((i) => i.id))));
+    this.trade.items({ type: 'Stock', active: true, pageSize: 500 }).subscribe((r) => {
+      this.tracked.set(new Set(r.items.filter((i) => i.trackBatches).map((i) => i.id)));
+      this.serialItems.set(new Set(r.items.filter((i) => i.trackSerials).map((i) => i.id)));
+    });
   }
 
   protected anything(): boolean {
@@ -398,7 +403,9 @@ export class ReceiveDialog {
         ...this.form.getRawValue(),
         lines: this.open.filter((l) => Number(this.qty[l.id].value) > 0).map((l) => ({
           purchaseOrderLineId: l.id, quantity: Number(this.qty[l.id].value),
-          batchNo: this.batch[l.id].value.trim() || null, expiryDate: this.expiry[l.id].value || null
+          ...(this.serialItems().has(l.itemId)
+            ? { serials: splitSerials(this.batch[l.id].value) }
+            : { batchNo: this.batch[l.id].value.trim() || null, expiryDate: this.expiry[l.id].value || null })
         }))
       })
       .subscribe({

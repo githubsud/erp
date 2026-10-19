@@ -76,6 +76,12 @@ abstract class StockDocumentPage {
   }
 }
 
+/** Serial numbers typed or scanned into one box: separated by commas, spaces or new lines. */
+export function splitSerials(text: string): string[] | null {
+  const list = text.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => x);
+  return list.length ? list : null;
+}
+
 @Component({
   selector: 'app-adjustments',
   imports: [...SHARED],
@@ -129,8 +135,9 @@ abstract class StockDocumentPage {
                 <td class="narrow"><mat-form-field><input matInput type="number" formControlName="quantity" dir="ltr" /></mat-form-field></td>
                 <td class="narrow"><mat-form-field><input matInput type="number" min="0" formControlName="unitCost" dir="ltr" /></mat-form-field></td>
                 <td class="narrow">@if (item(line.value.itemId ?? '')?.trackBatches) {
-                  <mat-form-field><input matInput formControlName="batchNo" dir="ltr" [placeholder]="(Number(line.value.quantity) < 0 ? 'batch.fefo' : '') | t" /></mat-form-field> }</td>
-                <td class="narrow">@if (item(line.value.itemId ?? '')?.trackBatches && Number(line.value.quantity) > 0) {
+                  <mat-form-field><input matInput formControlName="batchNo" dir="ltr"
+                    [placeholder]="(item(line.value.itemId ?? '')?.trackSerials ? 'serial.enter' : Number(line.value.quantity) < 0 ? 'batch.fefo' : '') | t" /></mat-form-field> }</td>
+                <td class="narrow">@if (item(line.value.itemId ?? '')?.trackBatches && !item(line.value.itemId ?? '')?.trackSerials && Number(line.value.quantity) > 0) {
                   <mat-form-field><input matInput type="date" formControlName="expiryDate" dir="ltr" /></mat-form-field> }</td>
                 <td><button mat-icon-button type="button" (click)="removeLine(i)" [disabled]="lines.length === 1"><mat-icon>delete</mat-icon></button></td>
               </tr>
@@ -246,7 +253,9 @@ export class AdjustmentsPage extends StockDocumentPage {
           itemId: l.itemId,
           quantity: Number(l.quantity),
           unitCost: Number(l.quantity) > 0 && l.unitCost !== null ? Number(l.unitCost) : null,
-          batchNo: l.batchNo.trim() || null,
+          ...(this.item(l.itemId ?? '')?.trackSerials
+            ? { batchNo: null, serials: splitSerials(l.batchNo) }
+            : { batchNo: l.batchNo.trim() || null }),
           expiryDate: Number(l.quantity) > 0 && l.expiryDate ? l.expiryDate : null
         }))
       })

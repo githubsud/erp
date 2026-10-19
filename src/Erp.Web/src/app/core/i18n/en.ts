@@ -1599,7 +1599,17 @@ export const en = {
   'src.remaining': 'Remaining',
   'src.releaseQty': 'Order now',
   'src.release': 'Release order',
-  'src.releases': 'Release orders'
+  'src.releases': 'Release orders',
+  'nav.serials': 'Serial numbers',
+  'item.trackSerials': 'Track serial numbers',
+  'serial.title': 'Serial number lookup',
+  'serial.no': 'Serial number',
+  'serial.enter': 'Serial numbers, separated by commas',
+  'serial.onHand': 'Serial numbers in stock',
+  'serial.inStock': 'In stock',
+  'serial.out': 'Not in stock',
+  'serial.document': 'Document',
+  'bin.title': 'Bin locations'
 } as const;
 
 export type TranslationKey = keyof typeof en;

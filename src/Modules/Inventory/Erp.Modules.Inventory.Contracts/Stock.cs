@@ -4,7 +4,14 @@ namespace Erp.Modules.Inventory.Contracts;
 public enum ItemType { Stock, Service }
 
 public sealed record ItemInfo(Guid Id, string Sku, string NameEn, string NameAr, ItemType Type, Guid ItemGroupId, string UomCode, bool IsActive,
-    decimal? SalesPrice = null, bool TrackBatches = false);
+    decimal? SalesPrice = null, bool TrackBatches = false, bool TrackSerials = false);
+
+public static class Serials
+{
+    /// <summary>One batch of quantity 1 per serial number.</summary>
+    public static IReadOnlyList<BatchQuantity>? AsBatches(IReadOnlyList<string>? serials) =>
+        serials is { Count: > 0 } ? serials.Select(s => new BatchQuantity(s, 1m)).ToList() : null;
+}
 
 /// <summary>Part of a movement in one batch. <see cref="Quantity"/> is positive (base unit); expiry is given when receiving a new batch.</summary>
 public sealed record BatchQuantity(string BatchNo, decimal Quantity, DateOnly? ExpiryDate = null);

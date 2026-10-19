@@ -55,6 +55,9 @@ public sealed class Item : TenantEntity
 
     /// <summary>Quantities are kept per batch with an expiry date (food, chemicals, medicines).</summary>
     public bool TrackBatches { get; set; }
+
+    /// <summary>Each unit has its own serial number (phones, laptops, machines). Serials are kept as one-unit batches.</summary>
+    public bool TrackSerials { get; set; }
     public bool IsActive { get; set; } = true;
     public uint Version { get; set; }
 }
