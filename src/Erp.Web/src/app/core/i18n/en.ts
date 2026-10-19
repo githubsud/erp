@@ -1882,7 +1882,9 @@ export const en = {
   'sl.status.Done': 'Done',
   'sl.status.Cancelled': 'Cancelled',
   'sl.status.NoShow': 'No-show',
-  'sl.msg.reminder': 'Hello {name}, a reminder of your appointment today at {time}. See you soon!'
+  'sl.msg.reminder': 'Hello {name}, a reminder of your appointment today at {time}. See you soon!',
+  'pos.onAccount': 'Sell on account',
+  'pos.onAccountDone': 'Added to the customer\'s account.'
 } as const;
 
 export type TranslationKey = keyof typeof en;

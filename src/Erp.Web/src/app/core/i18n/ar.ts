@@ -1884,5 +1884,7 @@ export const ar: Record<TranslationKey, string> = {
   'sl.status.Done': 'تم',
   'sl.status.Cancelled': 'ملغى',
   'sl.status.NoShow': 'لم تحضر',
-  'sl.msg.reminder': 'مرحباً {name}، نذكّرك بموعدك اليوم الساعة {time}. بانتظارك!'
+  'sl.msg.reminder': 'مرحباً {name}، نذكّرك بموعدك اليوم الساعة {time}. بانتظارك!',
+  'pos.onAccount': 'بيع بالآجل',
+  'pos.onAccountDone': 'أُضيف إلى حساب العميل.'
 };

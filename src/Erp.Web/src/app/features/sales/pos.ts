@@ -240,6 +240,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
               @else { <span>{{ 'pos.change' | t }}</span><span class="ltr">{{ change_() | money }}</span> }
             </div>
             <button mat-flat-button class="pay-btn" [disabled]="!cart().length || due() > 0 || busy()" (click)="pay()">{{ 'pos.pay' | t }}</button>
+            <button mat-stroked-button class="account-btn" [disabled]="!cart().length || busy()" (click)="onAccount()"><mat-icon>menu_book</mat-icon> {{ 'pos.onAccount' | t }}</button>
             @if (last(); as s) {
               <div class="last">
                 <span>{{ 'pos.lastReceipt' | t }}: <b class="ltr">{{ s.receiptNo }}</b></span>
@@ -283,6 +284,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
     .pay mat-form-field { flex: 1; }
     .quick { display: flex; flex-wrap: wrap; gap: 4px; }
     .pay-btn { width: 100%; height: 56px; font-size: 1.2rem; }
+    .account-btn { width: 100%; margin-top: 8px; }
     .last { display: flex; align-items: center; justify-content: space-between; margin-block-start: 8px; }
     .failed { color: var(--mat-sys-error); }
   `
@@ -417,6 +419,30 @@ export class PosPage implements OnInit, OnDestroy {
 
   protected cashGiven(n: number): void {
     this.cash.setValue(n);
+  }
+
+  /** A regular customer takes the goods now and pays later (needs a connection: it becomes a sales invoice). */
+  protected onAccount(): void {
+    const shift = this.shift();
+    if (!shift) return;
+    this.dialog.open(CustomerPickDialog, { width: '420px' }).afterClosed().pipe(filter((c): c is { id: string; nameEn: string } => !!c)).subscribe((customer) => {
+      this.busy.set(true);
+      this.api.post<Sale>('sales/pos/sales', {
+        clientId: crypto.randomUUID(), shiftId: shift.id, soldAt: new Date().toISOString(), cash: 0, card: 0, customerId: customer.id,
+        customerName: customer.nameEn, customerPhone: null,
+        lines: this.cart().map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: l.item.salesPrice, discountPercent: l.discountPercent }))
+      }).subscribe({
+        next: (s) => {
+          this.busy.set(false);
+          this.done(s);
+          this.notify.success('pos.onAccountDone');
+        },
+        error: (e) => {
+          this.busy.set(false);
+          this.notify.error(e);
+        }
+      });
+    });
   }
 
   protected pay(): void {
@@ -868,5 +894,36 @@ class RegisterDialog implements OnInit {
       next: () => this.ref.close(true),
       error: (e) => this.notify.error(e)
     });
+  }
+}
+
+/** Finds a customer (name, code or phone) for a sale on account. */
+@Component({
+  selector: 'app-pos-customer-pick',
+  imports: [...SHARED],
+  template: `
+    <h2 mat-dialog-title>{{ 'pos.onAccount' | t }}</h2>
+    <mat-dialog-content>
+      <mat-form-field class="full"><mat-label>{{ 'app.search' | t }}</mat-label>
+        <input matInput [formControl]="search" (keydown.enter)="find()" (input)="find()" autocomplete="off" /></mat-form-field>
+      @for (c of results(); track c.id) {
+        <button mat-button class="full row" (click)="ref.close(c)"><span>{{ c | bi }}</span> <span class="ltr secondary">{{ c.code }} {{ c.phone }}</span></button>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end"><button mat-button mat-dialog-close>{{ 'app.cancel' | t }}</button></mat-dialog-actions>
+  `,
+  styles: `.full { width: 100%; } .row { justify-content: space-between; display: flex; } .secondary { color: var(--mat-sys-on-surface-variant); font-size: 12px; }`
+})
+class CustomerPickDialog {
+  private readonly api = inject(ApiService);
+  protected readonly ref = inject(MatDialogRef<CustomerPickDialog>);
+  protected readonly search = new FormControl('', { nonNullable: true });
+  protected readonly results = signal<{ id: string; code: string; nameEn: string; nameAr: string; phone: string | null }[]>([]);
+
+  protected find(): void {
+    const q = this.search.value.trim();
+    if (q.length < 2) return;
+    this.api.get<{ id: string; code: string; nameEn: string; nameAr: string; phone: string | null; isActive: boolean }[]>('sales/customers', { search: q })
+      .subscribe((r) => this.results.set(r.filter((c) => c.isActive).slice(0, 15)));
   }
 }

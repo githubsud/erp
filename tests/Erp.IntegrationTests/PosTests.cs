@@ -110,4 +110,54 @@ public sealed class PosTests(ErpFixture fixture)
         var valuation = await c.GetAsync<InventoryTests.Valuation>($"/api/inventory/reports/valuation?asOf={Today:yyyy-MM-dd}");
         valuation.Difference.ShouldBe(0m);
     }
+
+    [Fact]
+    public async Task A_regular_customer_can_buy_on_account_at_the_till_and_it_shows_in_their_receivables()
+    {
+        var t = await fixture.CreateTenantAsync();
+        var c = t.Client;
+        var accounts = await c.GetAsync<List<FinanceTests.Account>>("/api/finance/accounts");
+        Guid A(string code) => accounts.Single(a => a.Code == code).Id;
+        var (main, group, pcs) = await InventoryTests.DefaultsAsync(c);
+        var rice = (await c.PostAsync<InventoryTests.Item>("/api/inventory/items", new
+        {
+            sku = "RICE5", nameEn = "Basmati rice 5 kg", nameAr = "أرز بسمتي 5 كغ", itemType = "Stock", itemGroupId = group, uomId = pcs, salesPrice = 45m
+        })).Id;
+        (await c.PostJsonAsync("/api/inventory/adjustments", new
+        {
+            warehouseId = main, date = Today, reason = "Opening", lines = new[] { new { itemId = rice, quantity = 20m, unitCost = 30m } }
+        })).EnsureSuccessStatusCode();
+        var customer = (await c.PostAsync<JsonElement>("/api/sales/customers", new
+        {
+            code = "ABU-ALI", nameEn = "Abu Ali (villa 12)", nameAr = "أبو علي (فيلا 12)", phone = "55667788", paymentTermsDays = 30, creditLimit = 1000m
+        })).GetProperty("id").GetGuid();
+        var register = await c.PostAsync<Guid>("/api/sales/pos/registers", new
+        {
+            code = "T1", nameEn = "Till", nameAr = "صندوق", warehouseId = main, cashAccountId = A("1110"), cardAccountId = A("1115")
+        });
+        var shift = await c.PostAsync<Shift>("/api/sales/pos/shifts", new { registerId = register, openingFloat = 100m });
+
+        (await (await c.PostJsonAsync("/api/sales/pos/sales", new
+        {
+            clientId = Guid.NewGuid(), shiftId = shift.Id, customerId = customer, lines = new[] { new { itemId = rice, quantity = 2m } }, cash = 10m, card = 0m
+        })).ProblemAsync()).GetProperty("code").GetString().ShouldBe("sal.pos_account_split");
+        var sale = await c.PostAsync<Sale>("/api/sales/pos/sales", new
+        {
+            clientId = Guid.NewGuid(), shiftId = shift.Id, customerId = customer, lines = new[] { new { itemId = rice, quantity = 2m } }, cash = 0m, card = 0m
+        });
+        sale.Total.ShouldBe(90m);
+
+        var aging = await c.GetAsync<JsonElement>($"/api/sales/reports/aging?asOf={Today:yyyy-MM-dd}");
+        aging.GetProperty("total").GetDecimal().ShouldBe(90m);
+        aging.GetProperty("ledgerBalance").GetDecimal().ShouldBe(90m);
+        (await (await c.PostJsonAsync("/api/sales/pos/refunds", new
+        {
+            clientId = Guid.NewGuid(), shiftId = shift.Id, saleId = sale.Id, lines = new[] { new { saleLineId = sale.Lines[0].Id, quantity = 1m } }
+        })).ProblemAsync()).GetProperty("code").GetString().ShouldBe("sal.pos_account_refund");
+
+        var z = await c.PostAsync<JsonElement>($"/api/sales/pos/shifts/{shift.Id}/close", new { countedCash = 100m });
+        z.GetProperty("difference").GetDecimal().ShouldBe(0m);
+        z.GetProperty("onAccountSales").GetDecimal().ShouldBe(90m);
+        (await c.GetAsync<InventoryTests.Valuation>($"/api/inventory/reports/valuation?asOf={Today:yyyy-MM-dd}")).Difference.ShouldBe(0m);
+    }
 }
