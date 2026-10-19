@@ -14,6 +14,7 @@ public static class HrPermissions
     public const string ContractsManage = "hr.contracts:manage";
     public const string DocumentsManage = "hr.documents:manage";
     public const string LeaveManage = "hr.leave:manage";
+    public const string RostersManage = "hr.rosters:manage";
     public const string LeaveApprove = "hr.leave:approve";
     public const string PayrollRead = "hr.payroll:read";
     public const string PayrollPrepare = "hr.payroll:prepare";
@@ -35,6 +36,7 @@ internal sealed class HrPermissionProvider : IPermissionProvider
         new(HrPermissions.ContractsManage, "Manage employment contracts", "إدارة عقود العمل", HrManager),
         new(HrPermissions.DocumentsManage, "Manage employee and company documents", "إدارة مستندات الموظفين والشركة", HrManager, PayrollOfficer),
         new(HrPermissions.LeaveManage, "Record leave requests", "تسجيل طلبات الإجازة", HrManager, PayrollOfficer),
+        new(HrPermissions.RostersManage, "Plan shifts and rosters", "تخطيط الورديات وجداول العمل", HrManager, PayrollOfficer),
         new(HrPermissions.LeaveApprove, "Approve leave", "اعتماد الإجازات", HrManager, GeneralManager),
         new(HrPermissions.PayrollRead, "View payroll", "عرض الرواتب", HrManager, PayrollOfficer, GeneralManager, Accountant, Auditor),
         new(HrPermissions.PayrollPrepare, "Prepare and calculate payroll", "إعداد واحتساب الرواتب", HrManager, PayrollOfficer),

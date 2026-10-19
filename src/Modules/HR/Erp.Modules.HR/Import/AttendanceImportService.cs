@@ -56,6 +56,8 @@ internal sealed class AttendanceImportService(ErpDbContext db, ITenantContext te
                 .Select(r => new { r.Year, r.Month }).ToListAsync(ct))
             .Select(r => (r.Year, r.Month)).ToHashSet();
 
+        var restDays = days.Count == 0 ? [] : await Rosters.RosterService.RestDaysAsync(db, employees.Values.Select(e => e.Id).ToList(),
+            days.Min(d => d.Date), days.Max(d => d.Date), ct);
         var valid = new List<(Day Day, Employee Employee, AttendanceHours Hours)>();
         var seen = new HashSet<(string, DateOnly)>();
         foreach (var d in days)
@@ -67,7 +69,8 @@ internal sealed class AttendanceImportService(ErpDbContext db, ITenantContext te
                 errors.Add($"Payroll for {d.Date:yyyy-MM} is already approved / تم اعتماد رواتب الشهر");
             if (employee is not null && (d.Date < employee.JoiningDate || employee.Status == EmployeeStatus.Terminated))
                 errors.Add("Employee was not in service on this date / الموظف لم يكن على رأس العمل");
-            var hours = AttendanceCalculator.Calculate(d.Date, d.In, d.Out, hoursPerDay, d.Holiday);
+            bool? rostered = employee is not null && restDays.TryGetValue((employee.Id, d.Date), out var off) ? off : null;
+            var hours = AttendanceCalculator.Calculate(d.Date, d.In, d.Out, hoursPerDay, d.Holiday, isRestDay: rostered);
             if (hours.Worked is <= 0 or > AttendanceCalculator.MaxShiftHours)
                 errors.Add($"{hours.Worked} hours worked — check for a missing punch / تحقق من البصمة");
 

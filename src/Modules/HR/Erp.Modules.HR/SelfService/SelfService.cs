@@ -124,6 +124,22 @@ internal static class SelfServiceEndpoints
             return Results.NoContent();
         });
 
+        g.MapGet("/roster", async (ErpDbContext db, ITenantContext t, IClock clock, CancellationToken ct) =>
+        {
+            var me = await MeAsync(db, t, ct);
+            var start = clock.Today.AddDays(-(int)clock.Today.DayOfWeek);
+            var end = start.AddDays(13);
+            return await (from r in db.Set<Rosters.RosterEntry>().AsNoTracking()
+                          join s in db.Set<Rosters.WorkShift>() on r.ShiftId equals s.Id into shifts
+                          from s in shifts.DefaultIfEmpty()
+                          where r.EmployeeId == me.Id && r.WorkDate >= start && r.WorkDate <= end
+                          orderby r.WorkDate
+                          select new
+                          {
+                              r.WorkDate, Off = r.ShiftId == null, ShiftCode = s == null ? null : s.Code, ShiftNameEn = s == null ? null : s.NameEn,
+                              ShiftNameAr = s == null ? null : s.NameAr, StartTime = s == null ? (TimeOnly?)null : s.StartTime, EndTime = s == null ? (TimeOnly?)null : s.EndTime
+                          }).ToListAsync(ct);
+        });
         g.MapGet("/documents", async (ErpDbContext db, ITenantContext t, IClock clock, CancellationToken ct) =>
         {
             var me = await MeAsync(db, t, ct);

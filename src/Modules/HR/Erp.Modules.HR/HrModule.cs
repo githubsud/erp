@@ -41,6 +41,7 @@ public sealed class HrModule : IModule
         services.AddScoped<HrPdfDocuments>();
         services.AddScoped<PortalService>();
         services.AddScoped<Reports.HrReportService>();
+        services.AddScoped<Rosters.RosterService>();
         services.AddScoped<ITenantProvisioner, HrProvisioner>();
         services.AddSingleton<IPermissionProvider, HrPermissionProvider>();
 
@@ -54,5 +55,6 @@ public sealed class HrModule : IModule
         HrEndpoints.Map(app);
         SelfServiceEndpoints.Map(app);
         Reports.HrReportEndpoints.Map(app);
+        Rosters.RosterEndpoints.Map(app);
     }
 }

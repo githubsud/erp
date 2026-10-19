@@ -11,6 +11,17 @@ export function toIso(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Adds whole days to a yyyy-MM-dd date. */
+export function addDaysIso(iso: string, days: number): string {
+  return toIso(new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10) + days));
+}
+
+/** The Sunday on or before the date (the working week in Qatar starts on Sunday). */
+export function weekStartIso(iso: string): string {
+  const d = new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+  return addDaysIso(iso, -d.getDay());
+}
+
 export function monthStartIso(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}-01`;
 }

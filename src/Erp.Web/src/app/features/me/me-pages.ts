@@ -1,7 +1,9 @@
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { forkJoin } from 'rxjs';
+import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
+import { todayIso } from '../../core/dates';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MeApi, MyAdvances, MyDocument, MyLeave, MyPayslip, MyProfile } from '../../core/me.api';
 import { Payslip } from '../../core/models';
@@ -319,6 +321,7 @@ export class MeDocumentsPage implements OnInit {
 
     <h2>{{ 'me.account' | t }}</h2>
     <div class="card">
+      <a class="list-item link" routerLink="/me/roster"><mat-icon>calendar_view_week</mat-icon><span class="grow">{{ 'me.nav.roster' | t }}</span></a>
       <a class="list-item link" routerLink="/change-password"><mat-icon>password</mat-icon><span class="grow">{{ 'password.change' | t }}</span></a>
       <button class="list-item link plain" (click)="i18n.toggle()"><mat-icon>translate</mat-icon><span class="grow">{{ 'app.language' | t }}</span></button>
       <button class="list-item link plain" (click)="auth.logout()"><mat-icon>logout</mat-icon><span class="grow">{{ 'app.logout' | t }}</span></button>
@@ -366,5 +369,56 @@ export class MeMorePage implements OnInit {
   protected nationality(code: string): string {
     const n = NATIONALITIES.find((x) => x.code === code);
     return n ? (this.i18n.isArabic() ? n.ar : n.en) : code;
+  }
+}
+
+interface MyRosterDay {
+  workDate: string;
+  off: boolean;
+  shiftCode: string | null;
+  shiftNameEn: string | null;
+  shiftNameAr: string | null;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+@Component({
+  selector: 'app-me-roster',
+  imports: [...SHARED],
+  template: `
+    <h2>{{ 'me.nav.roster' | t }}</h2>
+    @if (days(); as list) {
+      <div class="card">
+        @for (d of list; track d.workDate) {
+          <div class="list-item">
+            <span class="icon-circle"><mat-icon>{{ d.off ? 'weekend' : 'schedule' }}</mat-icon></span>
+            <div class="grow">
+              <div class="ltr">{{ d.workDate | d }}</div>
+              <div class="muted">
+                @if (d.off) { {{ 'roster.off' | t }} } @else { {{ i18n.isArabic() ? d.shiftNameAr : d.shiftNameEn }} ·
+                  <span class="ltr">{{ d.startTime?.slice(0, 5) }}–{{ d.endTime?.slice(0, 5) }}</span> }
+              </div>
+            </div>
+            @if (d.workDate === today) { <span class="chip ok">{{ 'me.today' | t }}</span> }
+          </div>
+        } @empty {
+          <div class="empty">{{ 'me.noRoster' | t }}</div>
+        }
+      </div>
+    } @else {
+      <mat-progress-bar mode="indeterminate" />
+    }
+  `,
+  styles: ME_STYLES
+})
+export class MeRosterPage implements OnInit {
+  private readonly api = inject(ApiService);
+  private readonly notify = inject(NotifyService);
+  protected readonly i18n = inject(I18nService);
+  protected readonly today = todayIso();
+  protected readonly days = signal<MyRosterDay[] | null>(null);
+
+  ngOnInit(): void {
+    this.api.get<MyRosterDay[]>('me/roster').subscribe({ next: (d) => this.days.set(d), error: (e) => this.notify.error(e) });
   }
 }

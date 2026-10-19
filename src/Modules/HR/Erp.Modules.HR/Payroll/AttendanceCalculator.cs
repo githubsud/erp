@@ -9,7 +9,8 @@ public sealed record AttendanceHours(decimal Worked, decimal Normal, decimal Nig
 /// Splits one day's punches into overtime buckets (Labour Law art. 73–75). On a working day the hours beyond the
 /// standard day are overtime; the part of it between 21:00 and 06:00 is night overtime. Every hour worked on the
 /// weekly rest day (Friday) or a public holiday is overtime of that type. A punch-out earlier than the punch-in
-/// is taken as the next morning (night shift).
+/// is taken as the next morning (night shift). When the employee is on a roster, <c>isRestDay</c> says whether this is their
+/// rostered day off; otherwise the company's weekly rest day applies.
 /// </summary>
 public static class AttendanceCalculator
 {
@@ -18,7 +19,7 @@ public static class AttendanceCalculator
     private static readonly TimeOnly NightEnd = new(6, 0);
 
     public static AttendanceHours Calculate(DateOnly date, TimeOnly timeIn, TimeOnly timeOut, decimal hoursPerDay, bool isHoliday,
-        DayOfWeek restDay = DayOfWeek.Friday)
+        DayOfWeek restDay = DayOfWeek.Friday, bool? isRestDay = null)
     {
         var start = date.ToDateTime(timeIn);
         var end = date.ToDateTime(timeOut);
@@ -26,7 +27,7 @@ public static class AttendanceCalculator
         var worked = Hours(end - start);
 
         if (isHoliday) return new(worked, 0, 0, 0, worked);
-        if (date.DayOfWeek == restDay) return new(worked, 0, 0, worked, 0);
+        if (isRestDay ?? date.DayOfWeek == restDay) return new(worked, 0, 0, worked, 0);
 
         var overtime = Math.Max(0, worked - hoursPerDay);
         if (overtime == 0) return new(worked, 0, 0, 0, 0);
