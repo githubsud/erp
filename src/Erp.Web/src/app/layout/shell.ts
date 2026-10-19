@@ -49,6 +49,7 @@ const NAV: NavGroup[] = [
   {
     label: 'nav.sales',
     items: [
+      { icon: 'content_cut', label: 'nav.salon', link: '/salon', permission: 'sal.salon:use' },
       { icon: 'checkroom', label: 'nav.tailoring', link: '/tailoring', permission: 'sal.tailoring:use' },
       { icon: 'point_of_sale', label: 'nav.pos', link: '/sales/pos', permission: 'sal.pos:sell' },
       { icon: 'insights', label: 'nav.crm', link: '/sales/crm', permission: 'sal.crm:use' },

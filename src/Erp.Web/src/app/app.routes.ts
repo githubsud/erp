@@ -243,6 +243,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/sales/projects').then((m) => m.ProjectDetailPage)
       },
       {
+        path: 'salon',
+        canActivate: [permissionGuard('sal.salon:use')],
+        loadComponent: () => import('./features/salon/salon').then((m) => m.SalonPage)
+      },
+      {
         path: 'tailoring',
         canActivate: [permissionGuard('sal.tailoring:use')],
         loadComponent: () => import('./features/tailoring/tailoring').then((m) => m.TailoringPage)

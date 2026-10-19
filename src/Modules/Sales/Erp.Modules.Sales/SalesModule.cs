@@ -29,6 +29,7 @@ public sealed class SalesModule : IModule
         services.AddScoped<Projects.ProjectService>();
         services.AddScoped<Pos.PosService>();
         services.AddScoped<Tailoring.TailoringService>();
+        services.AddScoped<Salon.SalonManager>();
         services.AddScoped<IScheduledReport, Reports.CustomerAgingScheduledReport>();
         services.AddScoped<IDashboardProvider, Reports.SalesDashboard>();
         services.AddScoped<CustomerOpeningService>();
@@ -45,5 +46,6 @@ public sealed class SalesModule : IModule
         Projects.ProjectEndpoints.Map(app);
         Pos.PosEndpoints.Map(app);
         Tailoring.TailoringEndpoints.Map(app);
+        Salon.SalonEndpoints.Map(app);
     }
 }
