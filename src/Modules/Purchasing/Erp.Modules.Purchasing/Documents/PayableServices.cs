@@ -63,7 +63,10 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
 {
     public const string SourceType = "supplier_invoice";
 
-    public Task<SupplierInvoice> CreateAsync(InvoiceRequest r, CancellationToken ct) =>
+    public Task<SupplierInvoice> CreateAsync(InvoiceRequest r, CancellationToken ct) => CreateAsync(r, false, ct);
+
+    /// <summary><paramref name="releasesRetention"/>: only subcontracts may raise retention-release lines.</summary>
+    internal Task<SupplierInvoice> CreateAsync(InvoiceRequest r, bool releasesRetention, CancellationToken ct) =>
         db.InTransactionAsync(async token =>
         {
             var supplier = await PurchaseOrderService.ActiveSupplierAsync(db, tenant, r.SupplierId, token);
@@ -158,9 +161,15 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                         itemId = null;
                         poLineId = null;
                         break;
+                    case InvoiceLineType.RetentionRelease or InvoiceLineType.TaxRelease:
+                        if (!releasesRetention)
+                            throw new BusinessRuleException("pur.release_via_subcontract", "Release retention from the subcontract.", "قم بالإفراج عن المحتجزات من عقد الباطن.");
+                        itemId = null;
+                        poLineId = null;
+                        break;
                 }
 
-                var category = supplier.SubjectToWht && l.LineType != InvoiceLineType.Goods
+                var category = supplier.SubjectToWht && l.LineType is InvoiceLineType.Service or InvoiceLineType.LandedCost
                     ? l.WhtCategory ?? (poWht != WhtCategory.None ? poWht : supplier.DefaultWhtCategory)
                     : WhtCategory.None;
                 var rate = PurchasingRules.WhtRate(category);
@@ -242,6 +251,12 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                     case InvoiceLineType.LandedCost:
                         builder.Add(AccountRoles.LandedCostClearing, null, PurchasingRules.ToBase(l.Amount, invoice.ExchangeRate));
                         break;
+                    case InvoiceLineType.RetentionRelease:
+                        builder.Add(AccountRoles.RetentionPayable, null, l.Amount);
+                        break;
+                    case InvoiceLineType.TaxRelease:
+                        builder.Add(AccountRoles.TaxRetentionPayable, null, l.Amount);
+                        break;
                 }
                 if (l.PurchaseOrderLineId is { } poLine) poLines[poLine].QuantityInvoiced += l.Quantity;
             }
@@ -250,7 +265,9 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                 builder.Add(AccountRoles.Inventory, x.ItemGroupId, x.ToInventory);
                 builder.Add(AccountRoles.CostOfSales, x.ItemGroupId, x.ToCostOfSales);
             }
-            builder.Add(AccountRoles.AccountsPayable, null, -invoice.TotalBase, invoice.SupplierId);
+            builder.Add(AccountRoles.AccountsPayable, null, -(invoice.TotalBase - invoice.Held), invoice.SupplierId);
+            if (invoice.RetentionAmount > 0) builder.Add(AccountRoles.RetentionPayable, null, -invoice.RetentionAmount);
+            if (invoice.TaxRetentionAmount > 0) builder.Add(AccountRoles.TaxRetentionPayable, null, -invoice.TaxRetentionAmount);
 
             var supplier = await db.Set<Supplier>().AsNoTracking().SingleAsync(s => s.Id == invoice.SupplierId, token);
             invoice.JournalEntryId = (await posting.PostAsync(new PostingRequest

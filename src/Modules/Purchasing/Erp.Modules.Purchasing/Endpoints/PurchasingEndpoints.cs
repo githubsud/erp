@@ -17,7 +17,7 @@ public sealed record SupplierDto(Guid Id, string Code, string NameEn, string Nam
     bool SubjectToWht, string? TaxCardNo, string? CrNo, string? Email, string? Phone, int PaymentTermsDays, string DefaultWhtCategory, bool IsActive,
     string Currency);
 
-public sealed record PurchaseSettingsDto(decimal PriceTolerancePercent);
+public sealed record PurchaseSettingsDto(decimal PriceTolerancePercent, decimal TaxClearanceRetentionPercent);
 public sealed record DecisionRequest(string? Comment);
 
 public sealed record OrderLineDto(Guid Id, int LineNo, Guid ItemId, string Sku, string NameEn, string NameAr, string ItemType, string UomCode,
@@ -95,12 +95,12 @@ internal static class PurchasingEndpoints
         g.MapGet("/settings", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
         {
             var s = await db.Set<PurchaseSettings>().AsNoTracking().SingleAsync(x => x.CompanyId == t.RequireCompanyId(), ct);
-            return new PurchaseSettingsDto(s.PriceTolerancePercent);
+            return new PurchaseSettingsDto(s.PriceTolerancePercent, s.TaxClearanceRetentionPercent);
         }).RequirePermission(PurchasingPermissions.SuppliersRead);
         g.MapPut("/settings", async (PurchaseSettingsRequest r, SupplierService s, CancellationToken ct) =>
         {
             var x = await s.SaveSettingsAsync(r, ct);
-            return new PurchaseSettingsDto(x.PriceTolerancePercent);
+            return new PurchaseSettingsDto(x.PriceTolerancePercent, x.TaxClearanceRetentionPercent);
         }).RequirePermission(PurchasingPermissions.SettingsManage);
 
         g.MapGet("/suppliers", async (ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct, string? search = null) =>
@@ -402,7 +402,7 @@ internal static class PurchasingEndpoints
                           join s in db.Set<Supplier>() on i.SupplierId equals s.Id
                           where i.CompanyId == t.RequireCompanyId() && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.PartiallyPaid)
                                 && i.InvoiceDate <= date
-                          select new { s.Id, s.Code, s.NameEn, s.NameAr, i.DueDate, Open = i.TotalBase - i.PaidBase - i.DebitedBase }).ToListAsync(ct);
+                          select new { s.Id, s.Code, s.NameEn, s.NameAr, i.DueDate, Open = i.TotalBase - i.RetentionAmount - i.TaxRetentionAmount - i.PaidBase - i.DebitedBase }).ToListAsync(ct);
         // Supplier credits not yet set off reduce what is owed to the supplier.
         var credits = await (from n in db.Set<DebitNote>().AsNoTracking()
                              join s in db.Set<Supplier>() on n.SupplierId equals s.Id

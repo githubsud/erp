@@ -1517,7 +1517,25 @@ export const en = {
   'grsia.reference': 'Reference',
   'grsia.pay': 'Record payment',
   'grsia.payConfirm': 'Record payment of this month\'s contributions to GRSIA?',
-  'grsia.notPosted': 'Post the month\'s payroll before recording the payment.'
+  'grsia.notPosted': 'Post the month\'s payroll before recording the payment.',
+  'nav.subcontracts': 'Subcontracts',
+  'sc.title': 'Subcontracts',
+  'sc.new': 'New subcontract',
+  'sc.name': 'Subcontract',
+  'sc.project': 'Customer project',
+  'sc.taxRetention': 'Tax clearance retention',
+  'sc.taxRetentionHint': 'Leave blank to use the purchasing setting.',
+  'sc.taxHeld': 'Held for tax clearance',
+  'sc.cleared': 'Cleared',
+  'sc.clearedOn': 'Clearance received',
+  'sc.net': 'Payable',
+  'sc.book': 'Book invoice',
+  'sc.bookConfirm': 'Book and post the supplier invoice for this certificate (retentions are held back)?',
+  'sc.recordClearance': 'Tax clearance received',
+  'sc.clearanceConfirm': 'Record that the subcontractor presented a tax clearance certificate? Everything held for tax becomes payable to them.',
+  'sc.hint': 'Retention is released at handover. The tax clearance retention is released when the subcontractor shows a tax clearance certificate; confirm the rate with your tax adviser.',
+  'tset.taxClearance': 'Tax clearance retention % (subcontracts)',
+  'tset.taxClearanceHint': 'Confirm the rate with your tax adviser.'
 } as const;
 
 export type TranslationKey = keyof typeof en;

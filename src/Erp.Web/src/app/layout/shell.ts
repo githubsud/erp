@@ -69,6 +69,7 @@ const NAV: NavGroup[] = [
       { icon: 'playlist_add', label: 'nav.purchaseRequests', link: '/purchasing/requests', permission: 'pur.requests:manage' },
       { icon: 'shopping_cart', label: 'nav.orders', link: '/purchasing/orders', permission: 'pur.suppliers:read' },
       { icon: 'request_quote', label: 'nav.invoices', link: '/purchasing/invoices', permission: 'pur.suppliers:read' },
+      { icon: 'construction', label: 'nav.subcontracts', link: '/purchasing/subcontracts', permission: 'pur.suppliers:read' },
       { icon: 'price_check', label: 'nav.supplierPayments', link: '/purchasing/payments', permission: 'pur.suppliers:read' },
       { icon: 'sailing', label: 'nav.landedCosts', link: '/purchasing/landed-costs', permission: 'pur.suppliers:read' },
       { icon: 'account_balance_wallet', label: 'nav.supplierCredits', link: '/purchasing/credits', permission: 'pur.suppliers:read' },

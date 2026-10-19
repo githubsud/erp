@@ -11,6 +11,9 @@ public sealed class PurchaseSettings : TenantEntity
 
     /// <summary>Invoice unit price above the receipt cost by more than this percentage puts the invoice on hold.</summary>
     public decimal PriceTolerancePercent { get; set; } = 2m;
+
+    /// <summary>Share of each subcontractor payment held until a tax clearance certificate is shown. ⚠️ VERIFY with a tax adviser.</summary>
+    public decimal TaxClearanceRetentionPercent { get; set; } = 3m;
 }
 
 /// <summary>Withholding tax categories for payments to non-residents without a permanent establishment (Income Tax Law 24/2018).</summary>
@@ -124,7 +127,8 @@ public enum InvoiceStatus { Draft, Posted, PartiallyPaid, Paid, Reversed }
 
 public enum MatchStatus { NotApplicable, Matched, Variance, Approved }
 
-public enum InvoiceLineType { Goods, Service, LandedCost }
+/// <summary>RetentionRelease / TaxRelease make retention held on earlier subcontract invoices payable (no expense: they clear the retention liability).</summary>
+public enum InvoiceLineType { Goods, Service, LandedCost, RetentionRelease, TaxRelease }
 
 public sealed class SupplierInvoice : TenantEntity
 {
@@ -150,6 +154,11 @@ public sealed class SupplierInvoice : TenantEntity
     public decimal DebitedAmount { get; set; }
     public decimal DebitedBase { get; set; }
     public decimal WhtWithheld { get; set; }
+
+    /// <summary>Held back from a subcontractor (QAR invoices only): not payable until released.</summary>
+    public decimal RetentionAmount { get; set; }
+    public decimal TaxRetentionAmount { get; set; }
+    public Guid? SubcontractId { get; set; }
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
     public MatchStatus MatchStatus { get; set; } = MatchStatus.NotApplicable;
     public Guid? VarianceApprovedBy { get; set; }
@@ -161,9 +170,11 @@ public sealed class SupplierInvoice : TenantEntity
     public uint Version { get; set; }
     public List<SupplierInvoiceLine> Lines { get; init; } = [];
 
-    public decimal OpenAmount => Total - PaidAmount - DebitedAmount;
+    public decimal Held => RetentionAmount + TaxRetentionAmount;
 
-    public decimal OpenBase => TotalBase - PaidBase - DebitedBase;
+    public decimal OpenAmount => Total - Held - PaidAmount - DebitedAmount;
+
+    public decimal OpenBase => TotalBase - Held - PaidBase - DebitedBase;
 }
 
 public sealed class SupplierInvoiceLine : TenantEntity

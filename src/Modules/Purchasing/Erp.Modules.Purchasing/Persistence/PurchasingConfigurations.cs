@@ -11,6 +11,7 @@ internal sealed class PurchaseSettingsConfiguration : IEntityTypeConfiguration<P
     {
         b.ToTable("settings", "pur");
         b.Property(x => x.PriceTolerancePercent).HasPrecision(9, 4);
+        b.Property(x => x.TaxClearanceRetentionPercent).HasPrecision(9, 4);
     }
 }
 

@@ -366,6 +366,7 @@ export interface SupplierPayment {
 
 export interface PurchaseSettings {
   priceTolerancePercent: number;
+  taxClearanceRetentionPercent?: number;
 }
 
 export interface GrniReport {

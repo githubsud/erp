@@ -12,7 +12,7 @@ public sealed record SupplierRequest(string Code, string? NameEn, string? NameAr
     string? TaxCardNo, string? CrNo, string? Email, string? Phone, int PaymentTermsDays = 30, WhtCategory DefaultWhtCategory = WhtCategory.None,
     bool IsActive = true, string? Currency = null);
 
-public sealed record PurchaseSettingsRequest(decimal PriceTolerancePercent);
+public sealed record PurchaseSettingsRequest(decimal PriceTolerancePercent, decimal? TaxClearanceRetentionPercent = null);
 
 /// <summary>Quantity and price are in <see cref="UomId"/> when given (an alternative unit of the item), otherwise in its base unit.</summary>
 public sealed record OrderLineRequest(Guid ItemId, string? Description, decimal Quantity, decimal UnitPrice, WhtCategory? WhtCategory = null, Guid? UomId = null);
@@ -67,6 +67,9 @@ internal sealed class SupplierService(ErpDbContext db, ITenantContext tenant)
     {
         var settings = await db.Set<PurchaseSettings>().SingleAsync(s => s.CompanyId == tenant.RequireCompanyId(), ct);
         settings.PriceTolerancePercent = Guard.NonNegative(r.PriceTolerancePercent, "priceTolerancePercent");
+        if (r.TaxClearanceRetentionPercent is { } taxRetention)
+            settings.TaxClearanceRetentionPercent = taxRetention is >= 0 and <= 100 ? taxRetention
+                : throw new BusinessRuleException("pur.tax_retention_percent", "Enter a percentage between 0 and 100.", "أدخل نسبة بين 0 و100.");
         await db.SaveChangesAsync(ct);
         return settings;
     }

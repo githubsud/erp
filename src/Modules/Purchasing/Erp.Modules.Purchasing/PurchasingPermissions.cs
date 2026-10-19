@@ -16,6 +16,7 @@ public static class PurchasingPermissions
     public const string PaymentsPost = "pur.payments:post";
     public const string ReportsRead = "pur.reports:read";
     public const string SettingsManage = "pur.settings:manage";
+    public const string SubcontractsManage = "pur.subcontracts:manage";
 }
 
 internal sealed class PurchasingPermissionProvider : IPermissionProvider
@@ -33,6 +34,7 @@ internal sealed class PurchasingPermissionProvider : IPermissionProvider
         new(PurchasingPermissions.InvoicesApprove, "Approve invoice price variances", "اعتماد فروقات أسعار الفواتير", GeneralManager),
         new(PurchasingPermissions.PaymentsPost, "Pay suppliers", "سداد الموردين", Accountant),
         new(PurchasingPermissions.ReportsRead, "View payables, GRNI and withholding tax reports", "عرض تقارير الذمم الدائنة والاستقطاع", Accountant, GeneralManager, Auditor),
+        new(PurchasingPermissions.SubcontractsManage, "Manage subcontracts and certify subcontractor work", "إدارة عقود الباطن واعتماد أعمال المقاولين", Purchaser, GeneralManager),
         new(PurchasingPermissions.SettingsManage, "Manage purchasing settings", "إدارة إعدادات المشتريات", GeneralManager, Accountant)
     ];
 }

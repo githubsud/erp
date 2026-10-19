@@ -103,6 +103,12 @@ public static class AccountRoles
     public const string WithholdingTaxPayable = "pur.wht_payable";
     /// <summary>Post-dated cheques issued to suppliers and not yet presented.</summary>
     public const string PdcPayable = "pur.pdc_payable";
+
+    /// <summary>Retention held back from subcontractors until handover.</summary>
+    public const string RetentionPayable = "pur.retention_payable";
+
+    /// <summary>Held from subcontractors until they show a tax clearance certificate.</summary>
+    public const string TaxRetentionPayable = "pur.tax_retention_payable";
     /// <summary>Freight, clearing and customs invoices waiting to be allocated to receipts by a landed cost voucher.</summary>
     public const string LandedCostClearing = "pur.landed_cost_clearing";
     /// <summary>Non-stock purchases (services, supplies); keyed by item group.</summary>

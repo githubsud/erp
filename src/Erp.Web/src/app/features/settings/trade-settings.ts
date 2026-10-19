@@ -25,6 +25,11 @@ type MasterKind = 'warehouses' | 'groups' | 'uoms';
             <mat-label>{{ 'tset.tolerance' | t }}</mat-label>
             <input matInput type="number" min="0" formControlName="priceTolerancePercent" dir="ltr" />
           </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ 'tset.taxClearance' | t }}</mat-label>
+            <input matInput type="number" min="0" max="100" formControlName="taxClearanceRetentionPercent" dir="ltr" />
+            <mat-hint>{{ 'tset.taxClearanceHint' | t }}</mat-hint>
+          </mat-form-field>
           <p class="secondary">{{ 'tset.approvalsMoved' | t }} <a routerLink="/settings/approvals">{{ 'nav.approvalRules' | t }}</a></p>
           @if (canManage) {
             <div class="actions"><button mat-flat-button [disabled]="purchase.invalid">{{ 'app.save' | t }}</button></div>
@@ -129,7 +134,8 @@ export class TradeSettingsPage {
   };
   protected readonly negative = new FormControl(false, { nonNullable: true });
   protected readonly purchase = this.fb.group({
-    priceTolerancePercent: [2, [Validators.required, Validators.min(0)]]
+    priceTolerancePercent: [2, [Validators.required, Validators.min(0)]],
+    taxClearanceRetentionPercent: [3, [Validators.required, Validators.min(0), Validators.max(100)]]
   });
 
   constructor() {
@@ -156,7 +162,7 @@ export class TradeSettingsPage {
   protected savePurchase(): void {
     const v = this.purchase.getRawValue();
     this.trade
-      .savePurchaseSettings({ priceTolerancePercent: Number(v.priceTolerancePercent) })
+      .savePurchaseSettings({ priceTolerancePercent: Number(v.priceTolerancePercent), taxClearanceRetentionPercent: Number(v.taxClearanceRetentionPercent) })
       .subscribe({ next: () => this.notify.success(), error: (e) => this.notify.error(e) });
   }
 

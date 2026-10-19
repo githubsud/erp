@@ -148,6 +148,16 @@ export const routes: Routes = [
         loadComponent: () => import('./features/purchasing/orders').then((m) => m.OrderDetailPage)
       },
       {
+        path: 'purchasing/subcontracts',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/subcontracts').then((m) => m.SubcontractsPage)
+      },
+      {
+        path: 'purchasing/subcontracts/:id',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/subcontracts').then((m) => m.SubcontractDetailPage)
+      },
+      {
         path: 'purchasing/invoices',
         canActivate: [permissionGuard('pur.suppliers:read')],
         loadComponent: () => import('./features/purchasing/invoices').then((m) => m.InvoicesPage)

@@ -28,6 +28,7 @@ public sealed class PurchasingModule : IModule
         services.AddScoped<SupplierPaymentService>();
         services.AddScoped<SupplierOpeningService>();
         services.AddScoped<DebitNoteService>();
+        services.AddScoped<Subcontracts.SubcontractService>();
         services.AddScoped<ITenantProvisioner, PurchasingProvisioner>();
         services.AddSingleton<IPermissionProvider, PurchasingPermissionProvider>();
     }
@@ -38,5 +39,6 @@ public sealed class PurchasingModule : IModule
         PurchaseRequestEndpoints.Map(app);
         FxRevaluationEndpoints.Map(app);
         SupplierCreditEndpoints.Map(app);
+        Subcontracts.SubcontractEndpoints.Map(app);
     }
 }

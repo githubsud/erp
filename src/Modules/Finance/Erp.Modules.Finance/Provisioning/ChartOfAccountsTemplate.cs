@@ -48,10 +48,12 @@ internal static class ChartOfAccountsTemplate
         new("2120", "21", "Post-dated Cheques Payable", "شيكات آجلة مستحقة الدفع", L),
         new("2125", "21", "Goods Received Not Invoiced", "بضاعة مستلمة لم تصل فواتيرها", L),
         new("2130", "21", "Accrued Expenses", "مصروفات مستحقة", L),
+        new("2135", "21", "Retentions Payable", "محتجزات مستحقة الدفع", L),
         new("2140", "21", "Salaries Payable", "رواتب مستحقة الدفع", L),
         new("2150", "21", "Leave Salary Provision", "مخصص رواتب الإجازات", L),
         new("2160", "21", "Air Ticket Provision", "مخصص تذاكر السفر", L),
         new("2170", "21", "Withholding Tax Payable", "ضريبة الاستقطاع المستحقة", L),
+        new("2175", "21", "Tax Clearance Retentions", "محتجزات شهادة المخالصة الضريبية", L),
         new("2180", "21", "Social Insurance Payable (GRSIA)", "اشتراكات التأمينات الاجتماعية المستحقة", L),
         new("2190", "21", "Corporate Income Tax Payable", "ضريبة الدخل المستحقة", L),
         new("22", "2", "Non-current Liabilities", "الالتزامات غير المتداولة", L, false),
@@ -133,7 +135,9 @@ internal static class ChartOfAccountsTemplate
         (AccountRoles.SalesReturns, "4130"),
         (AccountRoles.PdcReceivable, "1140"),
         (AccountRoles.RetentionReceivable, "1145"),
-        (AccountRoles.CashOverShort, "5345")
+        (AccountRoles.CashOverShort, "5345"),
+        (AccountRoles.RetentionPayable, "2135"),
+        (AccountRoles.TaxRetentionPayable, "2175")
     ];
 
     public static NormalBalance DefaultNormal(AccountType type) =>
