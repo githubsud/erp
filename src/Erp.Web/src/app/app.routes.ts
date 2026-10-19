@@ -73,6 +73,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/payroll/payroll-inputs').then((m) => m.PayrollInputsPage)
       },
       {
+        path: 'field-staff',
+        canActivate: [permissionGuard('hr.employees:read')],
+        loadComponent: () => import('./features/payroll/field-staff').then((m) => m.FieldStaffPage)
+      },
+      {
         path: 'rosters',
         canActivate: [permissionGuard('hr.employees:read')],
         loadComponent: () => import('./features/payroll/rosters').then((m) => m.RostersPage)

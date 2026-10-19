@@ -21,6 +21,7 @@ internal sealed class HrProvisioner(ErpDbContext db, IPostingRuleRegistry rules)
         new("FOOD", "Food Allowance", "بدل الطعام", ComponentKind.Earning, WpsField.Food, true, true, false, AccountRoles.PayrollExpense, "5240"),
         new("OTHER_ALW", "Other Allowance", "بدل آخر", ComponentKind.Earning, WpsField.ExtraIncome, true, true, false, AccountRoles.PayrollExpense, "5250"),
         new("OVERTIME", "Overtime", "العمل الإضافي", ComponentKind.Earning, WpsField.Overtime, false, false, false, AccountRoles.PayrollExpense, "5260"),
+        new("EXPENSE_CLAIM", "Expense reimbursement", "تعويض مصروفات", ComponentKind.Earning, WpsField.ExtraIncome, false, false, false, AccountRoles.PayrollExpense, "5360"),
         new("BONUS", "Bonus / Incentive", "مكافأة / حافز", ComponentKind.Earning, WpsField.ExtraIncome, false, false, false, AccountRoles.PayrollExpense, "5265"),
         new("ADVANCE_RECOVERY", "Salary Advance Recovery", "استرداد سلفة راتب", ComponentKind.Deduction, WpsField.Deduction, false, false, false, AccountRoles.EmployeeAdvances, null),
         new("OTHER_DED", "Other Deduction", "خصم آخر", ComponentKind.Deduction, WpsField.Deduction, false, false, false, AccountRoles.PayrollDeduction, "4210"),

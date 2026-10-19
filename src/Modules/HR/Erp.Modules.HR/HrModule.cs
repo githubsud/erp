@@ -42,6 +42,7 @@ public sealed class HrModule : IModule
         services.AddScoped<PortalService>();
         services.AddScoped<Reports.HrReportService>();
         services.AddScoped<Rosters.RosterService>();
+        services.AddScoped<SelfService.FieldStaffService>();
         services.AddScoped<Reports.GrsiaService>();
         services.AddScoped<IScheduledReport, ExpiringDocumentsScheduledReport>();
         services.AddScoped<ITenantProvisioner, HrProvisioner>();
@@ -58,6 +59,7 @@ public sealed class HrModule : IModule
         SelfServiceEndpoints.Map(app);
         Reports.HrReportEndpoints.Map(app);
         Rosters.RosterEndpoints.Map(app);
+        SelfService.FieldStaffEndpoints.Map(app);
         Reports.GrsiaEndpoints.Map(app);
     }
 }

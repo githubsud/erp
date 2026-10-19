@@ -253,7 +253,7 @@ public sealed class PayrollInput : TenantEntity
     public InputSource Source { get; init; } = InputSource.Manual;
 }
 
-public enum InputSource { Manual, Attendance }
+public enum InputSource { Manual, Attendance, Expense }
 
 public sealed class AttendanceDay : TenantEntity
 {

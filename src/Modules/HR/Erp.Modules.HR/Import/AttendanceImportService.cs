@@ -117,7 +117,7 @@ internal sealed class AttendanceImportService(ErpDbContext db, ITenantContext te
     }
 
     /// <summary>Replaces the attendance-generated overtime inputs of these employees for the month with the month's totals.</summary>
-    private async Task RebuildOvertimeInputsAsync(Guid companyId, IReadOnlyCollection<Guid> employeeIds, int year, int month, CancellationToken ct)
+    internal async Task RebuildOvertimeInputsAsync(Guid companyId, IReadOnlyCollection<Guid> employeeIds, int year, int month, CancellationToken ct)
     {
         var overtime = await db.Set<PayComponent>().FirstOrDefaultAsync(c => c.CompanyId == companyId && c.WpsField == WpsField.Overtime && c.IsActive, ct)
             ?? throw new BusinessRuleException("hr.overtime_component", "No active overtime pay component.", "لا يوجد مكون نشط للعمل الإضافي.");

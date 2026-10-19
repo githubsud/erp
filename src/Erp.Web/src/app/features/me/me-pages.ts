@@ -321,6 +321,8 @@ export class MeDocumentsPage implements OnInit {
 
     <h2>{{ 'me.account' | t }}</h2>
     <div class="card">
+      <a class="list-item link" routerLink="/me/punch"><mat-icon>where_to_vote</mat-icon><span class="grow">{{ 'me.nav.punch' | t }}</span></a>
+      <a class="list-item link" routerLink="/me/expenses"><mat-icon>receipt_long</mat-icon><span class="grow">{{ 'me.nav.expenses' | t }}</span></a>
       <a class="list-item link" routerLink="/me/roster"><mat-icon>calendar_view_week</mat-icon><span class="grow">{{ 'me.nav.roster' | t }}</span></a>
       <a class="list-item link" routerLink="/change-password"><mat-icon>password</mat-icon><span class="grow">{{ 'password.change' | t }}</span></a>
       <button class="list-item link plain" (click)="i18n.toggle()"><mat-icon>translate</mat-icon><span class="grow">{{ 'app.language' | t }}</span></button>
