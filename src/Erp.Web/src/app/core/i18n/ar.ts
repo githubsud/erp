@@ -1627,5 +1627,11 @@ export const ar: Record<TranslationKey, string> = {
   'reorder.onOrder': 'قيد الطلب',
   'reorder.price': 'سعر الوحدة',
   'reorder.create': 'إنشاء أوامر شراء مسودة',
-  'reorder.none': 'لا توجد أصناف تحتاج إعادة طلب.'
+  'reorder.none': 'لا توجد أصناف تحتاج إعادة طلب.',
+  'dashboard.approvals': 'بانتظار اعتمادك',
+  'dashboard.section.finance': 'المالية',
+  'dashboard.section.sales': 'المبيعات',
+  'dashboard.section.purchasing': 'المشتريات',
+  'dashboard.section.inventory': 'المخزون',
+  'dashboard.section.hr': 'الموظفون والرواتب'
 };

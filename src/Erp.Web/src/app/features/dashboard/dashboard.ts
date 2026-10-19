@@ -7,6 +7,19 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { ExpiringDocument, GratuityRow, LeaveRequest, Paged, Employee, PayrollRun } from '../../core/models';
 import { SHARED } from '../../shared/shared';
 
+interface DashboardTile {
+  section: string;
+  key: string;
+  labelEn: string;
+  labelAr: string;
+  value: number;
+  format: 'money' | 'count';
+  link: string;
+  hintEn: string | null;
+  hintAr: string | null;
+  tone: 'ok' | 'warn' | 'bad' | null;
+}
+
 @Component({
   selector: 'app-dashboard',
   imports: [...SHARED],
@@ -17,6 +30,26 @@ import { SHARED } from '../../shared/shared';
     @if (loading()) {
       <mat-progress-bar mode="indeterminate" />
     }
+
+    @if (approvals() > 0) {
+      <mat-card appearance="outlined" class="stat approvals" routerLink="/approvals">
+        <div class="label">{{ 'dashboard.approvals' | t }}</div>
+        <div class="value">{{ approvals() }}</div>
+      </mat-card>
+    }
+    @for (s of sections(); track s.key) {
+      <h2 class="section">{{ 'dashboard.section.' + s.key | t }}</h2>
+      <div class="card-grid">
+        @for (tile of s.tiles; track tile.key) {
+          <mat-card appearance="outlined" class="stat" [routerLink]="tile.link" [class.warn]="tile.tone === 'warn'" [class.bad]="tile.tone === 'bad'">
+            <div class="label">{{ tile | bi:'label' }}</div>
+            <div class="value ltr">{{ tile.format === 'money' ? (tile.value | money) : tile.value }}</div>
+            @if (tile.hintEn) { <div class="hint">{{ tile | bi:'hint' }}</div> }
+          </mat-card>
+        }
+      </div>
+    }
+    @if (auth.can('hr.employees:read') || auth.can('hr.payroll:read')) { <h2 class="section">{{ 'dashboard.section.hr' | t }}</h2> }
 
     <div class="card-grid">
       @if (auth.can('hr.employees:read')) {
@@ -95,6 +128,10 @@ import { SHARED } from '../../shared/shared';
   `,
   styles: `
     .stat { cursor: pointer; }
+    .stat.warn .value { color: #8a5300; }
+    .stat.bad .value { color: #8c1d18; }
+    .approvals { max-width: 260px; margin-block-end: 8px; border-color: var(--mat-sys-primary); }
+    .section { font: var(--mat-sys-title-medium); color: var(--mat-sys-on-surface-variant); margin: 20px 0 8px; }
     .h2 { font: var(--mat-sys-title-large) !important; }
     .late { color: #8c1d18; }
   `
@@ -111,6 +148,12 @@ export class DashboardPage {
   protected readonly pendingLeave = signal(0);
   protected readonly gratuityTotal = signal(0);
   protected readonly docColumns = ['owner', 'type', 'expiry', 'status'];
+  protected readonly approvals = signal(0);
+  private readonly tiles = signal<DashboardTile[]>([]);
+  protected readonly sections = computed(() => {
+    const order = ['finance', 'sales', 'purchasing', 'inventory'];
+    return order.map((key) => ({ key, tiles: this.tiles().filter((t) => t.section === key) })).filter((s) => s.tiles.length);
+  });
 
   private readonly today = new Date();
   /** Wages for this month fall due on the 1st of next month; WPS deposit within 7 days. */
@@ -120,6 +163,8 @@ export class DashboardPage {
   protected readonly wpsDaysLeft = computed(() => daysBetween(todayIso(), this.wpsDeadline()));
 
   constructor() {
+    this.api.get<DashboardTile[]>('core/dashboard').pipe(catchError(() => of<DashboardTile[]>([]))).subscribe((t) => this.tiles.set(t));
+    this.api.get<unknown[]>('approvals/inbox').pipe(catchError(() => of<unknown[]>([]))).subscribe((a) => this.approvals.set(a.length));
     const canHr = this.auth.can('hr.employees:read');
     const canPayroll = this.auth.can('hr.payroll:read');
     const none = <T>(value: T) => of(value);

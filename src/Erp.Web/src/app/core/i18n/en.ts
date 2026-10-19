@@ -1625,7 +1625,13 @@ export const en = {
   'reorder.onOrder': 'On order',
   'reorder.price': 'Unit price',
   'reorder.create': 'Create draft orders',
-  'reorder.none': 'Nothing to reorder.'
+  'reorder.none': 'Nothing to reorder.',
+  'dashboard.approvals': 'Waiting for your approval',
+  'dashboard.section.finance': 'Finance',
+  'dashboard.section.sales': 'Sales',
+  'dashboard.section.purchasing': 'Purchasing',
+  'dashboard.section.inventory': 'Inventory',
+  'dashboard.section.hr': 'People and payroll'
 } as const;
 
 export type TranslationKey = keyof typeof en;

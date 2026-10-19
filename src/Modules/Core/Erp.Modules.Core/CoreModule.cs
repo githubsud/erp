@@ -47,5 +47,6 @@ public sealed class CoreModule : IModule
         ApprovalEndpoints.Map(app);
         Platform.PlatformEndpoints.Map(app);
         Platform.ReportScheduleEndpoints.Map(app);
+        Platform.DashboardEndpoints.Map(app);
     }
 }

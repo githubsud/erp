@@ -186,7 +186,7 @@ internal static class InventoryEndpoints
     private static MasterDto Group(ItemGroup x) => new(x.Id, x.Code, x.NameEn, x.NameAr, x.IsActive);
 
     /// <summary>Batches with stock, soonest expiry first; with <paramref name="withinDays"/> only those expiring by then (expired included).</summary>
-    private static async Task<List<BatchRow>> BatchesAsync(ErpDbContext db, ITenantContext t, IClock clock, Guid? itemId, Guid? warehouseId, int? withinDays,
+    internal static async Task<List<BatchRow>> BatchesAsync(ErpDbContext db, ITenantContext t, IClock clock, Guid? itemId, Guid? warehouseId, int? withinDays,
         CancellationToken ct)
     {
         var today = clock.Today;
