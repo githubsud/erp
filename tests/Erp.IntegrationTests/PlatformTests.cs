@@ -7,7 +7,8 @@ namespace Erp.IntegrationTests;
 public sealed class PlatformTests(ErpFixture fixture)
 {
     private static readonly string[] TenantSchemas = ["core", "fin", "hr", "inv", "pur", "sal"];
-    private static readonly string[] PlatformTables = ["core.tenant"];
+    private static readonly string[] PlatformTables =
+        ["core.tenant", "core.platform_admin", "core.plan", "core.subscription", "core.subscription_invoice", "core.subscription_payment"];
 
     [Fact]
     public async Task Every_tenant_table_follows_the_schema_conventions()

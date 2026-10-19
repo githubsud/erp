@@ -19,7 +19,17 @@ public sealed record ProvisionTenantRequest(
     string? AdminNameEn,
     string? AdminNameAr,
     int FiscalYearStartMonth = 1,
-    string PreferredLanguage = "ar");
+    string PreferredLanguage = "ar",
+    string? PlanCode = null,
+    Platform.BillingCycle BillingCycle = Platform.BillingCycle.Monthly,
+    decimal? Price = null,
+    int TrialDays = 0,
+    string? BusinessType = null,
+    string? ContactName = null,
+    string? ContactPhone = null,
+    string? ContactEmail = null,
+    string? Area = null,
+    string? Notes = null);
 
 public sealed record ProvisionTenantResponse(Guid TenantId, string Code, Guid CompanyId, Guid BranchId, Guid AdminUserId);
 
@@ -62,7 +72,12 @@ public sealed partial class TenantProvisioningService(
         var (adminEn, adminAr) = Bilingual.Require(request.AdminNameEn, request.AdminNameAr, "administrator name");
         var now = clock.UtcNow;
 
-        var tenant = new Tenant { Code = code, NameEn = nameEn, NameAr = nameAr, DefaultLocale = $"{language}-QA", CreatedAt = now };
+        var tenant = new Tenant
+        {
+            Code = code, NameEn = nameEn, NameAr = nameAr, DefaultLocale = $"{language}-QA", CreatedAt = now, BusinessType = Clean(request.BusinessType),
+            ContactName = Clean(request.ContactName), ContactPhone = Clean(request.ContactPhone), ContactEmail = Clean(request.ContactEmail)?.ToLowerInvariant(),
+            Area = Clean(request.Area), Notes = Clean(request.Notes)
+        };
         var company = new Company { NameEn = nameEn, NameAr = nameAr, CrNo = request.CrNo?.Trim(), EstablishmentId = request.EstablishmentId?.Trim() };
         var branch = new Branch { CompanyId = company.Id, Code = "HO", NameEn = "Head Office", NameAr = "المكتب الرئيسي" };
         var admin = new AppUser
@@ -77,6 +92,9 @@ public sealed partial class TenantProvisioningService(
         {
             db.Add(tenant);
             await db.SaveChangesAsync(token);
+            // No plan given (demos, tests, the provisioning API): everything licensed and free.
+            await Platform.SubscriptionFactory.CreateAsync(db, tenant.Id, request.PlanCode, request.BillingCycle, request.Price, request.TrialDays,
+                clock.Today, now, token);
             db.AddRange(company, branch, admin);
 
             var definitions = permissionProviders.SelectMany(p => p.GetPermissions()).ToList();
@@ -103,4 +121,6 @@ public sealed partial class TenantProvisioningService(
 
         return new ProvisionTenantResponse(tenant.Id, code, company.Id, branch.Id, admin.Id);
     }
+
+    private static string? Clean(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
 }

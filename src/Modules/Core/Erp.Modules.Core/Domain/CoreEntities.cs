@@ -14,6 +14,14 @@ public sealed class Tenant : Entity
     public string BaseCurrency { get; init; } = Money.BaseCurrency;
     public string DefaultLocale { get; set; } = "ar-QA";
     public string TimeZone { get; init; } = "Asia/Qatar";
+
+    /// <summary>Back-office details kept by the platform: kind of business, who to call, where.</summary>
+    public string? BusinessType { get; set; }
+    public string? ContactName { get; set; }
+    public string? ContactPhone { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? Area { get; set; }
+    public string? Notes { get; set; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? UpdatedAt { get; set; }
 }

@@ -58,6 +58,7 @@ public sealed class ErpFixture : IAsyncLifetime
             builder.UseSetting("Outbox:Enabled", "false");
             builder.UseSetting("Jobs:DocumentExpiry:Enabled", "false");
             builder.UseSetting("Jobs:ReportSchedules:Enabled", "false");
+            builder.UseSetting("Jobs:Billing:Enabled", "false");
             builder.UseSetting("Jwt:SigningKey", "integration-test-signing-key-0123456789abcdef");
             builder.UseSetting("Security:FieldEncryptionKey", Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i + 1)).ToArray()));
             builder.UseSetting("Security:BlindIndexKey", Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i + 101)).ToArray()));

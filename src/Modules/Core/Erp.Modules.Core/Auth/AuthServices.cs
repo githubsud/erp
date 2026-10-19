@@ -93,7 +93,8 @@ public sealed class AuthService(
     {
         var code = (request.TenantCode ?? "").Trim().ToLowerInvariant();
         var tenant = await db.Set<Tenant>().AsNoTracking().SingleOrDefaultAsync(t => t.Code == code, ct);
-        if (tenant is null || tenant.Status != TenantStatus.Active) throw InvalidCredentials();
+        // A suspended customer may still sign in read-only (ModuleGateMiddleware blocks changes); closed accounts may not.
+        if (tenant is null || tenant.Status == TenantStatus.Closed) throw InvalidCredentials();
 
         // From here on every query is scoped to this tenant (filters + row-level security).
         tenantContext.Set(tenant.Id, null, null);

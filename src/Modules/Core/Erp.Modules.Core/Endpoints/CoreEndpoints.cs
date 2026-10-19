@@ -82,6 +82,9 @@ internal static class CoreEndpoints
         core.MapGet("/audit", ListAudit).RequirePermission(CorePermissions.AuditRead);
     }
 
+    internal static ValueTask<object?> RequirePlatformKeyFilter(EndpointFilterInvocationContext context, EndpointFilterDelegate next) =>
+        RequirePlatformKey(context, next);
+
     private static async ValueTask<object?> RequirePlatformKey(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var configured = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Platform:ApiKey"];

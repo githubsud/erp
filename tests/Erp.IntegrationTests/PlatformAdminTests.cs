@@ -20,10 +20,9 @@ public sealed class PlatformAdminTests(ErpFixture fixture)
         var c = t.Client;
         (await c.GetAsync<List<Module>>("/api/core/modules")).ShouldAllBe(m => m.Enabled);
 
-        // Inventory cannot go while sales still needs it; sales can, and its API then answers 403 while HR keeps working.
-        var refused = await c.PutAsJsonAsync("/api/core/modules", new { disabled = new[] { "inventory" } }, ErpFixture.Json);
-        (await refused.ProblemAsync()).GetProperty("code").GetString().ShouldBe("core.module_required");
-        (await c.PutAsJsonAsync("/api/core/modules", new { disabled = new[] { "sales" } }, ErpFixture.Json)).EnsureSuccessStatusCode();
+        // Switching sales off also switches off what depends on it (CRM, projects, tailoring, salon); its API then answers 403 while HR works.
+        var off = await (await c.PutAsJsonAsync("/api/core/modules", new { disabled = new[] { "sales" } }, ErpFixture.Json)).ReadAsync<List<Module>>();
+        off.Where(m => !m.Enabled).Select(m => m.Code).ShouldBe(["sales", "crm", "projects", "tailoring", "salon"], ignoreOrder: true);
         (await c.GetAsync("/api/sales/customers")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await c.GetAsync("/api/hr/departments")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await c.PutAsJsonAsync("/api/core/modules", new { disabled = Array.Empty<string>() }, ErpFixture.Json)).EnsureSuccessStatusCode();

@@ -12,7 +12,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Erp.Modules.Core.Platform;
 
-public sealed record ModuleDto(string Code, string NameEn, string NameAr, bool Enabled, IReadOnlyList<string> Requires);
+public sealed record ModuleDto(string Code, string NameEn, string NameAr, bool Enabled, IReadOnlyList<string> Requires, bool Licensed = true);
 
 public sealed record ModuleSwitchRequest(IReadOnlyList<string> Disabled);
 
@@ -23,34 +23,67 @@ public sealed record AuditPage(IReadOnlyList<AuditRowDto> Items, int Total, int 
 public sealed record AccessReviewRow(Guid UserId, string Login, string DisplayNameEn, string DisplayNameAr, bool IsActive, IReadOnlyList<string> Roles,
     int PermissionCount, bool IsOwner, bool MfaEnabled, DateTimeOffset? LastLoginAt, IReadOnlyList<string> Flags);
 
-/// <summary>Switched-off modules of the current company, cached briefly (switching takes effect within a minute everywhere).</summary>
+/// <summary>
+/// Modules that are off for the current company: not in the customer's subscription, or switched off by the company. Cached briefly,
+/// so licence and switch changes take effect within a minute everywhere.
+/// </summary>
 internal sealed class ModuleAccess(ErpDbContext db, ITenantContext tenant, IMemoryCache cache) : IModuleAccess
 {
-    public async Task<IReadOnlySet<string>> DisabledAsync(CancellationToken ct)
+    private sealed record State(IReadOnlySet<string> Licensed, IReadOnlySet<string> Disabled, bool Suspended);
+
+    public async Task<IReadOnlySet<string>> DisabledAsync(CancellationToken ct) => (await StateAsync(ct)).Disabled;
+
+    public async Task<IReadOnlySet<string>> LicensedAsync(CancellationToken ct) => (await StateAsync(ct)).Licensed;
+
+    public async Task<bool> SuspendedAsync(CancellationToken ct) => (await StateAsync(ct)).Suspended;
+
+    private async Task<State> StateAsync(CancellationToken ct)
     {
-        if (tenant.CompanyId is not { } companyId) return new HashSet<string>();
-        var key = $"modules:{companyId}";
-        if (cache.TryGetValue(key, out IReadOnlySet<string>? cached) && cached is not null) return cached;
-        var raw = await db.Set<Company>().AsNoTracking().Where(c => c.Id == companyId).Select(c => c.DisabledModules).SingleOrDefaultAsync(ct) ?? "";
-        IReadOnlySet<string> result = Parse(raw);
-        cache.Set(key, result, TimeSpan.FromSeconds(30));
-        return result;
+        if (tenant.TenantId is not { } tenantId || tenant.CompanyId is not { } companyId)
+            return new State(ModuleCodes.Optional.ToHashSet(), new HashSet<string>(), false);
+        var version = cache.GetOrCreate($"modules-ver:{tenantId}", e => Guid.NewGuid());
+        var key = $"modules:{companyId}:{version}";
+        if (cache.TryGetValue(key, out State? cached) && cached is not null) return cached;
+        var switchedOff = ModuleCodes.Parse(await db.Set<Company>().AsNoTracking().Where(c => c.Id == companyId).Select(c => c.DisabledModules)
+            .SingleOrDefaultAsync(ct));
+        var subscription = await db.Set<Subscription>().AsNoTracking().Where(s => s.TenantId == tenantId)
+            .Select(s => new { s.Modules, s.Status }).SingleOrDefaultAsync(ct);
+        var status = await db.Set<Tenant>().AsNoTracking().Where(t => t.Id == tenantId).Select(t => t.Status).SingleOrDefaultAsync(ct);
+        // Tenants created before billing existed have no subscription row: everything stays licensed.
+        IReadOnlySet<string> licensed = subscription is null ? ModuleCodes.Optional.ToHashSet() : ModuleCodes.Parse(subscription.Modules);
+        var disabled = ModuleCodes.Optional.Where(m => !licensed.Contains(m) || switchedOff.Contains(m)).ToHashSet();
+        var state = new State(licensed, disabled, status == TenantStatus.Suspended || subscription?.Status == SubscriptionStatus.Suspended);
+        cache.Set(key, state, TimeSpan.FromSeconds(30));
+        return state;
     }
 
-    internal static HashSet<string> Parse(string raw) => raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
+    internal static HashSet<string> Parse(string raw) => ModuleCodes.Parse(raw);
 
-    internal static void Invalidate(IMemoryCache cache, Guid companyId) => cache.Remove($"modules:{companyId}");
+    /// <summary>After a licence, status or company switch changes: every company of that tenant reloads.</summary>
+    internal static void InvalidateTenant(IMemoryCache cache, Guid tenantId) => cache.Set($"modules-ver:{tenantId}", Guid.NewGuid());
 }
 
 internal static class PlatformEndpoints
 {
-    private static readonly (string Code, string En, string Ar, string[] Requires)[] Catalog =
+    internal static readonly (string Code, string En, string Ar)[] Names =
     [
-        (ModuleCodes.Hr, "HR & Payroll", "الموارد البشرية والرواتب", []),
-        (ModuleCodes.Inventory, "Inventory", "المخزون", []),
-        (ModuleCodes.Purchasing, "Purchasing", "المشتريات", [ModuleCodes.Inventory]),
-        (ModuleCodes.Sales, "Sales", "المبيعات", [ModuleCodes.Inventory])
+        (ModuleCodes.Hr, "HR & Payroll", "الموارد البشرية والرواتب"),
+        (ModuleCodes.Ess, "Employee self-service", "الخدمة الذاتية للموظفين"),
+        (ModuleCodes.Inventory, "Inventory", "المخزون"),
+        (ModuleCodes.Purchasing, "Purchasing", "المشتريات"),
+        (ModuleCodes.Sales, "Sales", "المبيعات"),
+        (ModuleCodes.Pos, "Point of sale", "نقاط البيع"),
+        (ModuleCodes.Crm, "CRM & commissions", "إدارة العملاء والعمولات"),
+        (ModuleCodes.Projects, "Projects & contracting", "المشاريع والمقاولات"),
+        (ModuleCodes.Subcontracts, "Subcontracts", "عقود الباطن"),
+        (ModuleCodes.Assets, "Fixed assets", "الأصول الثابتة"),
+        (ModuleCodes.Budgets, "Budgets", "الموازنات"),
+        (ModuleCodes.Tailoring, "Tailoring & abaya orders", "طلبات الخياطة والعبايات"),
+        (ModuleCodes.Salon, "Salon & appointments", "الصالون والمواعيد")
     ];
+
+    private static IEnumerable<(string Code, string En, string Ar, string[] Requires)> Catalog =>
+        Names.Select(n => (n.Code, n.En, n.Ar, ModuleCodes.Requires.GetValueOrDefault(n.Code) ?? []));
 
     public static void Map(IEndpointRouteBuilder app)
     {
@@ -64,24 +97,38 @@ internal static class PlatformEndpoints
     private static async Task<List<ModuleDto>> ListModules(IModuleAccess access, CancellationToken ct)
     {
         var disabled = await access.DisabledAsync(ct);
-        return Catalog.Select(m => new ModuleDto(m.Code, m.En, m.Ar, !disabled.Contains(m.Code), m.Requires)).ToList();
+        var licensed = await access.LicensedAsync(ct);
+        return Catalog.Select(m => new ModuleDto(m.Code, m.En, m.Ar, !disabled.Contains(m.Code), m.Requires, licensed.Contains(m.Code))).ToList();
     }
 
-    private static async Task<List<ModuleDto>> SaveModules(ModuleSwitchRequest r, ErpDbContext db, ITenantContext t, IMemoryCache cache, CancellationToken ct)
+    private static async Task<List<ModuleDto>> SaveModules(ModuleSwitchRequest r, ErpDbContext db, ITenantContext t, IMemoryCache cache, IModuleAccess access,
+        CancellationToken ct)
     {
-        var disabled = (r.Disabled ?? []).Select(x => x.Trim().ToLowerInvariant()).Distinct().ToList();
+        var licensed = await access.LicensedAsync(ct);
+        // Modules outside the subscription stay off whatever the company asks for.
+        var requested = (r.Disabled ?? []).Select(x => x.Trim().ToLowerInvariant()).Distinct().ToList();
+        var disabled = requested.Concat(ModuleCodes.Optional.Where(m => !licensed.Contains(m))).Distinct().ToList();
         if (disabled.Any(d => !ModuleCodes.Optional.Contains(d)))
             throw new BusinessRuleException("core.unknown_module", "Unknown module.", "وحدة غير معروفة.");
-        foreach (var m in Catalog.Where(m => !disabled.Contains(m.Code)))
-            foreach (var required in m.Requires.Where(disabled.Contains))
-                throw new BusinessRuleException("core.module_required", $"{m.En} needs {required}; switch {m.En} off first.",
-                    $"تحتاج وحدة {m.Ar} إلى وحدة أخرى مفعّلة؛ أوقف {m.Ar} أولاً.");
+        // Switching a module off also switches off the modules that depend on it (e.g. sales → CRM, projects, tailoring, salon).
+        bool changed;
+        do
+        {
+            changed = false;
+            foreach (var m in Catalog.Where(m => !disabled.Contains(m.Code) && m.Requires.Any(disabled.Contains)))
+            {
+                disabled.Add(m.Code);
+                if (licensed.Contains(m.Code)) requested.Add(m.Code);
+                changed = true;
+            }
+        } while (changed);
         var company = await db.Set<Company>().SingleAsync(c => c.Id == t.RequireCompanyId(), ct);
-        company.DisabledModules = string.Join(',', disabled.Order());
+        // Only the company's own choices are stored; licensing is applied on top, so an upgrade takes effect without re-saving.
+        company.DisabledModules = string.Join(',', requested.Where(licensed.Contains).Order());
         await db.SaveChangesAsync(ct);
-        ModuleAccess.Invalidate(cache, company.Id);
+        ModuleAccess.InvalidateTenant(cache, t.RequireTenantId());
         var set = disabled.ToHashSet();
-        return Catalog.Select(m => new ModuleDto(m.Code, m.En, m.Ar, !set.Contains(m.Code), m.Requires)).ToList();
+        return Catalog.Select(m => new ModuleDto(m.Code, m.En, m.Ar, !set.Contains(m.Code), m.Requires, licensed.Contains(m.Code))).ToList();
     }
 
     /// <summary>Audit trail with filters; newest first.</summary>
