@@ -9,6 +9,7 @@ namespace Erp.Modules.Inventory.Endpoints;
 internal sealed class InventoryDashboard(ErpDbContext db, ITenantContext tenant, IClock clock) : IDashboardProvider
 {
     public string Permission => InventoryPermissions.ReportsRead;
+    public string? Module => ModuleCodes.Inventory;
 
     public async Task<IReadOnlyList<DashboardTile>> GetTilesAsync(CancellationToken ct)
     {

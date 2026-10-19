@@ -12,13 +12,14 @@ internal static class DashboardEndpoints
     public static void Map(IEndpointRouteBuilder app)
     {
         // Each module's tiles that the user may see; a module that fails is left out instead of breaking the page.
-        app.MapGet("/api/core/dashboard", async (IEnumerable<IDashboardProvider> providers, IPermissionService permissions, ILoggerFactory logs,
-            CancellationToken ct) =>
+        app.MapGet("/api/core/dashboard", async (IEnumerable<IDashboardProvider> providers, IPermissionService permissions, IModuleAccess modules,
+            ILoggerFactory logs, CancellationToken ct) =>
         {
             var tiles = new List<DashboardTile>();
+            var off = await modules.DisabledAsync(ct);
             foreach (var p in providers)
             {
-                if (!await permissions.HasAsync(p.Permission, ct)) continue;
+                if (!await permissions.HasAsync(p.Permission, ct) || (p.Module is { } m && off.Contains(m))) continue;
                 try
                 {
                     tiles.AddRange(await p.GetTilesAsync(ct));

@@ -1895,7 +1895,8 @@ export const en = {
   'renew.Lease': 'Renew and attest at the municipality BEFORE the CR and licence renewal; it is the most common reason renewals are refused.',
   'renew.Insurance': 'Check that cover matches stock value and staff numbers.',
   'renew.VehicleRegistration': 'Needs valid insurance and a passed technical inspection (Fahes).',
-  'renew.Other': ''
+  'renew.Other': '',
+  'dashboard.section.today': 'Today'
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -1897,5 +1897,6 @@ export const ar: Record<TranslationKey, string> = {
   'renew.Lease': 'جدّد العقد وصدّقه من البلدية قبل تجديد السجل والرخصة؛ هو أكثر أسباب رفض التجديد شيوعاً.',
   'renew.Insurance': 'تأكد أن التغطية تناسب قيمة المخزون وعدد العاملين.',
   'renew.VehicleRegistration': 'يتطلب تأميناً سارياً واجتياز الفحص الفني (فاحص).',
-  'renew.Other': ''
+  'renew.Other': '',
+  'dashboard.section.today': 'اليوم'
 };

@@ -14,7 +14,7 @@ public sealed class DashboardTests(ErpFixture fixture)
         await FinanceTests.PostSimpleVoucherAsync(c, 100m);
         var owner = await c.GetAsync<List<JsonElement>>("/api/core/dashboard");
         var sections = owner.Select(x => x.GetProperty("section").GetString()).Distinct().ToList();
-        sections.ShouldBe(["finance", "sales", "purchasing", "inventory"], ignoreOrder: true);
+        sections.ShouldBe(["today", "finance", "sales", "purchasing", "inventory"], ignoreOrder: true);
         owner.Single(x => x.GetProperty("key").GetString() == "fin.cash").GetProperty("format").GetString().ShouldBe("money");
 
         (await c.PostJsonAsync("/api/core/users", new

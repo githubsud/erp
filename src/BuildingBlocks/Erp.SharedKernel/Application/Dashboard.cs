@@ -9,5 +9,8 @@ public interface IDashboardProvider
 {
     string Permission { get; }
 
+    /// <summary>The optional module the tiles belong to (null: always shown); hidden when it is off for the company.</summary>
+    string? Module => null;
+
     Task<IReadOnlyList<DashboardTile>> GetTilesAsync(CancellationToken ct);
 }

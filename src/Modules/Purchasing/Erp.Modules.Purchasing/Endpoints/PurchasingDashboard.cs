@@ -12,6 +12,7 @@ internal sealed class PurchasingDashboard(ErpDbContext db, ITenantContext tenant
     : IDashboardProvider
 {
     public string Permission => PurchasingPermissions.ReportsRead;
+    public string? Module => ModuleCodes.Purchasing;
 
     public async Task<IReadOnlyList<DashboardTile>> GetTilesAsync(CancellationToken ct)
     {

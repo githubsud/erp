@@ -151,7 +151,7 @@ export class DashboardPage {
   protected readonly approvals = signal(0);
   private readonly tiles = signal<DashboardTile[]>([]);
   protected readonly sections = computed(() => {
-    const order = ['finance', 'sales', 'purchasing', 'inventory'];
+    const order = ['today', 'finance', 'sales', 'purchasing', 'inventory'];
     return order.map((key) => ({ key, tiles: this.tiles().filter((t) => t.section === key) })).filter((s) => s.tiles.length);
   });
 

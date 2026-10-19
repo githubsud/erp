@@ -11,6 +11,7 @@ namespace Erp.Modules.Sales.Reports;
 internal sealed class SalesDashboard(ErpDbContext db, ITenantContext tenant, IFinanceQueries finance, IClock clock) : IDashboardProvider
 {
     public string Permission => SalesPermissions.ReportsRead;
+    public string? Module => ModuleCodes.Sales;
 
     public async Task<IReadOnlyList<DashboardTile>> GetTilesAsync(CancellationToken ct)
     {
