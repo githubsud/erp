@@ -30,6 +30,7 @@ public sealed class CoreModule : IModule
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IUserAccounts, UserAccounts>();
         services.AddScoped<ApprovalService>();
+        services.AddScoped<IModuleAccess, Platform.ModuleAccess>();
         services.AddScoped<IApprovalService>(sp => sp.GetRequiredService<ApprovalService>());
         services.AddScoped<ITenantProvisioner, ApprovalProvisioner>();
         services.AddSingleton<IPermissionProvider, CorePermissionProvider>();
@@ -39,5 +40,6 @@ public sealed class CoreModule : IModule
     {
         CoreEndpoints.Map(app);
         ApprovalEndpoints.Map(app);
+        Platform.PlatformEndpoints.Map(app);
     }
 }

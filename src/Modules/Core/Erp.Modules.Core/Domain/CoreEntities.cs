@@ -43,6 +43,9 @@ public sealed class Company : TenantEntity
 
     /// <summary>Segregation of duties: when false nobody approves a document they submitted themselves.</summary>
     public bool AllowSelfApproval { get; set; }
+
+    /// <summary>Comma-separated optional modules switched off for this company (hr, inventory, purchasing, sales).</summary>
+    public string DisabledModules { get; set; } = "";
     public uint Version { get; private set; }
 }
 

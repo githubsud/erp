@@ -359,6 +359,12 @@ export const routes: Routes = [
       { path: 'settings/security', loadComponent: () => import('./features/settings/security').then((m) => m.SecurityPage) },
       { path: 'settings/company', loadComponent: () => import('./features/settings/company').then((m) => m.CompanyPage) },
       {
+        path: 'settings/audit',
+        canActivate: [permissionGuard('core.audit:read')],
+        loadComponent: () => import('./features/settings/platform').then((m) => m.AuditPage)
+      },
+      { path: 'settings/modules', loadComponent: () => import('./features/settings/platform').then((m) => m.ModulesPage) },
+      {
         path: 'settings/users',
         canActivate: [permissionGuard('core.users:read')],
         loadComponent: () => import('./features/settings/users').then((m) => m.UsersPage)

@@ -1,3 +1,4 @@
+import { downloadCsv } from '../../shared/export';
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormArray, FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
@@ -29,6 +30,7 @@ export function matchChip(status: MatchStatus): string {
   template: `
     <div class="page-header">
       <h1>{{ 'pinv.title' | t }}</h1>
+      <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('pur.invoices:post')) {
         <a mat-flat-button routerLink="/purchasing/invoices/new"><mat-icon>add</mat-icon> {{ 'pinv.new' | t }}</a>
       }
@@ -90,6 +92,10 @@ export class InvoicesPage {
   protected readonly openOnly = new FormControl(false, { nonNullable: true });
   protected readonly suppliers = signal<Supplier[]>([]);
   protected readonly rows = signal<SupplierInvoice[]>([]);
+
+  protected exportCsv(): void {
+    downloadCsv('supplier_invoices.csv', ['Invoice', 'Supplier ref', 'Date', 'Due', 'Supplier', 'Currency', 'Total', 'Open', 'Status'], this.rows().map((x) => [x.invoiceNo, x.supplierRef, x.invoiceDate, x.dueDate, x.supplierNameEn, x.currency, x.total, x.openAmount, x.status]));
+  }
 
   constructor() {
     this.trade.suppliers().subscribe((s) => this.suppliers.set(s));

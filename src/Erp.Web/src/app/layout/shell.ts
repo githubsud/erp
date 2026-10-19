@@ -7,6 +7,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
 import { AuthService } from '../core/auth.service';
+import { ModulesService } from '../core/modules.service';
 import { I18nService } from '../core/i18n/i18n.service';
 import { SHARED } from '../shared/shared';
 
@@ -97,7 +98,9 @@ const NAV: NavGroup[] = [
       { icon: 'rule', label: 'nav.approvalRules', link: '/settings/approvals', permission: 'core.approvals:manage' },
       { icon: 'apartment', label: 'nav.company', link: '/settings/company' },
       { icon: 'shield_lock', label: 'nav.security', link: '/settings/security' },
-      { icon: 'group', label: 'nav.users', link: '/settings/users', permission: 'core.users:read' }
+      { icon: 'group', label: 'nav.users', link: '/settings/users', permission: 'core.users:read' },
+      { icon: 'manage_search', label: 'nav.audit', link: '/settings/audit', permission: 'core.audit:read' },
+      { icon: 'extension', label: 'nav.modules', link: '/settings/modules' }
     ]
   }
 ];
@@ -183,7 +186,16 @@ export class Shell {
     inject(BreakpointObserver).observe('(max-width: 960px)').pipe(map((r) => r.matches)),
     { initialValue: false }
   );
-  protected readonly nav = computed(() =>
-    NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.permission || this.auth.can(i.permission)) })).filter((g) => g.items.length > 0)
-  );
+  private readonly modules = inject(ModulesService);
+  protected readonly nav = computed(() => {
+    const off = this.modules.disabled();
+    return NAV.map((g) => ({
+      ...g,
+      items: g.items.filter((i) => (!i.permission || this.auth.can(i.permission)) && !off.has(ModulesService.moduleOf(i.link) ?? ''))
+    })).filter((g) => g.items.length > 0);
+  });
+
+  constructor() {
+    this.modules.load();
+  }
 }

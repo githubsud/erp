@@ -1,3 +1,4 @@
+import { downloadCsv } from '../../shared/export';
 import { Component, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, Validators } from '@angular/forms';
@@ -147,6 +148,7 @@ export class ItemDialog {
   template: `
     <div class="page-header">
       <h1>{{ 'item.title' | t }}</h1>
+      <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('inv.items:manage')) {
         <button mat-flat-button (click)="create()"><mat-icon>add</mat-icon> {{ 'item.new' | t }}</button>
       }
@@ -215,6 +217,10 @@ export class ItemsPage {
   protected readonly search = new FormControl('', { nonNullable: true });
   protected readonly type = new FormControl('', { nonNullable: true });
   protected readonly rows = signal<Item[]>([]);
+
+  protected exportCsv(): void {
+    downloadCsv('items.csv', ['SKU', 'Name', 'الاسم', 'Type', 'Unit', 'Barcode', 'On hand', 'Average cost', 'Value', 'Sales price'], this.rows().map((x) => [x.sku, x.nameEn, x.nameAr, x.itemType, x.uomCode, x.barcode ?? '', x.quantityOnHand, x.averageCost, x.stockValue, x.salesPrice ?? '']));
+  }
   protected readonly total = signal(0);
   protected readonly loading = signal(false);
   protected pageSize = 50;

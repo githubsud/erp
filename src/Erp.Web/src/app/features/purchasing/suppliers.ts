@@ -1,3 +1,4 @@
+import { downloadCsv } from '../../shared/export';
 import { Component, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, Validators } from '@angular/forms';
@@ -137,6 +138,7 @@ export class SupplierDialog {
   template: `
     <div class="page-header">
       <h1>{{ 'sup.title' | t }}</h1>
+      <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('pur.suppliers:manage')) {
         <button mat-flat-button (click)="edit()"><mat-icon>add</mat-icon> {{ 'sup.new' | t }}</button>
       }
@@ -191,6 +193,10 @@ export class SuppliersPage {
   protected readonly columns = ['code', 'name', 'country', 'terms', 'contact'];
   protected readonly search = new FormControl('', { nonNullable: true });
   protected readonly rows = signal<Supplier[]>([]);
+
+  protected exportCsv(): void {
+    downloadCsv('suppliers.csv', ['Code', 'Name', 'الاسم', 'Country', 'Resident', 'Currency', 'Payment terms', 'Phone', 'Email'], this.rows().map((x) => [x.code, x.nameEn, x.nameAr, x.country, x.isResident, x.currency, x.paymentTermsDays, x.phone ?? '', x.email ?? '']));
+  }
 
   constructor() {
     this.search.valueChanges.pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed()).subscribe(() => this.load());

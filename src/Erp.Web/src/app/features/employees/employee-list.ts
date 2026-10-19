@@ -1,3 +1,4 @@
+import { downloadCsv } from '../../shared/export';
 import { Component, inject, signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
@@ -17,6 +18,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
   template: `
     <div class="page-header">
       <h1>{{ 'employee.title' | t }}</h1>
+      <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('hr.employees:manage')) {
         <a mat-stroked-button routerLink="/employees/import"><mat-icon>upload_file</mat-icon> {{ 'import.title' | t }}</a>
         <a mat-flat-button routerLink="/employees/new"><mat-icon>person_add</mat-icon> {{ 'employee.new' | t }}</a>
@@ -92,6 +94,10 @@ export class EmployeeListPage {
 
   protected readonly columns = ['empNo', 'name', 'nationality', 'joining', 'status'];
   protected readonly rows = signal<Employee[]>([]);
+
+  protected exportCsv(): void {
+    downloadCsv('employees.csv', ['Emp No', 'Name', 'الاسم', 'Nationality', 'Job title', 'Joining date', 'Status', 'Mobile', 'Email'], this.rows().map((x) => [x.empNo, x.nameEn, x.nameAr, x.nationality, x.jobTitleEn ?? '', x.joiningDate, x.status, x.mobile ?? '', x.email ?? '']));
+  }
   protected readonly total = signal(0);
   protected readonly loading = signal(false);
   protected readonly search = new FormControl('', { nonNullable: true });

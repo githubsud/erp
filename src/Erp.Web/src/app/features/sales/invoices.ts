@@ -1,3 +1,4 @@
+import { downloadCsv } from '../../shared/export';
 import { CURRENCIES } from '../../core/trade.models';
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -24,6 +25,7 @@ export const salesInvoiceChip = (s: SalesInvoiceStatus) =>
   template: `
     <div class="page-header">
       <h1>{{ 'sinv.title' | t }}</h1>
+      <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('sal.invoices:post')) {
         <a mat-flat-button routerLink="/sales/invoices/new"><mat-icon>add</mat-icon> {{ 'sinv.new' | t }}</a>
       }
@@ -84,6 +86,10 @@ export class SalesInvoicesPage {
   protected readonly openOnly = new FormControl(false, { nonNullable: true });
   protected readonly customers = signal<Customer[]>([]);
   protected readonly rows = signal<SalesInvoice[]>([]);
+
+  protected exportCsv(): void {
+    downloadCsv('sales_invoices.csv', ['Invoice', 'Date', 'Due', 'Customer', 'Currency', 'Total', 'Open', 'Status'], this.rows().map((x) => [x.invoiceNo, x.invoiceDate, x.dueDate, x.customerNameEn, x.currency, x.total, x.openAmount, x.status]));
+  }
 
   constructor() {
     this.sales.customers().subscribe((c) => this.customers.set(c));

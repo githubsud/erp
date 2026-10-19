@@ -70,6 +70,7 @@ app.UseStatusCodePages();
 app.UseCors();
 app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();
+app.UseMiddleware<Erp.Infrastructure.Web.ModuleGateMiddleware>();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())

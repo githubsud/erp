@@ -1,3 +1,4 @@
+import { downloadCsv } from '../../shared/export';
 import { CURRENCIES } from '../../core/trade.models';
 import { Component, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -154,6 +155,7 @@ export class CustomerDialog {
   template: `
     <div class="page-header">
       <h1>{{ 'cust.title' | t }}</h1>
+      <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('sal.customers:manage')) {
         <a mat-stroked-button routerLink="/sales/price-lists"><mat-icon>sell</mat-icon> {{ 'nav.priceLists' | t }}</a>
         <button mat-flat-button (click)="edit()"><mat-icon>add</mat-icon> {{ 'cust.new' | t }}</button>
@@ -210,6 +212,10 @@ export class CustomersPage {
   protected readonly columns = ['code', 'name', 'limit', 'terms', 'contact'];
   protected readonly search = new FormControl('', { nonNullable: true });
   protected readonly rows = signal<Customer[]>([]);
+
+  protected exportCsv(): void {
+    downloadCsv('customers.csv', ['Code', 'Name', 'الاسم', 'Currency', 'Payment terms', 'Credit limit', 'Phone', 'Email', 'Active'], this.rows().map((x) => [x.code, x.nameEn, x.nameAr, x.currency, x.paymentTermsDays, x.creditLimit ?? '', x.phone ?? '', x.email ?? '', x.isActive]));
+  }
 
   constructor() {
     this.search.valueChanges.pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed()).subscribe(() => this.load());
