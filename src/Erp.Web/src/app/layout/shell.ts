@@ -39,7 +39,8 @@ const NAV: NavGroup[] = [
       { icon: 'beach_access', label: 'nav.leave', link: '/leave', permission: 'hr.employees:read' },
       { icon: 'event_busy', label: 'nav.documents', link: '/documents', permission: 'hr.employees:read' },
       { icon: 'handshake', label: 'nav.settlements', link: '/settlements', permission: 'hr.payroll:read' },
-      { icon: 'savings', label: 'nav.gratuity', link: '/gratuity', permission: 'hr.payroll:read' }
+      { icon: 'savings', label: 'nav.gratuity', link: '/gratuity', permission: 'hr.payroll:read' },
+      { icon: 'summarize', label: 'nav.hrReports', link: '/hr-reports', permission: 'hr.payroll:read' }
     ]
   },
   {

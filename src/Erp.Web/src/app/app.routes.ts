@@ -297,6 +297,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/settlements/settlement-list').then((m) => m.SettlementListPage)
       },
       {
+        path: 'hr-reports',
+        canActivate: [permissionGuard('hr.payroll:read')],
+        loadComponent: () => import('./features/payroll/hr-reports').then((m) => m.HrReportsPage)
+      },
+      {
         path: 'gratuity',
         canActivate: [permissionGuard('hr.payroll:read')],
         loadComponent: () => import('./features/payroll/gratuity-report').then((m) => m.GratuityReportPage)

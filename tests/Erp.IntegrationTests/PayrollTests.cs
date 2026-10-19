@@ -67,9 +67,9 @@ public sealed class PayrollTests(ErpFixture fixture)
             components = components.Select(c => new { componentCode = c.Code, amount = c.Amount }).ToArray()
         });
 
-    private sealed record Workforce(Employee Ramesh, Employee Maria, Employee Ahmed);
+    internal sealed record Workforce(Employee Ramesh, Employee Maria, Employee Ahmed);
 
-    private static async Task<Workforce> SetUpWorkforceAsync(HttpClient client)
+    internal static async Task<Workforce> SetUpWorkforceAsync(HttpClient client)
     {
         await ConfigureWpsAsync(client);
         var ramesh = await HireAsync(client, "E001", "Ramesh Kumar", "IN", new DateOnly(2024, 3, 1), "28435612345", "000000000001111111111");
