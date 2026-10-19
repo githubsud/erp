@@ -16,6 +16,7 @@ public static class FinancePermissions
     public const string BankReconcile = "fin.bank:reconcile";
     public const string AssetsRead = "fin.assets:read";
     public const string AssetsManage = "fin.assets:manage";
+    public const string BudgetsManage = "fin.budgets:manage";
 }
 
 internal sealed class FinancePermissionProvider : IPermissionProvider
@@ -32,6 +33,7 @@ internal sealed class FinancePermissionProvider : IPermissionProvider
         new(FinancePermissions.ReportsRead, "View financial reports", "عرض التقارير المالية", Accountant, GeneralManager, Auditor),
         new(FinancePermissions.BankReconcile, "Import bank statements and reconcile", "استيراد كشوف البنك والمطابقة", Accountant),
         new(FinancePermissions.AssetsRead, "View fixed assets", "عرض الأصول الثابتة", Accountant, GeneralManager, Auditor),
-        new(FinancePermissions.AssetsManage, "Manage fixed assets and run depreciation", "إدارة الأصول الثابتة وتشغيل الإهلاك", Accountant)
+        new(FinancePermissions.AssetsManage, "Manage fixed assets and run depreciation", "إدارة الأصول الثابتة وتشغيل الإهلاك", Accountant),
+        new(FinancePermissions.BudgetsManage, "Prepare and approve budgets", "إعداد واعتماد الموازنات", Accountant, GeneralManager)
     ];
 }

@@ -1248,7 +1248,28 @@ export const en = {
   'fa.status.Draft': 'Not capitalised',
   'fa.status.Active': 'In use',
   'fa.status.FullyDepreciated': 'Fully depreciated',
-  'fa.status.Disposed': 'Disposed'
+  'fa.status.Disposed': 'Disposed',
+  'nav.budgets': 'Budgets',
+  'bud.title': 'Budgets',
+  'bud.year': 'Fiscal year',
+  'bud.name': 'Budget name',
+  'bud.new': 'New budget',
+  'bud.income': 'Income',
+  'bud.expense': 'Expenses',
+  'bud.status.Draft': 'Draft',
+  'bud.status.Approved': 'Approved',
+  'bud.approve': 'Approve',
+  'bud.approveConfirm': 'Approve this budget? It becomes the baseline for variance reports and cannot be edited until reopened.',
+  'bud.reopen': 'Reopen',
+  'bud.reopenConfirm': 'Reopen this budget for changes?',
+  'bud.plan': 'Plan',
+  'bud.variance': 'Budget vs actual',
+  'bud.account': 'Account',
+  'bud.addAccount': 'Add account',
+  'bud.spread': 'Spread a yearly amount evenly',
+  'bud.budget': 'Budget',
+  'bud.actual': 'Actual',
+  'bud.varianceCol': 'Variance'
 } as const;
 
 export type TranslationKey = keyof typeof en;

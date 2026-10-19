@@ -28,6 +28,7 @@ public sealed class FinanceModule : IModule
         services.AddScoped<CashFlowReport>();
         services.AddScoped<YearEndService>();
         services.AddScoped<Assets.FixedAssetService>();
+        services.AddScoped<Budgets.BudgetService>();
         services.AddScoped<StatementsPdf>();
         services.AddScoped<BankReconciliationService>();
         services.AddScoped<JournalVoucherService>();
@@ -39,5 +40,6 @@ public sealed class FinanceModule : IModule
     {
         FinanceEndpoints.Map(app);
         Assets.FixedAssetEndpoints.Map(app);
+        Budgets.BudgetEndpoints.Map(app);
     }
 }

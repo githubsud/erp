@@ -84,6 +84,7 @@ const NAV: NavGroup[] = [
       { icon: 'edit_note', label: 'nav.vouchers', link: '/finance/vouchers', permission: 'fin.journal:read' },
       { icon: 'account_balance', label: 'nav.bank', link: '/finance/bank', permission: 'fin.bank:reconcile' },
       { icon: 'precision_manufacturing', label: 'nav.fixedAssets', link: '/finance/assets', permission: 'fin.assets:read' },
+      { icon: 'query_stats', label: 'nav.budgets', link: '/finance/budgets', permission: 'fin.reports:read' },
       { icon: 'account_tree', label: 'nav.accounts', link: '/finance/accounts', permission: 'fin.accounts:read' },
       { icon: 'balance', label: 'nav.trialBalance', link: '/finance/trial-balance', permission: 'fin.reports:read' },
       { icon: 'receipt_long', label: 'nav.journal', link: '/finance/journal', permission: 'fin.journal:read' },
