@@ -178,7 +178,8 @@ export class AuditPage implements OnInit {
     <mat-card appearance="outlined" class="card">
       @for (m of modules(); track m.code) {
         <div class="row">
-          <mat-slide-toggle [checked]="m.enabled" [disabled]="!canManage || busy()" (change)="toggle(m, $event.checked)">{{ m | bi }}</mat-slide-toggle>
+          <mat-slide-toggle [checked]="m.enabled" [disabled]="!canManage || busy() || m.licensed === false" (change)="toggle(m, $event.checked)">{{ m | bi }}</mat-slide-toggle>
+          @if (m.licensed === false) { <span class="chip">{{ 'modules.notLicensed' | t }}</span> }
           @if (m.requires.length) { <span class="secondary">{{ 'modules.requires' | t }} @for (r of m.requires; track r) { {{ name(r) }} }</span> }
         </div>
       }
@@ -208,7 +209,7 @@ export class ModulesPage implements OnInit {
   }
 
   protected toggle(m: ModuleInfo, on: boolean): void {
-    const disabled = this.modules().filter((x) => (x.code === m.code ? !on : !x.enabled)).map((x) => x.code);
+    const disabled = this.modules().filter((x) => x.licensed !== false && (x.code === m.code ? !on : !x.enabled)).map((x) => x.code);
     this.busy.set(true);
     this.api.put<ModuleInfo[]>('core/modules', { disabled }).subscribe({
       next: (list) => {

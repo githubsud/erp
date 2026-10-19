@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse, HttpInterceptorFn, HttpRequest } from '@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { Observable, catchError, finalize, map, of, shareReplay, switchMap, tap, throwError } from 'rxjs';
+import { BackOfficeService } from './backoffice.service';
 import { ConfigService } from './config.service';
 import { I18nService } from './i18n/i18n.service';
 import { LoginResponse } from './models';
@@ -132,8 +133,20 @@ const isAuthCall = (req: HttpRequest<unknown>) => /\/api\/auth\/(login|refresh|l
 
 /** Adds the bearer token and language; on 401 renews the session once and retries, otherwise signs out. */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const auth = inject(AuthService);
   const i18n = inject(I18nService);
+  // The vendor back-office has its own token and never sees a customer's session (and vice versa).
+  if (req.url.includes('/api/backoffice/')) {
+    const backOffice = inject(BackOfficeService);
+    const headers: Record<string, string> = { 'Accept-Language': i18n.lang() };
+    if (backOffice.token && !req.url.endsWith('/api/backoffice/auth/login')) headers['Authorization'] = `Bearer ${backOffice.token}`;
+    return next(req.clone({ setHeaders: headers })).pipe(
+      catchError((error: unknown) => {
+        if (error instanceof HttpErrorResponse && error.status === 401 && !req.url.endsWith('/auth/login')) backOffice.logout();
+        return throwError(() => error);
+      })
+    );
+  }
+  const auth = inject(AuthService);
   const withToken = (r: HttpRequest<unknown>) => {
     const headers: Record<string, string> = { 'Accept-Language': i18n.lang() };
     if (auth.token && !isAuthCall(r)) headers['Authorization'] = `Bearer ${auth.token}`;

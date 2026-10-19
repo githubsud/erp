@@ -1,9 +1,24 @@
 import { Routes } from '@angular/router';
 import { authGuard, permissionGuard, selfServiceGuard, sessionGuard } from './core/auth.service';
+import { backOfficeGuard } from './core/backoffice.service';
 import { Shell } from './layout/shell';
 
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./features/login/login').then((m) => m.LoginPage) },
+  { path: 'backoffice/login', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeLoginPage) },
+  {
+    path: 'backoffice',
+    canActivate: [backOfficeGuard],
+    loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeShell),
+    children: [
+      { path: '', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeDashboardPage) },
+      { path: 'customers', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeCustomersPage) },
+      { path: 'customers/:id', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeCustomerPage) },
+      { path: 'invoices', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeInvoicesPage) },
+      { path: 'plans', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficePlansPage) },
+      { path: 'admins', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeAdminsPage) }
+    ]
+  },
   {
     path: 'change-password',
     canActivate: [sessionGuard],
