@@ -2,7 +2,9 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
 import { todayIso } from '../../core/dates';
-import { PayrollRun } from '../../core/models';
+import { AuthService } from '../../core/auth.service';
+import { I18nService } from '../../core/i18n/i18n.service';
+import { Account, PayrollRun } from '../../core/models';
 import { NotifyService } from '../../core/notify.service';
 import { NATIONALITIES, SHARED } from '../../shared/shared';
 
@@ -67,6 +69,39 @@ interface WpsRow {
   paymentDate: string | null;
   matches: boolean;
   issues: string[];
+}
+
+interface GrsiaMonth {
+  month: number;
+  employees: number;
+  employeeShare: number;
+  employerShare: number;
+  total: number;
+  paidOn: string | null;
+  paidAmount: number | null;
+}
+
+interface GrsiaSchedule {
+  year: number;
+  month: number;
+  rows: {
+    employeeId: string;
+    empNo: string;
+    nameEn: string;
+    nameAr: string;
+    qid: string | null;
+    contributionSalary: number;
+    employeeShare: number;
+    employerShare: number;
+    total: number;
+  }[];
+  contributionSalary: number;
+  employeeShare: number;
+  employerShare: number;
+  total: number;
+  allPosted: boolean;
+  payment: { amount: number; paymentDate: string; reference: string | null } | null;
+  ledgerBalance: number;
 }
 
 @Component({
@@ -187,6 +222,70 @@ interface WpsRow {
         </table>
         @if (!wps().length) { <p class="secondary">{{ 'app.none' | t }}</p> }
       </mat-tab>
+
+      <mat-tab [label]="'grsia.tab' | t">
+        <div class="toolbar-row tab-body">
+          <mat-form-field><mat-label>{{ 'hrr.year' | t }}</mat-label><input matInput type="number" [formControl]="year" dir="ltr" /></mat-form-field>
+          <button mat-flat-button (click)="loadGrsiaYear()">{{ 'finance.run' | t }}</button>
+        </div>
+        <p class="secondary">{{ 'grsia.hint' | t }}</p>
+        <table class="line-editor">
+          <thead><tr><th>{{ 'payroll.month' | t }}</th><th class="num">{{ 'grsia.employees' | t }}</th><th class="num">{{ 'grsia.employeeShare' | t }}</th>
+            <th class="num">{{ 'grsia.employerShare' | t }}</th><th class="num">{{ 'app.total' | t }}</th><th>{{ 'grsia.paid' | t }}</th><th></th></tr></thead>
+          <tbody>
+            @for (m of grsiaYear(); track m.month) {
+              @if (m.total > 0 || m.paidAmount) {
+                <tr>
+                  <td class="ltr">{{ period(m.month) }}</td>
+                  <td class="num ltr">{{ m.employees }}</td>
+                  <td class="num ltr">{{ m.employeeShare | money }}</td>
+                  <td class="num ltr">{{ m.employerShare | money }}</td>
+                  <td class="num ltr"><b>{{ m.total | money }}</b></td>
+                  <td>@if (m.paidOn) { <span class="chip ok ltr">{{ m.paidOn | d }}</span> } @else { <span class="chip warn">{{ 'grsia.unpaid' | t }}</span> }</td>
+                  <td><button mat-button (click)="loadGrsia(m.month)">{{ 'app.view' | t }}</button></td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+        @if (grsia(); as g) {
+          <h3>{{ 'grsia.schedule' | t }} · <span class="ltr">{{ period(g.month) }}</span>
+            <button mat-button (click)="grsiaExcel(g.year, g.month)"><mat-icon>download</mat-icon> Excel</button></h3>
+          <div class="reconcile" [class.bad]="!g.payment && g.total !== g.ledgerBalance">
+            {{ 'grsia.ledger' | t }}: <span class="ltr">{{ g.ledgerBalance | money }}</span>
+          </div>
+          <table class="line-editor compact">
+            <thead><tr><th>{{ 'grsia.empNo' | t }}</th><th>{{ 'grsia.name' | t }}</th><th>QID</th><th class="num">{{ 'grsia.salary' | t }}</th>
+              <th class="num">{{ 'grsia.employeeShare' | t }}</th><th class="num">{{ 'grsia.employerShare' | t }}</th><th class="num">{{ 'app.total' | t }}</th></tr></thead>
+            <tbody>
+              @for (r of g.rows; track r.employeeId) {
+                <tr>
+                  <td class="ltr">{{ r.empNo }}</td><td>{{ r | bi }}</td><td class="ltr">{{ r.qid }}</td>
+                  <td class="num ltr">{{ r.contributionSalary | money }}</td><td class="num ltr">{{ r.employeeShare | money }}</td>
+                  <td class="num ltr">{{ r.employerShare | money }}</td><td class="num ltr">{{ r.total | money }}</td>
+                </tr>
+              }
+              <tr class="total"><td colspan="3">{{ 'app.total' | t }}</td><td class="num ltr">{{ g.contributionSalary | money }}</td>
+                <td class="num ltr">{{ g.employeeShare | money }}</td><td class="num ltr">{{ g.employerShare | money }}</td><td class="num ltr"><b>{{ g.total | money }}</b></td></tr>
+            </tbody>
+          </table>
+          @if (g.payment; as p) {
+            <p>{{ 'grsia.paidOn' | t }} <span class="ltr">{{ p.paymentDate | d }}</span> · <span class="ltr">{{ p.amount | money }}</span>
+              @if (p.reference) { · <span class="ltr">{{ p.reference }}</span> }</p>
+          } @else if (canPay && g.allPosted && g.total > 0) {
+            <div class="toolbar-row">
+              <mat-form-field><mat-label>{{ 'grsia.payFrom' | t }}</mat-label>
+                <mat-select [formControl]="payAccount">@for (a of bankAccounts(); track a.id) { <mat-option [value]="a.id"><span class="ltr">{{ a.code }}</span> {{ a | bi }}</mat-option> }</mat-select>
+              </mat-form-field>
+              <mat-form-field><mat-label>{{ 'app.date' | t }}</mat-label><input matInput type="date" [formControl]="payDate" /></mat-form-field>
+              <mat-form-field><mat-label>{{ 'grsia.reference' | t }}</mat-label><input matInput class="ltr" [formControl]="payRef" /></mat-form-field>
+              <button mat-flat-button [disabled]="!payAccount.value" (click)="payGrsia(g.year, g.month)">{{ 'grsia.pay' | t }}</button>
+            </div>
+          } @else if (!g.allPosted) {
+            <p class="secondary">{{ 'grsia.notPosted' | t }}</p>
+          }
+        }
+      </mat-tab>
     </mat-tab-group>
   `,
   styles: `
@@ -206,6 +305,7 @@ interface WpsRow {
 export class HrReportsPage implements OnInit {
   private readonly api = inject(ApiService);
   private readonly notify = inject(NotifyService);
+  private readonly i18n = inject(I18nService);
   protected readonly runs = signal<PayrollRun[]>([]);
   protected readonly runId = new FormControl('', { nonNullable: true });
   protected readonly asOf = new FormControl(todayIso(), { nonNullable: true });
@@ -214,6 +314,13 @@ export class HrReportsPage implements OnInit {
   protected readonly headcount = signal<Headcount | null>(null);
   protected readonly leave = signal<LeaveLiability | null>(null);
   protected readonly wps = signal<WpsRow[]>([]);
+  protected readonly grsiaYear = signal<GrsiaMonth[]>([]);
+  protected readonly grsia = signal<GrsiaSchedule | null>(null);
+  protected readonly bankAccounts = signal<Account[]>([]);
+  protected readonly canPay = inject(AuthService).can('hr.payroll:post');
+  protected readonly payAccount = new FormControl('', { nonNullable: true });
+  protected readonly payDate = new FormControl(todayIso(), { nonNullable: true });
+  protected readonly payRef = new FormControl('', { nonNullable: true });
 
   ngOnInit(): void {
     this.api.payrollRuns().subscribe((runs) => {
@@ -230,6 +337,38 @@ export class HrReportsPage implements OnInit {
     if (index === 1 && !this.headcount()) this.loadHeadcount();
     if (index === 2 && !this.leave()) this.loadLeave();
     if (index === 3 && !this.wps().length) this.loadWps();
+    if (index === 4 && !this.grsiaYear().length) this.loadGrsiaYear();
+  }
+
+  protected period(month: number): string {
+    return `${this.year.value}-${String(month).padStart(2, '0')}`;
+  }
+
+  protected loadGrsiaYear(): void {
+    this.grsia.set(null);
+    this.api.get<GrsiaMonth[]>('hr/reports/grsia/year', { year: this.year.value }).subscribe({ next: (r) => this.grsiaYear.set(r), error: (e) => this.notify.error(e) });
+  }
+
+  protected loadGrsia(month: number): void {
+    this.api.get<GrsiaSchedule>('hr/reports/grsia', { year: this.year.value, month }).subscribe({ next: (r) => this.grsia.set(r), error: (e) => this.notify.error(e) });
+    if (this.canPay && !this.bankAccounts().length)
+      this.api.accounts().subscribe((a) => this.bankAccounts.set(a.filter((x) => x.isPostable && x.isActive && (x.subtype === 'bank' || x.subtype === 'cash'))));
+  }
+
+  protected grsiaExcel(year: number, month: number): void {
+    this.api.download('hr/reports/grsia/xlsx', { year, month }, `grsia_${year}_${month}.xlsx`).subscribe({ error: (e) => this.notify.error(e) });
+  }
+
+  protected payGrsia(year: number, month: number): void {
+    if (!confirm(this.i18n.t('grsia.payConfirm'))) return;
+    this.api.post('hr/reports/grsia/pay', { year, month, accountId: this.payAccount.value, paymentDate: this.payDate.value, reference: this.payRef.value || null }).subscribe({
+      next: () => {
+        this.notify.success();
+        this.loadGrsia(month);
+        this.api.get<GrsiaMonth[]>('hr/reports/grsia/year', { year }).subscribe((r) => this.grsiaYear.set(r));
+      },
+      error: (e) => this.notify.error(e)
+    });
   }
 
   protected loadRegister(): void {

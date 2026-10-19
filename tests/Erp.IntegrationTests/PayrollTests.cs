@@ -180,6 +180,27 @@ public sealed class PayrollTests(ErpFixture fixture)
         tb.Rows.Single(r => r.Code == "2140").Closing.ShouldBe(0m);
         tb.Rows.Single(r => r.Code == "1120").Closing.ShouldBe(-run.TotalNet);
 
+        // GRSIA schedule: only the Qatari, 7% + 14% of 20,000; it agrees with social insurance payable until paid.
+        var grsia = await c.GetAsync<JsonElement>($"/api/hr/reports/grsia?year={MonthStart.Year}&month={MonthStart.Month}");
+        grsia.GetProperty("rows").GetArrayLength().ShouldBe(1);
+        grsia.GetProperty("rows")[0].GetProperty("contributionSalary").GetDecimal().ShouldBe(20000m);
+        grsia.GetProperty("employeeShare").GetDecimal().ShouldBe(1400m);
+        grsia.GetProperty("employerShare").GetDecimal().ShouldBe(2800m);
+        grsia.GetProperty("total").GetDecimal().ShouldBe(grsia.GetProperty("ledgerBalance").GetDecimal());
+        (await c.GetAsync($"/api/hr/reports/grsia/xlsx?year={MonthStart.Year}&month={MonthStart.Month}")).EnsureSuccessStatusCode();
+        await c.PostAsync<JsonElement>("/api/hr/reports/grsia/pay", new
+        {
+            year = MonthStart.Year, month = MonthStart.Month, accountId = accounts.Single(a => a.Code == "1120").Id, paymentDate = MonthEnd, reference = "GRSIA-REF"
+        });
+        (await (await c.PostJsonAsync("/api/hr/reports/grsia/pay", new
+        {
+            year = MonthStart.Year, month = MonthStart.Month, accountId = accounts.Single(a => a.Code == "1120").Id, paymentDate = MonthEnd
+        })).ProblemAsync()).GetProperty("code").GetString().ShouldBe("hr.grsia_paid");
+        tb = await c.GetAsync<FinanceTests.Tb>($"/api/finance/reports/trial-balance?from={MonthStart:yyyy-MM-dd}&to={MonthEnd:yyyy-MM-dd}");
+        tb.Rows.Single(r => r.Code == "2180").Closing.ShouldBe(0m);
+        var grsiaYear = await c.GetAsync<List<JsonElement>>($"/api/hr/reports/grsia/year?year={MonthStart.Year}");
+        grsiaYear.Single(m => m.GetProperty("month").GetInt32() == MonthStart.Month).GetProperty("paidAmount").GetDecimal().ShouldBe(4200m);
+
         var reverse = await c.PostJsonAsync($"/api/hr/payroll-runs/{run.Id}/reverse", new { date = MonthEnd, reason = "test" });
         (await reverse.ProblemAsync()).GetProperty("code").GetString().ShouldBe("hr.payroll_paid");
     }

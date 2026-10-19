@@ -1499,7 +1499,25 @@ export const en = {
   'roster.editShift': 'Edit shift',
   'me.nav.roster': 'My shifts',
   'me.today': 'Today',
-  'me.noRoster': 'No shifts planned for you in the next two weeks.'
+  'me.noRoster': 'No shifts planned for you in the next two weeks.',
+  'grsia.tab': 'GRSIA',
+  'grsia.hint': 'Social insurance contributions for Qatari employees from approved payroll. Confirm the GRSIA filing format with your adviser before uploading the export.',
+  'grsia.employees': 'Employees',
+  'grsia.employeeShare': 'Employee share',
+  'grsia.employerShare': 'Employer share',
+  'grsia.paid': 'Paid',
+  'grsia.unpaid': 'Not paid',
+  'grsia.schedule': 'Contribution schedule',
+  'grsia.ledger': 'Social insurance payable in the ledger at month end',
+  'grsia.empNo': 'Emp no',
+  'grsia.name': 'Name',
+  'grsia.salary': 'Contribution salary',
+  'grsia.paidOn': 'Paid on',
+  'grsia.payFrom': 'Pay from',
+  'grsia.reference': 'Reference',
+  'grsia.pay': 'Record payment',
+  'grsia.payConfirm': 'Record payment of this month\'s contributions to GRSIA?',
+  'grsia.notPosted': 'Post the month\'s payroll before recording the payment.'
 } as const;
 
 export type TranslationKey = keyof typeof en;
