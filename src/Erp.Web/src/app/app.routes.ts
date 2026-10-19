@@ -173,6 +173,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/purchasing/reports').then((m) => m.PurchasingReportsPage)
       },
       {
+        path: 'sales/crm',
+        canActivate: [permissionGuard('sal.crm:use')],
+        loadComponent: () => import('./features/sales/crm').then((m) => m.CrmPage)
+      },
+      {
         path: 'sales/customers',
         canActivate: [permissionGuard('sal.customers:read')],
         loadComponent: () => import('./features/sales/customers').then((m) => m.CustomersPage)
