@@ -1884,7 +1884,18 @@ export const en = {
   'sl.status.NoShow': 'No-show',
   'sl.msg.reminder': 'Hello {name}, a reminder of your appointment today at {time}. See you soon!',
   'pos.onAccount': 'Sell on account',
-  'pos.onAccountDone': 'Added to the customer\'s account.'
+  'pos.onAccountDone': 'Added to the customer\'s account.',
+  'renew.CommercialRegistration': 'Renew with the trade licence and Chamber membership (Single Window). Needs a valid, municipality-attested tenancy contract covering the new period.',
+  'renew.CommercialLicense': 'Renewed together with the CR. Keep the tenancy contract and civil defence approval (if your activity needs it) valid.',
+  'renew.MunicipalityLicense': 'Needs the attested tenancy contract and, for some shops, a municipality inspection.',
+  'renew.EstablishmentCard': 'Renew before visas or labour transactions are blocked; needs a valid CR.',
+  'renew.ChamberCertificate': 'Renewed with the CR; the membership fee depends on the capital.',
+  'renew.TaxCard': 'Keep it valid for government tenders and some bank transactions.',
+  'renew.CivilDefence': 'Book the inspection early: fire extinguishers and exits must be in order.',
+  'renew.Lease': 'Renew and attest at the municipality BEFORE the CR and licence renewal; it is the most common reason renewals are refused.',
+  'renew.Insurance': 'Check that cover matches stock value and staff numbers.',
+  'renew.VehicleRegistration': 'Needs valid insurance and a passed technical inspection (Fahes).',
+  'renew.Other': ''
 } as const;
 
 export type TranslationKey = keyof typeof en;

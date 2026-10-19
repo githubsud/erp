@@ -105,7 +105,8 @@ const COMPANY_DOC_TYPES = [
             <table mat-table [dataSource]="company()">
               <ng-container matColumnDef="type">
                 <th mat-header-cell *matHeaderCellDef>{{ 'document.type' | t }}</th>
-                <td mat-cell *matCellDef="let d">{{ d | bi }}</td>
+                <td mat-cell *matCellDef="let d">{{ d | bi }}
+                  <div class="renew">{{ 'renew.' + d.docType | t }}</div></td>
               </ng-container>
               <ng-container matColumnDef="no">
                 <th mat-header-cell *matHeaderCellDef>{{ 'document.no' | t }}</th>
@@ -132,6 +133,7 @@ const COMPANY_DOC_TYPES = [
   `,
   styles: `
     .tab { padding: 20px 4px; }
+    .renew { color: var(--mat-sys-on-surface-variant); font-size: 12px; max-width: 520px; }
     .within { width: 160px; }
     .form-card { padding: 16px 20px; margin-bottom: 16px; }
     .small { font-size: 18px; width: 18px; height: 18px; vertical-align: middle; }
