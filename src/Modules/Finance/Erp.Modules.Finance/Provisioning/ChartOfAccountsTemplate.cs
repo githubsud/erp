@@ -67,6 +67,7 @@ internal static class ChartOfAccountsTemplate
         new("4130", "4", "Sales Returns and Discounts", "مردودات وخصومات المبيعات", I, Normal: NormalBalance.Debit),
         new("4210", "4", "Other Income", "إيرادات أخرى", I),
         new("4220", "4", "Foreign Exchange Differences", "فروقات أسعار الصرف", I),
+        new("4230", "4", "Gain or Loss on Disposal of Assets", "أرباح أو خسائر بيع الأصول", I),
 
         new("5", null, "Expenses", "المصروفات", X, false),
         new("51", "5", "Cost of Sales", "تكلفة المبيعات", X, false, Subtype: "cost_of_sales"),
