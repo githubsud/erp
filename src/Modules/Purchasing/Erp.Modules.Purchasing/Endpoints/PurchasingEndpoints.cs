@@ -395,7 +395,7 @@ internal static class PurchasingEndpoints
         return new GrniReport(result, total, ledger, total - ledger);
     }
 
-    private static async Task<AgingReport> AgingAsync(ErpDbContext db, ITenantContext t, IFinanceQueries finance, CancellationToken ct, DateOnly? asOf = null)
+    internal static async Task<AgingReport> AgingAsync(ErpDbContext db, ITenantContext t, IFinanceQueries finance, CancellationToken ct, DateOnly? asOf = null)
     {
         var date = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var open = await (from i in db.Set<SupplierInvoice>().AsNoTracking()

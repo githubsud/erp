@@ -1549,7 +1549,25 @@ export const en = {
   'approval.revoked': 'Revoked',
   'approval.ended': 'Ended',
   'approval.revoke': 'Revoke',
-  'approval.onBehalfOf': 'on behalf of {name}'
+  'approval.onBehalfOf': 'on behalf of {name}',
+  'nav.reportSchedules': 'Scheduled reports',
+  'sched.title': 'Scheduled reports',
+  'sched.hint': 'Reports you can see can be emailed automatically as Excel-ready CSV files. They are sent after 6:00 am Qatar time.',
+  'sched.report': 'Report',
+  'sched.frequency': 'Frequency',
+  'sched.freq.Daily': 'Daily',
+  'sched.freq.Weekly': 'Weekly',
+  'sched.freq.Monthly': 'Monthly',
+  'sched.weekday': 'Day of the week',
+  'sched.monthDay': 'Day of the month (1–28)',
+  'sched.recipients': 'Recipients',
+  'sched.recipientsHint': 'Email addresses separated by commas',
+  'sched.add': 'Schedule',
+  'sched.next': 'Next send',
+  'sched.last': 'Last sent',
+  'sched.sendNow': 'Send now',
+  'sched.queued': 'Queued for sending.',
+  'sched.deleteConfirm': 'Delete this schedule?'
 } as const;
 
 export type TranslationKey = keyof typeof en;

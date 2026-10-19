@@ -20,6 +20,7 @@ public sealed class InventoryModule : IModule
         services.AddScoped<IStockService, StockLedger>();
         services.AddScoped<IInventoryQueries, InventoryQueries>();
         services.AddScoped<InventoryMasterService>();
+        services.AddScoped<IScheduledReport, Endpoints.ReorderScheduledReport>();
         services.AddScoped<StockAdjustmentService>();
         services.AddScoped<StockTransferService>();
         services.AddScoped<StockCountService>();

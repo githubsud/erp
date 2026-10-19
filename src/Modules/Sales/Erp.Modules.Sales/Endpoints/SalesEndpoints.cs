@@ -455,7 +455,7 @@ internal static class SalesEndpoints
     }
 
     /// <summary>Open invoices by days past their due date, next to the receivable account balance.</summary>
-    private static async Task<CustomerAgingReport> AgingAsync(ErpDbContext db, ITenantContext t, IFinanceQueries finance, IClock clock, CancellationToken ct,
+    internal static async Task<CustomerAgingReport> AgingAsync(ErpDbContext db, ITenantContext t, IFinanceQueries finance, IClock clock, CancellationToken ct,
         DateOnly? asOf = null)
     {
         var date = asOf ?? clock.Today;

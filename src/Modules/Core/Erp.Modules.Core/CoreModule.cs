@@ -33,6 +33,11 @@ public sealed class CoreModule : IModule
         services.AddScoped<IModuleAccess, Platform.ModuleAccess>();
         services.AddScoped<IApprovalService>(sp => sp.GetRequiredService<ApprovalService>());
         services.AddScoped<ITenantProvisioner, ApprovalProvisioner>();
+        services.AddScoped<Platform.ReportScheduleService>();
+        services.AddScoped<Erp.Infrastructure.Outbox.IOutboxHandler, Platform.ScheduledReportEmailHandler>();
+        services.AddSingleton<Platform.ReportScheduleJob>();
+        if (configuration.GetValue("Jobs:ReportSchedules:Enabled", true))
+            services.AddHostedService(sp => sp.GetRequiredService<Platform.ReportScheduleJob>());
         services.AddSingleton<IPermissionProvider, CorePermissionProvider>();
     }
 
@@ -41,5 +46,6 @@ public sealed class CoreModule : IModule
         CoreEndpoints.Map(app);
         ApprovalEndpoints.Map(app);
         Platform.PlatformEndpoints.Map(app);
+        Platform.ReportScheduleEndpoints.Map(app);
     }
 }

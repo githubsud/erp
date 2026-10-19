@@ -28,6 +28,7 @@ public sealed class SalesModule : IModule
         services.AddScoped<Crm.CommissionService>();
         services.AddScoped<Projects.ProjectService>();
         services.AddScoped<Pos.PosService>();
+        services.AddScoped<IScheduledReport, Reports.CustomerAgingScheduledReport>();
         services.AddScoped<CustomerOpeningService>();
         services.AddScoped<SalesPdfDocuments>();
         services.AddScoped<ITenantProvisioner, SalesProvisioner>();

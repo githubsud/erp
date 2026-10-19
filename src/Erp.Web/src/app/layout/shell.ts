@@ -107,7 +107,8 @@ const NAV: NavGroup[] = [
       { icon: 'shield_lock', label: 'nav.security', link: '/settings/security' },
       { icon: 'group', label: 'nav.users', link: '/settings/users', permission: 'core.users:read' },
       { icon: 'manage_search', label: 'nav.audit', link: '/settings/audit', permission: 'core.audit:read' },
-      { icon: 'extension', label: 'nav.modules', link: '/settings/modules' }
+      { icon: 'extension', label: 'nav.modules', link: '/settings/modules' },
+      { icon: 'schedule_send', label: 'nav.reportSchedules', link: '/settings/report-schedules' }
     ]
   }
 ];

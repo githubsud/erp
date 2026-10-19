@@ -43,6 +43,7 @@ public sealed class HrModule : IModule
         services.AddScoped<Reports.HrReportService>();
         services.AddScoped<Rosters.RosterService>();
         services.AddScoped<Reports.GrsiaService>();
+        services.AddScoped<IScheduledReport, ExpiringDocumentsScheduledReport>();
         services.AddScoped<ITenantProvisioner, HrProvisioner>();
         services.AddSingleton<IPermissionProvider, HrPermissionProvider>();
 

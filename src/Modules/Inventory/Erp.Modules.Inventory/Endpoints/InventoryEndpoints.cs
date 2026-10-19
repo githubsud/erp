@@ -239,7 +239,7 @@ internal static class InventoryEndpoints
         return new PagedResult<ItemDto>(items, total, page, pageSize);
     }
 
-    private static async Task<List<StockRow>> StockAsync(ErpDbContext db, ITenantContext t, CancellationToken ct, Guid? warehouseId = null,
+    internal static async Task<List<StockRow>> StockAsync(ErpDbContext db, ITenantContext t, CancellationToken ct, Guid? warehouseId = null,
         string? search = null, bool belowReorder = false)
     {
         var companyId = t.RequireCompanyId();
