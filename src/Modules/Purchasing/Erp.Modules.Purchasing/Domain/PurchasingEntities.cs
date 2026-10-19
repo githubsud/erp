@@ -67,6 +67,10 @@ public sealed class PurchaseOrder : TenantEntity
     /// <summary>Contracts with non-residents must be notified to the GTA within 30 days.</summary>
     public DateOnly? GtaNotificationDue { get; set; }
     public string? GtaNotificationRef { get; set; }
+
+    /// <summary>Set when the order was released from a blanket agreement or awarded from a request for quotation.</summary>
+    public Guid? BlanketAgreementId { get; set; }
+    public Guid? RfqId { get; set; }
     public uint Version { get; set; }
     public List<PurchaseOrderLine> Lines { get; init; } = [];
 }

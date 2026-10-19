@@ -103,6 +103,9 @@ internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenan
             var order = await FindAsync(id, token);
             if (order.Status != PurchaseOrderStatus.Draft)
                 throw new ConflictException("pur.po_not_draft", "Only draft orders can be edited.", "يمكن تعديل أوامر الشراء المسودة فقط.");
+            if (order.BlanketAgreementId is not null)
+                throw new BusinessRuleException("pur.po_blanket", "This order was released from a blanket agreement at its prices; cancel it and release again.",
+                    "تم إصدار هذا الأمر من اتفاقية إطارية بأسعارها؛ ألغه وأصدر أمراً جديداً.");
             db.RemoveRange(order.Lines);
             order.Lines.Clear();
             await db.SaveChangesAsync(token);
