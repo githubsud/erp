@@ -153,6 +153,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/purchasing/orders').then((m) => m.OrderDetailPage)
       },
       {
+        path: 'purchasing/reorder',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/reorder').then((m) => m.ReorderPage)
+      },
+      {
         path: 'purchasing/sourcing',
         canActivate: [permissionGuard('pur.suppliers:read')],
         loadComponent: () => import('./features/purchasing/sourcing').then((m) => m.SourcingPage)

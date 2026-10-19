@@ -66,6 +66,7 @@ const NAV: NavGroup[] = [
     label: 'nav.trade',
     items: [
       { icon: 'factory', label: 'nav.suppliers', link: '/purchasing/suppliers', permission: 'pur.suppliers:read' },
+      { icon: 'production_quantity_limits', label: 'nav.reorder', link: '/purchasing/reorder', permission: 'pur.suppliers:read' },
       { icon: 'compare', label: 'nav.sourcing', link: '/purchasing/sourcing', permission: 'pur.suppliers:read' },
       { icon: 'playlist_add', label: 'nav.purchaseRequests', link: '/purchasing/requests', permission: 'pur.requests:manage' },
       { icon: 'shopping_cart', label: 'nav.orders', link: '/purchasing/orders', permission: 'pur.suppliers:read' },

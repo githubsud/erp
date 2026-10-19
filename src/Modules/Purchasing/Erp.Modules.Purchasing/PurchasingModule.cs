@@ -30,6 +30,7 @@ public sealed class PurchasingModule : IModule
         services.AddScoped<DebitNoteService>();
         services.AddScoped<Subcontracts.SubcontractService>();
         services.AddScoped<Sourcing.SourcingService>();
+        services.AddScoped<Sourcing.ReorderService>();
         services.AddScoped<IScheduledReport, SupplierAgingScheduledReport>();
         services.AddScoped<ITenantProvisioner, PurchasingProvisioner>();
         services.AddSingleton<IPermissionProvider, PurchasingPermissionProvider>();
@@ -43,5 +44,6 @@ public sealed class PurchasingModule : IModule
         SupplierCreditEndpoints.Map(app);
         Subcontracts.SubcontractEndpoints.Map(app);
         Sourcing.SourcingEndpoints.Map(app);
+        Sourcing.ReorderEndpoints.Map(app);
     }
 }

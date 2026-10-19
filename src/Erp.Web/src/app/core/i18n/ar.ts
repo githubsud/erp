@@ -1611,5 +1611,21 @@ export const ar: Record<TranslationKey, string> = {
   'serial.inStock': 'في المخزون',
   'serial.out': 'خارج المخزون',
   'serial.document': 'المستند',
-  'bin.title': 'مواقع التخزين'
+  'bin.title': 'مواقع التخزين',
+  'nav.reorder': 'اقتراحات إعادة الطلب',
+  'item.reorderQuantity': 'كمية إعادة الطلب',
+  'kit.title': 'مكونات المجموعة',
+  'kit.hint': 'اجعل هذا الصنف مجموعة بإدراج ما تحتويه الوحدة الواحدة. يؤدي التجميع إلى صرف المكونات وإدخال المجموعة بتكلفتها.',
+  'kit.component': 'المكوّن',
+  'kit.perKit': 'لكل مجموعة',
+  'kit.quantity': 'عدد المجموعات',
+  'kit.estimated': 'التكلفة التقديرية',
+  'kit.assemble': 'تجميع',
+  'reorder.title': 'اقتراحات إعادة الطلب',
+  'reorder.hint': 'الأصناف عند حد إعادة الطلب أو أقل بعد احتساب ما هو مطلوب حالياً. المورد والسعر من آخر أمر شراء؛ حدد البنود المراد طلبها.',
+  'reorder.onHand': 'المتوفر',
+  'reorder.onOrder': 'قيد الطلب',
+  'reorder.price': 'سعر الوحدة',
+  'reorder.create': 'إنشاء أوامر شراء مسودة',
+  'reorder.none': 'لا توجد أصناف تحتاج إعادة طلب.'
 };

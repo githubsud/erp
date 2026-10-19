@@ -31,6 +31,7 @@ export interface Item {
   stockValue: number;
   trackBatches: boolean;
   trackSerials?: boolean;
+  reorderQuantity?: number | null;
 }
 
 /** A unit an item is bought or sold in; one holds `factor` base units (the base unit has factor 1). */

@@ -1609,7 +1609,23 @@ export const en = {
   'serial.inStock': 'In stock',
   'serial.out': 'Not in stock',
   'serial.document': 'Document',
-  'bin.title': 'Bin locations'
+  'bin.title': 'Bin locations',
+  'nav.reorder': 'Reorder suggestions',
+  'item.reorderQuantity': 'Reorder quantity',
+  'kit.title': 'Kit components',
+  'kit.hint': 'Make this item a kit by listing what goes into one unit. Assembling takes the components out of stock and puts the kit in at their cost.',
+  'kit.component': 'Component',
+  'kit.perKit': 'Per kit',
+  'kit.quantity': 'Kits to build',
+  'kit.estimated': 'Estimated cost',
+  'kit.assemble': 'Assemble',
+  'reorder.title': 'Reorder suggestions',
+  'reorder.hint': 'Items at or below their reorder level, after what is already on order. The supplier and price come from the last order; tick the lines to order.',
+  'reorder.onHand': 'On hand',
+  'reorder.onOrder': 'On order',
+  'reorder.price': 'Unit price',
+  'reorder.create': 'Create draft orders',
+  'reorder.none': 'Nothing to reorder.'
 } as const;
 
 export type TranslationKey = keyof typeof en;

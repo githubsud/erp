@@ -60,6 +60,10 @@ import { SHARED } from '../../shared/shared';
           <input matInput type="number" min="0" formControlName="reorderLevel" dir="ltr" />
         </mat-form-field>
         <mat-form-field>
+          <mat-label>{{ 'item.reorderQuantity' | t }}</mat-label>
+          <input matInput type="number" min="0" formControlName="reorderQuantity" dir="ltr" />
+        </mat-form-field>
+        <mat-form-field>
           <mat-label>{{ 'item.purchasePrice' | t }}</mat-label>
           <input matInput type="number" min="0" formControlName="purchasePrice" dir="ltr" />
         </mat-form-field>
@@ -101,6 +105,7 @@ export class ItemDialog {
     uomId: [this.data.item?.uomId ?? '', Validators.required],
     barcode: [this.data.item?.barcode ?? ''],
     reorderLevel: [this.data.item?.reorderLevel ?? (null as number | null)],
+    reorderQuantity: [this.data.item?.reorderQuantity ?? (null as number | null)],
     purchasePrice: [this.data.item?.purchasePrice ?? (null as number | null)],
     salesPrice: [this.data.item?.salesPrice ?? (null as number | null)],
     hsCode: [this.data.item?.hsCode ?? ''],
@@ -128,6 +133,7 @@ export class ItemDialog {
       .saveItem(this.data.item?.id ?? null, {
         ...v,
         reorderLevel: num(v.reorderLevel),
+        reorderQuantity: num(v.reorderQuantity),
         purchasePrice: num(v.purchasePrice),
         salesPrice: num(v.salesPrice)
       })

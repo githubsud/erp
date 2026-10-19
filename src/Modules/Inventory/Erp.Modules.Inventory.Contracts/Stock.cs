@@ -64,8 +64,14 @@ public interface IStockService
 /// <summary>An active, priced item as a till sees it (barcode lookups and an offline copy).</summary>
 public sealed record CatalogItem(Guid Id, string Sku, string? Barcode, string NameEn, string NameAr, string UomCode, ItemType Type, decimal SalesPrice);
 
+/// <summary>An active stock item at or below its reorder level (company-wide quantity).</summary>
+public sealed record ReorderCandidate(Guid ItemId, string Sku, string NameEn, string NameAr, string UomCode, decimal OnHand, decimal ReorderLevel,
+    decimal? ReorderQuantity, decimal? PurchasePrice, decimal AverageCost);
+
 public interface IInventoryQueries
 {
+    Task<IReadOnlyList<ReorderCandidate>> GetReorderCandidatesAsync(CancellationToken ct = default);
+
     /// <summary>Active items that have a sales price.</summary>
     Task<IReadOnlyList<CatalogItem>> GetCatalogAsync(CancellationToken ct = default);
 

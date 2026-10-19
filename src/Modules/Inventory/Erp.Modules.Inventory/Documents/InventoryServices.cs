@@ -12,7 +12,7 @@ public sealed record MasterRequest(string Code, string? NameEn, string? NameAr, 
 
 public sealed record ItemRequest(string Sku, string? NameEn, string? NameAr, ItemType ItemType, Guid ItemGroupId, Guid UomId, string? Barcode,
     decimal? ReorderLevel, decimal? PurchasePrice, decimal? SalesPrice, string? HsCode, bool IsActive = true, bool TrackBatches = false,
-    bool TrackSerials = false);
+    bool TrackSerials = false, decimal? ReorderQuantity = null);
 
 /// <summary>For batch-tracked items: the batch added to (with its expiry), or taken from (first to expire when omitted).</summary>
 public sealed record AdjustmentLineRequest(Guid ItemId, decimal Quantity, decimal? UnitCost, string? BatchNo = null, DateOnly? ExpiryDate = null,
@@ -135,6 +135,7 @@ internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext ten
             item.UomId = r.UomId;
             item.Barcode = string.IsNullOrWhiteSpace(r.Barcode) ? null : r.Barcode.Trim();
             item.ReorderLevel = r.ReorderLevel;
+            item.ReorderQuantity = r.ReorderQuantity is > 0 ? r.ReorderQuantity : null;
             item.PurchasePrice = r.PurchasePrice;
             item.SalesPrice = r.SalesPrice;
             item.HsCode = string.IsNullOrWhiteSpace(r.HsCode) ? null : r.HsCode.Trim();

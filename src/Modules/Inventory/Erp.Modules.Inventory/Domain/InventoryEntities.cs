@@ -49,6 +49,9 @@ public sealed class Item : TenantEntity
     public Guid UomId { get; set; }
     public string? Barcode { get; set; }
     public decimal? ReorderLevel { get; set; }
+
+    /// <summary>How much to buy when stock falls to the reorder level (null: bring stock back to twice the level).</summary>
+    public decimal? ReorderQuantity { get; set; }
     public decimal? PurchasePrice { get; set; }
     public decimal? SalesPrice { get; set; }
     public string? HsCode { get; set; }

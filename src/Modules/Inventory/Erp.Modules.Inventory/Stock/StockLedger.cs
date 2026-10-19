@@ -398,6 +398,18 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
             .ToDictionaryAsync(i => i.Id, ct);
     }
 
+    public async Task<IReadOnlyList<ReorderCandidate>> GetReorderCandidatesAsync(CancellationToken ct = default)
+    {
+        var companyId = tenant.RequireCompanyId();
+        return await (from i in db.Set<Item>().AsNoTracking()
+                      join u in db.Set<Uom>() on i.UomId equals u.Id
+                      join v in db.Set<ItemValuation>() on i.Id equals v.ItemId
+                      where i.CompanyId == companyId && i.IsActive && i.ItemType == ItemType.Stock && i.ReorderLevel != null && v.Quantity <= i.ReorderLevel
+                      orderby i.Sku
+                      select new ReorderCandidate(i.Id, i.Sku, i.NameEn, i.NameAr, u.Code, v.Quantity, i.ReorderLevel!.Value, i.ReorderQuantity, i.PurchasePrice,
+                          v.AverageCost)).ToListAsync(ct);
+    }
+
     public async Task<IReadOnlyList<CatalogItem>> GetCatalogAsync(CancellationToken ct = default)
     {
         var companyId = tenant.RequireCompanyId();
