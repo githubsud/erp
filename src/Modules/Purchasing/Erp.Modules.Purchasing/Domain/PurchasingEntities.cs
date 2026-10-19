@@ -135,6 +135,9 @@ public sealed class SupplierInvoice : TenantEntity
     public DateOnly InvoiceDate { get; init; }
     public DateOnly DueDate { get; init; }
     public Guid? PurchaseOrderId { get; init; }
+
+    /// <summary>Project (contract) the costs are charged to; expense lines carry it in the ledger.</summary>
+    public Guid? ProjectId { get; init; }
     public string Currency { get; init; } = "QAR";
     public decimal ExchangeRate { get; init; } = 1m;
 

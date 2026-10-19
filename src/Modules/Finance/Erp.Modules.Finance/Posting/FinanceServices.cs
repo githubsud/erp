@@ -78,6 +78,19 @@ internal sealed class PostingRuleRegistry(ErpDbContext db, ITenantContext tenant
 
 internal sealed class FinanceQueries(ErpDbContext db, ITenantContext tenant) : IFinanceQueries
 {
+    public async Task<IReadOnlyList<ProjectLedgerLine>> GetProjectLedgerAsync(Guid projectId, CancellationToken ct = default)
+    {
+        var companyId = tenant.RequireCompanyId();
+        return await (from l in db.Set<JournalLine>().AsNoTracking()
+                      join e in db.Set<JournalEntry>() on l.JournalEntryId equals e.Id
+                      join a in db.Set<Account>() on l.AccountId equals a.Id
+                      where e.CompanyId == companyId && l.ProjectId == projectId && (a.AccountType == AccountType.Income || a.AccountType == AccountType.Expense)
+                      group l by new { a.Id, a.Code, a.NameEn, a.NameAr, a.AccountType } into g
+                      orderby g.Key.Code
+                      select new ProjectLedgerLine(g.Key.Id, g.Key.Code, g.Key.NameEn, g.Key.NameAr, g.Key.AccountType == AccountType.Income,
+                          g.Sum(x => x.DebitBase - x.CreditBase))).ToListAsync(ct);
+    }
+
     public async Task<AccountSummary?> FindPostableAccountAsync(Guid accountId, CancellationToken ct = default)
     {
         var companyId = tenant.RequireCompanyId();

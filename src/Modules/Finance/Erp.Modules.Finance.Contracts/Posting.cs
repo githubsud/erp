@@ -117,4 +117,6 @@ public static class AccountRoles
     public const string SalesReturns = "sal.returns";
     /// <summary>Post-dated cheques received and held until their date.</summary>
     public const string PdcReceivable = "sal.pdc_receivable";
+    /// <summary>Retentions held back by customers on progress invoices.</summary>
+    public const string RetentionReceivable = "sal.retention_receivable";
 }

@@ -12,7 +12,7 @@ public sealed record InvoiceLineRequest(InvoiceLineType LineType, Guid? GoodsRec
     decimal Quantity, decimal UnitPrice, WhtCategory? WhtCategory = null);
 
 public sealed record InvoiceRequest(Guid SupplierId, string SupplierRef, DateOnly InvoiceDate, DateOnly? DueDate, Guid? PurchaseOrderId, string? Notes,
-    IReadOnlyList<InvoiceLineRequest> Lines, string? Currency = null, decimal? ExchangeRate = null);
+    IReadOnlyList<InvoiceLineRequest> Lines, string? Currency = null, decimal? ExchangeRate = null, Guid? ProjectId = null);
 
 public sealed record ChargeRequest(ChargeType ChargeType, string? Description, decimal Amount, Guid? SupplierInvoiceId);
 
@@ -29,7 +29,7 @@ public sealed record PaymentRequest(Guid SupplierId, DateOnly Date, Guid Payment
 public sealed record PdcClearRequest(DateOnly Date);
 
 /// <summary>Collects signed amounts per account role and key, then emits balanced debit/credit posting lines.</summary>
-internal sealed class PostingBuilder
+internal sealed class PostingBuilder(Guid? projectId = null)
 {
     private readonly Dictionary<(string Role, Guid? Key, Guid? Party), decimal> _amounts = [];
 
@@ -46,7 +46,9 @@ internal sealed class PostingBuilder
         Side = x.Value > 0 ? PostingSide.Debit : PostingSide.Credit,
         Amount = Math.Abs(x.Value),
         PartyType = x.Key.Party is null ? null : PartyType.Supplier,
-        PartyId = x.Key.Party
+        PartyId = x.Key.Party,
+        // Only expense lines carry the project: balance-sheet lines (GRNI, inventory, tax) stay untagged.
+        ProjectId = x.Key.Party is null && x.Key.Role == AccountRoles.PurchaseExpense ? projectId : null
     }).ToList();
 }
 
@@ -96,7 +98,8 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                 InvoiceDate = r.InvoiceDate,
                 DueDate = r.DueDate ?? r.InvoiceDate.AddDays(supplier.PaymentTermsDays),
                 PurchaseOrderId = r.PurchaseOrderId,
-                Notes = r.Notes
+                Notes = r.Notes,
+                ProjectId = r.ProjectId
             };
             var lineNo = 0;
             var variance = false;
@@ -216,7 +219,7 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
             var grnLines = await LinesAsync<GoodsReceiptLine>(invoice.Lines.Select(l => l.GoodsReceiptLineId), token);
             var poLines = await LinesAsync<PurchaseOrderLine>(invoice.Lines.Select(l => l.PurchaseOrderLineId), token);
             var items = await inventory.GetItemsAsync(invoice.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value), token);
-            var builder = new PostingBuilder();
+            var builder = new PostingBuilder(invoice.ProjectId);
             var revaluations = new List<RevaluationLine>();
             foreach (var l in invoice.Lines)
             {

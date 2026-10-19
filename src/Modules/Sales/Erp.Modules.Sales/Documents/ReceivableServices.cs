@@ -214,7 +214,7 @@ internal sealed class SalesInvoiceService(ErpDbContext db, ITenantContext tenant
             var dnLines = await LinesAsync<DeliveryNoteLine>(invoice.Lines.Select(l => l.DeliveryNoteLineId), token);
             var soLines = await LinesAsync<SalesOrderLine>(invoice.Lines.Select(l => l.SalesOrderLineId), token);
             var items = await inventory.GetItemsAsync(invoice.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value), token);
-            var builder = new PostingBuilder();
+            var builder = new PostingBuilder(invoice.ProjectId);
             foreach (var l in invoice.Lines)
             {
                 if (l.DeliveryNoteLineId is { } dnLineId)
@@ -236,8 +236,13 @@ internal sealed class SalesInvoiceService(ErpDbContext db, ITenantContext tenant
                     so.QuantityInvoiced += l.Quantity;
                 }
                 var group = l.ItemId is { } item ? items[item].ItemGroupId : (Guid?)null;
-                builder.Add(l.LineType == InvoiceLineType.Service ? AccountRoles.ServiceRevenue : AccountRoles.SalesRevenue, group,
-                    -SalesRules.ToBase(l.Amount, invoice.ExchangeRate));
+                var role = l.LineType switch
+                {
+                    InvoiceLineType.Service => AccountRoles.ServiceRevenue,
+                    InvoiceLineType.RetentionRelease => AccountRoles.RetentionReceivable,
+                    _ => AccountRoles.SalesRevenue
+                };
+                builder.Add(role, l.LineType == InvoiceLineType.RetentionRelease ? null : group, -SalesRules.ToBase(l.Amount, invoice.ExchangeRate));
             }
 
             var direct = invoice.Lines.Where(l => l.LineType == InvoiceLineType.Direct).ToList();
@@ -255,7 +260,8 @@ internal sealed class SalesInvoiceService(ErpDbContext db, ITenantContext tenant
                 }
             }
             invoice.TotalBase = invoice.Lines.Sum(l => SalesRules.ToBase(l.Amount, invoice.ExchangeRate));
-            builder.Add(AccountRoles.AccountsReceivable, null, invoice.TotalBase, customer.Id);
+            builder.Add(AccountRoles.AccountsReceivable, null, invoice.TotalBase - invoice.RetentionBase, customer.Id);
+            if (invoice.RetentionAmount > 0) builder.Add(AccountRoles.RetentionReceivable, null, invoice.RetentionBase);
 
             invoice.EInvoiceUuid = Guid.NewGuid();
             invoice.IssuedAt = clock.UtcNow;
@@ -288,6 +294,9 @@ internal sealed class SalesInvoiceService(ErpDbContext db, ITenantContext tenant
                 if (l.SalesOrderLineId is { } s) soLines[s].QuantityInvoiced -= l.Quantity;
             }
             invoice.Status = InvoiceStatus.Reversed;
+            // A reversed progress invoice sends its certificate back so the period can be certified again.
+            foreach (var certificate in await db.Set<Projects.ProgressCertificate>().Where(c => c.SalesInvoiceId == invoice.Id).ToListAsync(token))
+                certificate.Status = Projects.CertificateStatus.Cancelled;
             await db.SaveChangesAsync(token);
             return invoice;
         }, ct);

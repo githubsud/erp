@@ -51,7 +51,8 @@ public sealed record SalesInvoiceLineDto(Guid Id, int LineNo, string LineType, G
 public sealed record SalesInvoiceDto(Guid Id, string InvoiceNo, Guid CustomerId, string CustomerCode, string CustomerNameEn, string CustomerNameAr,
     DateOnly InvoiceDate, DateOnly DueDate, Guid? SalesOrderId, Guid? WarehouseId, string? CustomerRef, decimal Total, decimal DiscountTotal, decimal PaidAmount,
     decimal CreditedAmount, decimal OpenAmount, string Status, string? Notes, Guid? EInvoiceUuid, DateTimeOffset? IssuedAt, Guid? JournalEntryId,
-    IReadOnlyList<SalesInvoiceLineDto> Lines, bool IsOpening, string Currency = "QAR", decimal ExchangeRate = 1m, decimal TotalBase = 0, decimal OpenBase = 0);
+    IReadOnlyList<SalesInvoiceLineDto> Lines, bool IsOpening, string Currency = "QAR", decimal ExchangeRate = 1m, decimal TotalBase = 0, decimal OpenBase = 0,
+    Guid? ProjectId = null, decimal RetentionAmount = 0);
 
 public sealed record CreditNoteLineDto(int LineNo, string LineType, Guid? SalesInvoiceLineId, Guid? ItemId, string? Sku, string? Description, decimal Quantity,
     decimal UnitPrice, decimal Amount, decimal Cost);
@@ -398,7 +399,7 @@ internal static class SalesEndpoints
                 l.ItemId, l.ItemId is { } a ? items[a].Sku : null, l.ItemId is { } b ? items[b].NameEn : null, l.ItemId is { } c ? items[c].NameAr : null,
                 l.Description, l.Quantity, l.UnitPrice, l.DiscountPercent, l.Amount, l.UnitCost, l.Cost, l.QuantityReturned, l.UomId, l.UomQuantity, l.UomPrice))
                 .ToList(), i.IsOpening,
-            i.Currency, i.ExchangeRate, i.TotalBase, i.OpenBase)).ToList();
+            i.Currency, i.ExchangeRate, i.TotalBase, i.OpenBase, i.ProjectId, i.RetentionAmount)).ToList();
     }
 
     private static async Task<List<CreditNoteDto>> CreditNotesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? customerId,
@@ -462,7 +463,7 @@ internal static class SalesEndpoints
                           join c in db.Set<Customer>() on i.CustomerId equals c.Id
                           where i.CompanyId == t.RequireCompanyId() && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.PartiallyPaid)
                                 && i.InvoiceDate <= date
-                          select new { c.Id, c.Code, c.NameEn, c.NameAr, c.CreditLimit, i.DueDate, Open = i.TotalBase - i.PaidBase - i.CreditedBase })
+                          select new { c.Id, c.Code, c.NameEn, c.NameAr, c.CreditLimit, i.DueDate, Open = i.TotalBase - i.PaidBase - i.CreditedBase - i.RetentionAmount * i.ExchangeRate })
             .ToListAsync(ct);
         // Unapplied credits (receipts on account, credit notes beyond the invoice) reduce what the customer owes.
         var credits = (await new CustomerCreditServiceQueries(db, t).UnappliedAsync(date, ct));

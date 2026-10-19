@@ -26,6 +26,7 @@ public sealed class SalesModule : IModule
         services.AddScoped<CustomerCreditService>();
         services.AddScoped<Crm.CrmService>();
         services.AddScoped<Crm.CommissionService>();
+        services.AddScoped<Projects.ProjectService>();
         services.AddScoped<CustomerOpeningService>();
         services.AddScoped<SalesPdfDocuments>();
         services.AddScoped<ITenantProvisioner, SalesProvisioner>();
@@ -37,5 +38,6 @@ public sealed class SalesModule : IModule
         SalesEndpoints.Map(app);
         CustomerCreditEndpoints.Map(app);
         Crm.CrmEndpoints.Map(app);
+        Projects.ProjectEndpoints.Map(app);
     }
 }

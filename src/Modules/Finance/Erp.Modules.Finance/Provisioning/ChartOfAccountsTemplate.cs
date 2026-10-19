@@ -31,6 +31,7 @@ internal static class ChartOfAccountsTemplate
         new("1120", "11", "Bank - Current Account", "البنك - الحساب الجاري", A, Subtype: "bank"),
         new("1130", "11", "Accounts Receivable", "الذمم المدينة", A, Control: ControlSubledger.Customer),
         new("1140", "11", "Post-dated Cheques Receivable", "شيكات آجلة برسم التحصيل", A),
+        new("1145", "11", "Retentions Receivable", "محتجزات مستحقة القبض", A),
         new("1150", "11", "Inventory", "المخزون", A),
         new("1160", "11", "Employee Advances and Loans", "سلف وقروض الموظفين", A, Control: ControlSubledger.Employee),
         new("1170", "11", "Prepaid Expenses", "مصروفات مدفوعة مقدماً", A),
@@ -128,7 +129,8 @@ internal static class ChartOfAccountsTemplate
         (AccountRoles.SalesRevenue, "4110"),
         (AccountRoles.ServiceRevenue, "4120"),
         (AccountRoles.SalesReturns, "4130"),
-        (AccountRoles.PdcReceivable, "1140")
+        (AccountRoles.PdcReceivable, "1140"),
+        (AccountRoles.RetentionReceivable, "1145")
     ];
 
     public static NormalBalance DefaultNormal(AccountType type) =>

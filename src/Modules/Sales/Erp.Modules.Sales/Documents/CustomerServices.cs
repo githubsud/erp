@@ -194,7 +194,7 @@ internal sealed class CreditControlService(ErpDbContext db, ITenantContext tenan
 }
 
 /// <summary>Collects signed amounts per account role and key, then emits balanced debit/credit posting lines.</summary>
-internal sealed class PostingBuilder
+internal sealed class PostingBuilder(Guid? projectId = null)
 {
     private readonly Dictionary<(string Role, Guid? Key, Guid? Party), decimal> _amounts = [];
 
@@ -211,6 +211,7 @@ internal sealed class PostingBuilder
         Side = x.Value > 0 ? PostingSide.Debit : PostingSide.Credit,
         Amount = Math.Abs(x.Value),
         PartyType = x.Key.Party is null ? null : PartyType.Customer,
-        PartyId = x.Key.Party
+        PartyId = x.Key.Party,
+        ProjectId = x.Key.Party is null ? projectId : null
     }).ToList();
 }

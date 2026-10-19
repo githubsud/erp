@@ -188,7 +188,8 @@ public sealed class DeliveryNoteLine : TenantEntity
 public enum InvoiceStatus { Draft, Posted, PartiallyPaid, Paid, Reversed }
 
 /// <summary>Delivered: goods already issued by a delivery note. Direct: stock issued by the invoice itself (counter sale). Service: no stock.</summary>
-public enum InvoiceLineType { Delivered, Direct, Service }
+/// <summary>RetentionRelease bills retention held on earlier progress invoices (no revenue: it clears retentions receivable).</summary>
+public enum InvoiceLineType { Delivered, Direct, Service, RetentionRelease }
 
 public sealed class SalesInvoice : TenantEntity
 {
@@ -211,6 +212,12 @@ public sealed class SalesInvoice : TenantEntity
     public decimal TotalBase { get; set; }
     public decimal PaidBase { get; set; }
     public decimal CreditedBase { get; set; }
+
+    /// <summary>Contract the invoice bills (progress certificates); revenue lines carry the project tag.</summary>
+    public Guid? ProjectId { get; set; }
+
+    /// <summary>Part of the total the customer keeps until handover; it is booked to retentions receivable, not to the receivable.</summary>
+    public decimal RetentionAmount { get; set; }
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
     public string? Notes { get; init; }
 
@@ -222,8 +229,9 @@ public sealed class SalesInvoice : TenantEntity
     public uint Version { get; set; }
     public List<SalesInvoiceLine> Lines { get; init; } = [];
 
-    public decimal OpenAmount => Total - PaidAmount - CreditedAmount;
-    public decimal OpenBase => TotalBase - PaidBase - CreditedBase;
+    public decimal OpenAmount => Total - RetentionAmount - PaidAmount - CreditedAmount;
+    public decimal RetentionBase => SalesRules.ToBase(RetentionAmount, ExchangeRate);
+    public decimal OpenBase => TotalBase - RetentionBase - PaidBase - CreditedBase;
 }
 
 public sealed class SalesInvoiceLine : TenantEntity

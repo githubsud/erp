@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Erp.Modules.Finance.Vouchers;
 
-public sealed record JournalVoucherLineRequest(Guid AccountId, decimal Debit, decimal Credit, Guid? CostCenterId, string? Description);
+public sealed record JournalVoucherLineRequest(Guid AccountId, decimal Debit, decimal Credit, Guid? CostCenterId, string? Description, Guid? ProjectId = null);
 
 public sealed record CreateJournalVoucherRequest(DateOnly Date, string? MemoEn, string? MemoAr, Guid? BranchId,
     IReadOnlyList<JournalVoucherLineRequest> Lines);
@@ -58,6 +58,7 @@ internal sealed class JournalVoucherService(ErpDbContext db, ITenantContext tena
                     Side = l.Debit > 0 ? PostingSide.Debit : PostingSide.Credit,
                     Amount = l.Debit > 0 ? l.Debit : l.Credit,
                     CostCenterId = l.CostCenterId,
+                    ProjectId = l.ProjectId,
                     Description = l.Description
                 }).ToList()
             }, token);

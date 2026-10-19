@@ -1,3 +1,4 @@
+import { ApiService } from '../../core/api.service';
 import { downloadCsv } from '../../shared/export';
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -172,6 +173,15 @@ interface OpenReceiptLine {
             <mat-hint>{{ 'fx.invoiceRateHint' | t }}</mat-hint>
           </mat-form-field>
         }
+        @if (projects().length) {
+          <mat-form-field>
+            <mat-label>{{ 'prj.chargeTo' | t }}</mat-label>
+            <mat-select formControlName="projectId">
+              <mat-option value="">—</mat-option>
+              @for (p of projects(); track p.id) { <mat-option [value]="p.id"><span class="ltr">{{ p.code }}</span> · {{ p | bi }}</mat-option> }
+            </mat-select>
+          </mat-form-field>
+        }
         <mat-form-field class="full">
           <mat-label>{{ 'app.notes' | t }}</mat-label>
           <input matInput formControlName="notes" />
@@ -284,8 +294,11 @@ export class InvoiceFormPage implements OnInit {
     supplierRef: ['', Validators.required],
     invoiceDate: [todayIso(), Validators.required],
     dueDate: [''],
-    notes: ['']
+    notes: [''],
+    projectId: ['']
   });
+  private readonly api = inject(ApiService);
+  protected readonly projects = signal<{ id: string; code: string; nameEn: string; nameAr: string; status: string }[]>([]);
   protected readonly lines = new FormArray<InvoiceLineGroup>([]);
   private readonly supplierId = signal('');
   private readonly orderId = signal<string | null>(null);
@@ -311,6 +324,8 @@ export class InvoiceFormPage implements OnInit {
   }
 
   ngOnInit(): void {
+    this.api.get<{ id: string; code: string; nameEn: string; nameAr: string; status: string }[]>('sales/projects')
+      .subscribe({ next: (p) => this.projects.set(p.filter((x) => x.status === 'Active')), error: () => undefined });
     this.trade.items({ type: 'Service', active: true, pageSize: 500 }).subscribe((r) => this.serviceItems.set(r.items));
     const q = this.route.snapshot.queryParamMap;
     this.orderId.set(q.get('orderId'));
@@ -347,6 +362,7 @@ export class InvoiceFormPage implements OnInit {
         ...v,
         dueDate: v.dueDate || null,
         exchangeRate: v.currency === 'QAR' ? null : Number(v.exchangeRate),
+        projectId: v.projectId || null,
         purchaseOrderId: this.orderId(),
         lines: this.lines.getRawValue().map((l) => ({
           lineType: l.lineType,

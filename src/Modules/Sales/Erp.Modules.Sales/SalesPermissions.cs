@@ -16,6 +16,7 @@ public static class SalesPermissions
     public const string SettingsManage = "sal.settings:manage";
     public const string CrmUse = "sal.crm:use";
     public const string CommissionsManage = "sal.commissions:manage";
+    public const string ProjectsManage = "sal.projects:manage";
 }
 
 internal sealed class SalesPermissionProvider : IPermissionProvider
@@ -34,6 +35,8 @@ internal sealed class SalesPermissionProvider : IPermissionProvider
         new(SalesPermissions.ReportsRead, "View receivables and sales reports", "عرض تقارير الذمم المدينة والمبيعات", Accountant, GeneralManager, Auditor),
         new(SalesPermissions.SettingsManage, "Manage sales settings", "إدارة إعدادات المبيعات", GeneralManager, Accountant),
         new(SalesPermissions.CrmUse, "Work with leads, opportunities and activities", "إدارة العملاء المحتملين والفرص والأنشطة", Salesperson, GeneralManager),
-        new(SalesPermissions.CommissionsManage, "Set and view sales commissions", "إعداد وعرض عمولات المبيعات", GeneralManager, Accountant)
+        new(SalesPermissions.CommissionsManage, "Set and view sales commissions", "إعداد وعرض عمولات المبيعات", GeneralManager, Accountant),
+        new(SalesPermissions.ProjectsManage, "Manage projects, bills of quantities and progress certificates", "إدارة المشاريع وجداول الكميات وشهادات الإنجاز",
+            Accountant, GeneralManager, Salesperson)
     ];
 }
