@@ -19,7 +19,7 @@ public sealed record DebitNoteRequest(Guid SupplierInvoiceId, DateOnly Date, str
 /// on services or without a line reduce purchase expense. A debit note takes at most what is still open on the invoice.
 /// </summary>
 internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, INumberingService numbering, IInventoryQueries inventory,
-    IStockService stock, IPostingService posting)
+    IStockService stock, IPostingService posting, SupplierCreditService credits)
 {
     public const string SourceType = "debit_note";
 
@@ -29,12 +29,13 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
             var invoice = await db.Set<SupplierInvoice>().Include(i => i.Lines)
                               .SingleOrDefaultAsync(i => i.Id == r.SupplierInvoiceId && i.CompanyId == tenant.RequireCompanyId(), token)
                           ?? throw new NotFoundException("Supplier invoice", r.SupplierInvoiceId);
-            if (invoice.Status is not (InvoiceStatus.Posted or InvoiceStatus.PartiallyPaid))
-                throw new BusinessRuleException("pur.invoice_not_open", $"Invoice {invoice.InvoiceNo} has nothing open to reduce.",
-                    $"لا يوجد رصيد مفتوح على الفاتورة {invoice.InvoiceNo}.");
-            if (invoice.WhtAmount != 0)
-                throw new BusinessRuleException("pur.debit_note_wht", "Invoices with withholding tax cannot take debit notes yet; reverse the invoice instead.",
-                    "لا يمكن إصدار إشعار مدين على فاتورة عليها ضريبة استقطاع حالياً؛ اعكس الفاتورة بدلاً من ذلك.");
+            if (invoice.Status is not (InvoiceStatus.Posted or InvoiceStatus.PartiallyPaid or InvoiceStatus.Paid))
+                throw new BusinessRuleException("pur.invoice_not_open", $"Invoice {invoice.InvoiceNo} cannot take a debit note.",
+                    $"لا يمكن إصدار إشعار مدين على الفاتورة {invoice.InvoiceNo}.");
+            // Withholding tax is withheld on payment, so a note can still reduce it while nothing has been paid.
+            if (invoice.WhtAmount != 0 && invoice.WhtWithheld != 0)
+                throw new BusinessRuleException("pur.debit_note_wht", "Tax was already withheld on payments of this invoice; reverse those payments first.",
+                    "تم استقطاع ضريبة على دفعات هذه الفاتورة؛ اعكس تلك الدفعات أولاً.");
             if (r.Lines is not { Count: > 0 })
                 throw new BusinessRuleException("pur.no_lines", "Add at least one line.", "أضف سطراً واحداً على الأقل.");
 
@@ -99,14 +100,29 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
                     builder.Add(AccountRoles.PurchaseExpense, original?.ItemId is { } svc ? items[svc].ItemGroupId : null, -lineBase);
             }
             note.Total = note.Lines.Sum(x => x.Amount);
+            var debitedBefore = await db.Set<DebitNote>().Where(n => n.SupplierInvoiceId == invoice.Id && n.Status == DocumentStatus.Posted)
+                .SumAsync(n => (decimal?)n.Total, token) ?? 0;
+            if (debitedBefore + note.Total > invoice.Total)
+                throw new BusinessRuleException("pur.debit_exceeds_invoice", $"Invoice {invoice.InvoiceNo} totals {invoice.Total:N2} and {debitedBefore:N2} is already credited.",
+                    $"إجمالي الفاتورة {invoice.InvoiceNo} هو {invoice.Total:N2} وتم إشعار {debitedBefore:N2} منها مسبقاً.");
+            note.AppliedAmount = Math.Min(note.Total, invoice.OpenAmount);
+            note.UnappliedAmount = note.Total - note.AppliedAmount;
+            if (note.UnappliedAmount > 0 && (invoice.Currency != Money.BaseCurrency || invoice.WhtAmount != 0))
+                throw new BusinessRuleException("pur.debit_exceeds_open", $"Invoice {invoice.InvoiceNo} has only {invoice.OpenAmount:N2} open.",
+                    $"المتبقي على الفاتورة {invoice.InvoiceNo} هو {invoice.OpenAmount:N2} فقط.");
+            if (invoice.WhtAmount != 0)
+            {
+                if (note.Lines.Any(x => x.SupplierInvoiceLineId is null))
+                    throw new BusinessRuleException("pur.debit_note_wht_line", "On an invoice with withholding tax, each line must refer to an invoice line.",
+                        "في الفاتورة الخاضعة للاستقطاع يجب ربط كل سطر بسطر من الفاتورة.");
+                note.WhtReduction = Math.Min(invoice.WhtAmount,
+                    note.Lines.Sum(x => Money.Round(x.Amount * invoice.Lines.Single(o => o.Id == x.SupplierInvoiceLineId).WhtRate / 100m)));
+            }
             var linesBase = note.Lines.Sum(x => PurchasingRules.ToBase(x.Amount, invoice.ExchangeRate));
-            note.TotalBase = PurchasingRules.BaseCleared(note.Total, invoice.OpenAmount, invoice.OpenBase, invoice.ExchangeRate);
+            note.AppliedBase = PurchasingRules.BaseCleared(note.AppliedAmount, invoice.OpenAmount, invoice.OpenBase, invoice.ExchangeRate);
+            note.TotalBase = note.AppliedBase + note.UnappliedAmount;
             // Closing a foreign-currency invoice can leave a cent of conversion rounding; it is an exchange difference.
             builder.Add(AccountRoles.ExchangeDifference, null, linesBase - note.TotalBase);
-            if (note.Total > invoice.OpenAmount)
-                throw new BusinessRuleException("pur.debit_exceeds_open",
-                    $"Invoice {invoice.InvoiceNo} has only {invoice.OpenAmount:N2} open; refunds of paid amounts are not supported yet.",
-                    $"المتبقي على الفاتورة {invoice.InvoiceNo} هو {invoice.OpenAmount:N2} فقط؛ استرداد المبالغ المدفوعة غير مدعوم بعد.");
             db.Add(note);
 
             if (returns.Count > 0)
@@ -139,8 +155,9 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
                 MemoAr = $"إشعار مدين {note.DebitNoteNo} على {invoice.SupplierRef} — {supplier.NameAr}",
                 Lines = builder.Lines()
             }, token)).JournalEntryId;
-            invoice.DebitedAmount += note.Total;
-            invoice.DebitedBase += note.TotalBase;
+            invoice.DebitedAmount += note.AppliedAmount;
+            invoice.DebitedBase += note.AppliedBase;
+            invoice.WhtAmount -= note.WhtReduction;
             SupplierInvoiceService.RefreshPaymentStatus(invoice);
             await db.SaveChangesAsync(token);
             return note;
@@ -154,14 +171,20 @@ internal sealed class DebitNoteService(ErpDbContext db, ITenantContext tenant, I
                        ?? throw new NotFoundException("Debit note", id);
             if (note.Status != DocumentStatus.Posted)
                 throw new ConflictException("pur.not_posted", "This debit note is already reversed.", "تم عكس هذا الإشعار مسبقاً.");
+            await credits.UnwindAsync(note.Id, token);
             await stock.ReverseAsync(SourceType, note.Id, r.Date, token);
             await posting.ReverseAsync(SourceType, note.Id, r.Date, Guard.Required(r.Reason, "reason"), token);
             var invoice = await db.Set<SupplierInvoice>().Include(i => i.Lines).SingleAsync(i => i.Id == note.SupplierInvoiceId, token);
+            if (note.WhtReduction != 0 && invoice.WhtWithheld != 0)
+                throw new BusinessRuleException("pur.debit_note_wht", "Tax was withheld on payments since this note; reverse those payments first.",
+                    "تم استقطاع ضريبة على دفعات بعد هذا الإشعار؛ اعكس تلك الدفعات أولاً.");
             foreach (var l in note.Lines.Where(l => l.LineType == DebitNoteLineType.Return))
                 invoice.Lines.Single(x => x.Id == l.SupplierInvoiceLineId).QuantityReturned -= l.Quantity;
-            invoice.DebitedAmount -= note.Total;
-            invoice.DebitedBase -= note.TotalBase;
+            invoice.DebitedAmount -= note.AppliedAmount;
+            invoice.DebitedBase -= note.AppliedBase;
+            invoice.WhtAmount += note.WhtReduction;
             SupplierInvoiceService.RefreshPaymentStatus(invoice);
+            note.UnappliedAmount = 0;
             note.Status = DocumentStatus.Reversed;
             await db.SaveChangesAsync(token);
             return note;

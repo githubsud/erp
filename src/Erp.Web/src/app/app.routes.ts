@@ -257,6 +257,16 @@ export const routes: Routes = [
         loadComponent: () => import('./features/sales/receipts').then((m) => m.CreditNotesPage)
       },
       {
+        path: 'sales/credits',
+        canActivate: [permissionGuard('sal.customers:read')],
+        loadComponent: () => import('./features/sales/credits').then((m) => m.CustomerCreditsPage)
+      },
+      {
+        path: 'purchasing/credits',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/sales/credits').then((m) => m.SupplierCreditsPage)
+      },
+      {
         path: 'sales/receipts',
         canActivate: [permissionGuard('sal.customers:read')],
         loadComponent: () => import('./features/sales/receipts').then((m) => m.ReceiptsPage)

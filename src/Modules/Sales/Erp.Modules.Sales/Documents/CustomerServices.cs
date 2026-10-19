@@ -10,7 +10,7 @@ namespace Erp.Modules.Sales.Documents;
 
 public sealed record CustomerRequest(string Code, string? NameEn, string? NameAr, string? Country, string? TaxCardNo, string? CrNo, string? Email,
     string? Phone, string? AddressEn, string? AddressAr, int PaymentTermsDays = 30, decimal? CreditLimit = null, Guid? PriceListId = null,
-    Guid? SalespersonUserId = null, bool IsActive = true);
+    Guid? SalespersonUserId = null, bool IsActive = true, string? Currency = null);
 
 public sealed record SalesSettingsRequest(CreditControl CreditControl, int QuotationValidityDays);
 
@@ -51,6 +51,7 @@ internal sealed class CustomerService(ErpDbContext db, ITenantContext tenant, II
         customer.AddressEn = Clean(r.AddressEn);
         customer.AddressAr = Clean(r.AddressAr);
         customer.PaymentTermsDays = r.PaymentTermsDays;
+        customer.Currency = SalesRules.CurrencyCode(r.Currency);
         customer.CreditLimit = r.CreditLimit is { } limit ? Money.Round(limit) : null;
         customer.PriceListId = r.PriceListId;
         customer.SalespersonUserId = r.SalespersonUserId;
@@ -103,7 +104,12 @@ internal sealed class CustomerService(ErpDbContext db, ITenantContext tenant, II
         }, ct);
 
     /// <summary>The price a customer pays for each item: its price list first, then the item's own sales price.</summary>
-    public async Task<IReadOnlyDictionary<Guid, decimal?>> PricesAsync(Guid? customerId, IReadOnlyCollection<Guid> itemIds, CancellationToken ct)
+    /// <summary>
+    /// Price-list prices are in the document's currency; the item's own sales price is in QAR and is converted at
+    /// <paramref name="exchangeRate"/> for foreign-currency documents.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, decimal?>> PricesAsync(Guid? customerId, IReadOnlyCollection<Guid> itemIds, CancellationToken ct,
+        decimal exchangeRate = 1m)
     {
         var items = await inventory.GetItemsAsync(itemIds, ct);
         Dictionary<Guid, decimal> listed = [];
@@ -118,7 +124,8 @@ internal sealed class CustomerService(ErpDbContext db, ITenantContext tenant, II
                                 select i).ToDictionaryAsync(i => i.ItemId, i => i.UnitPrice, ct);
         }
         return itemIds.Distinct().ToDictionary(id => id,
-            id => listed.TryGetValue(id, out var price) ? price : items.TryGetValue(id, out var item) ? item.SalesPrice : null);
+            id => listed.TryGetValue(id, out var price) ? (decimal?)price
+                : items.TryGetValue(id, out var item) && item.SalesPrice is { } qar ? Money.Round(qar / exchangeRate) : null);
     }
 
     internal static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -147,14 +154,14 @@ internal sealed class CreditControlService(ErpDbContext db, ITenantContext tenan
                        ?? throw new NotFoundException("Customer", customerId);
         var receivable = await finance.GetPartyBalanceAsync(AccountRoles.AccountsReceivable, PartyType.Customer, customerId, clock.Today.AddYears(10), ct);
         var cheques = await db.Set<CustomerReceipt>().AsNoTracking()
-            .Where(r => r.CustomerId == customerId && r.Status == ReceiptStatus.PdcHeld).SumAsync(r => r.Amount, ct);
+            .Where(r => r.CustomerId == customerId && r.Status == ReceiptStatus.PdcHeld).SumAsync(r => r.AmountBase, ct);
         var lines = await (from l in db.Set<SalesOrderLine>().AsNoTracking()
                            join o in db.Set<SalesOrder>() on l.SalesOrderId equals o.Id
                            where o.CustomerId == customerId && o.Id != excludingOrderId && l.QuantityInvoiced < l.Quantity
                                  && (o.Status == SalesOrderStatus.Confirmed || o.Status == SalesOrderStatus.PartiallyDelivered ||
                                      o.Status == SalesOrderStatus.Delivered)
-                           select new { l.Quantity, l.QuantityInvoiced, l.Amount }).ToListAsync(ct);
-        var orders = lines.Sum(l => Money.Round(l.Amount * (l.Quantity - l.QuantityInvoiced) / l.Quantity));
+                           select new { l.Quantity, l.QuantityInvoiced, l.Amount, o.ExchangeRate }).ToListAsync(ct);
+        var orders = lines.Sum(l => Money.Round(l.Amount * (l.Quantity - l.QuantityInvoiced) / l.Quantity * l.ExchangeRate));
         var exposure = receivable + cheques + orders;
         return new CustomerExposure(customerId, receivable, cheques, orders, exposure, customer.CreditLimit,
             customer.CreditLimit is { } limit ? limit - exposure : null);

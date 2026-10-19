@@ -278,6 +278,14 @@ public sealed class DebitNote : TenantEntity
     public required string Reason { get; init; }
     public decimal Total { get; set; }
     public decimal TotalBase { get; set; }
+
+    /// <summary>The part that reduced the invoice; the rest (when the invoice was already paid) is a credit from the supplier.</summary>
+    public decimal AppliedAmount { get; set; }
+    public decimal AppliedBase { get; set; }
+    public decimal UnappliedAmount { get; set; }
+
+    /// <summary>Withholding tax no longer due on the invoice because of this note.</summary>
+    public decimal WhtReduction { get; set; }
     public DocumentStatus Status { get; set; } = DocumentStatus.Posted;
     public Guid? JournalEntryId { get; set; }
     public List<DebitNoteLine> Lines { get; init; } = [];

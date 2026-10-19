@@ -1128,7 +1128,29 @@ export const en = {
   'fy.reopen': 'Reopen',
   'fy.reopenConfirm': 'Reopen this year so entries can be posted into it again?',
   'fy.closePeriod': 'Close this month',
-  'fy.reopenPeriod': 'Reopen this month'
+  'fy.reopenPeriod': 'Reopen this month',
+  'nav.customerCredits': 'Customer credits',
+  'nav.supplierCredits': 'Supplier credits',
+  'credit.customerTitle': 'Customer credits',
+  'credit.supplierTitle': 'Supplier credits',
+  'credit.customerHint': 'Money received on account and credit notes beyond the invoice. Apply them to open invoices or pay them back.',
+  'credit.supplierHint': 'Debit notes on invoices that were already paid. Set them against the next invoices or record the refund the supplier pays.',
+  'credit.document': 'Document',
+  'credit.original': 'Original',
+  'credit.unapplied': 'Available',
+  'credit.available': 'Available to apply:',
+  'credit.apply': 'Apply to invoices',
+  'credit.refund': 'Refund',
+  'credit.none': 'No open credits.',
+  'credit.noInvoices': 'No open QAR invoices to apply this credit to.',
+  'credit.refundCustomerHint': 'Money paid back to the customer from this credit.',
+  'credit.refundSupplierHint': 'Money the supplier paid back to us for this credit.',
+  'credit.source.Receipt': 'On account',
+  'credit.source.CreditNote': 'Credit note',
+  'credit.source.DebitNote': 'Debit note',
+  'rcpt.onAccount': 'On account (QAR)',
+  'rcpt.onAccountHint': 'Received without an invoice; kept as customer credit',
+  'fx.invoiceHint': 'Lines from orders use the order\'s currency'
 } as const;
 
 export type TranslationKey = keyof typeof en;

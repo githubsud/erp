@@ -14,7 +14,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Erp.Modules.Sales.Endpoints;
 
 public sealed record CustomerDto(Guid Id, string Code, string NameEn, string NameAr, string Country, string? TaxCardNo, string? CrNo, string? Email,
-    string? Phone, string? AddressEn, string? AddressAr, int PaymentTermsDays, decimal? CreditLimit, Guid? PriceListId, Guid? SalespersonUserId, bool IsActive);
+    string? Phone, string? AddressEn, string? AddressAr, int PaymentTermsDays, decimal? CreditLimit, Guid? PriceListId, Guid? SalespersonUserId, bool IsActive,
+    string Currency = "QAR");
 
 public sealed record SalesSettingsDto(string CreditControl, int QuotationValidityDays);
 
@@ -29,11 +30,12 @@ public sealed record SalesLineDto(Guid Id, int LineNo, Guid ItemId, string Sku, 
     string? OrderUomCode, decimal UomFactor, decimal UomQuantity, decimal UomPrice);
 
 public sealed record QuotationDto(Guid Id, string QuoteNo, Guid CustomerId, string CustomerCode, string CustomerNameEn, string CustomerNameAr, DateOnly QuoteDate,
-    DateOnly ValidUntil, bool IsExpired, string Status, decimal Total, string? Notes, Guid? SalesOrderId, IReadOnlyList<SalesLineDto> Lines);
+    DateOnly ValidUntil, bool IsExpired, string Status, decimal Total, string? Notes, Guid? SalesOrderId, IReadOnlyList<SalesLineDto> Lines,
+    string Currency = "QAR", decimal ExchangeRate = 1m);
 
 public sealed record SalesOrderDto(Guid Id, string SoNo, Guid CustomerId, string CustomerCode, string CustomerNameEn, string CustomerNameAr, DateOnly OrderDate,
     DateOnly? ExpectedDate, Guid WarehouseId, string? CustomerRef, Guid? QuotationId, string Status, decimal Total, string? Notes, string? CreditWarning,
-    DateTimeOffset? CreditApprovedAt, IReadOnlyList<SalesLineDto> Lines);
+    DateTimeOffset? CreditApprovedAt, IReadOnlyList<SalesLineDto> Lines, string Currency = "QAR", decimal ExchangeRate = 1m);
 
 public sealed record DeliveryLineDto(Guid Id, int LineNo, Guid SalesOrderLineId, Guid ItemId, string Sku, string NameEn, string NameAr, string UomCode,
     decimal Quantity, decimal UnitCost, decimal Cost, decimal QuantityInvoiced);
@@ -44,28 +46,29 @@ public sealed record DeliveryNoteDto(Guid Id, string DnNo, Guid SalesOrderId, st
 
 public sealed record SalesInvoiceLineDto(Guid Id, int LineNo, string LineType, Guid? DeliveryNoteLineId, Guid? SalesOrderLineId, Guid? ItemId, string? Sku,
     string? NameEn, string? NameAr, string? Description, decimal Quantity, decimal UnitPrice, decimal DiscountPercent, decimal Amount, decimal? UnitCost,
-    decimal Cost, decimal QuantityReturned);
+    decimal Cost, decimal QuantityReturned, Guid? UomId = null, decimal UomQuantity = 0, decimal UomPrice = 0);
 
 public sealed record SalesInvoiceDto(Guid Id, string InvoiceNo, Guid CustomerId, string CustomerCode, string CustomerNameEn, string CustomerNameAr,
     DateOnly InvoiceDate, DateOnly DueDate, Guid? SalesOrderId, Guid? WarehouseId, string? CustomerRef, decimal Total, decimal DiscountTotal, decimal PaidAmount,
     decimal CreditedAmount, decimal OpenAmount, string Status, string? Notes, Guid? EInvoiceUuid, DateTimeOffset? IssuedAt, Guid? JournalEntryId,
-    IReadOnlyList<SalesInvoiceLineDto> Lines, bool IsOpening);
+    IReadOnlyList<SalesInvoiceLineDto> Lines, bool IsOpening, string Currency = "QAR", decimal ExchangeRate = 1m, decimal TotalBase = 0, decimal OpenBase = 0);
 
 public sealed record CreditNoteLineDto(int LineNo, string LineType, Guid? SalesInvoiceLineId, Guid? ItemId, string? Sku, string? Description, decimal Quantity,
     decimal UnitPrice, decimal Amount, decimal Cost);
 
 public sealed record CreditNoteDto(Guid Id, string CreditNoteNo, Guid CustomerId, string CustomerNameEn, string CustomerNameAr, Guid SalesInvoiceId,
     string InvoiceNo, DateOnly NoteDate, Guid? WarehouseId, string Reason, decimal Total, decimal CostReturned, string Status, Guid? JournalEntryId,
-    IReadOnlyList<CreditNoteLineDto> Lines);
+    IReadOnlyList<CreditNoteLineDto> Lines, decimal UnappliedAmount = 0);
 
 public sealed record ReceiptAllocationDto(Guid SalesInvoiceId, string InvoiceNo, decimal Amount);
 
 public sealed record ReceiptDto(Guid Id, string ReceiptNo, Guid CustomerId, string CustomerNameEn, string CustomerNameAr, DateOnly ReceiptDate, string Method,
     Guid? DepositAccountId, string? Reference, string? ChequeNo, DateOnly? ChequeDate, string? ChequeBank, decimal Amount, string Status, DateOnly? ClearedDate,
-    string? StatusReason, Guid? JournalEntryId, IReadOnlyList<ReceiptAllocationDto> Allocations);
+    string? StatusReason, Guid? JournalEntryId, IReadOnlyList<ReceiptAllocationDto> Allocations, decimal UnappliedAmount = 0, string Currency = "QAR",
+    decimal ExchangeRate = 1m, decimal AmountBase = 0, decimal FxDifference = 0);
 
 public sealed record CustomerAgingRow(Guid CustomerId, string Code, string NameEn, string NameAr, decimal Current, decimal Days1To30, decimal Days31To60,
-    decimal Days61To90, decimal Over90, decimal Total, decimal? CreditLimit);
+    decimal Days61To90, decimal Over90, decimal Total, decimal? CreditLimit, decimal UnappliedCredit = 0);
 
 public sealed record CustomerAgingReport(DateOnly AsOf, IReadOnlyList<CustomerAgingRow> Rows, decimal Total, decimal LedgerBalance);
 
@@ -144,10 +147,10 @@ internal static class SalesEndpoints
         g.MapPut("/price-lists/{id:guid}", async (Guid id, PriceListRequest r, CustomerService s, ErpDbContext db, ITenantContext t, IInventoryQueries inv,
             CancellationToken ct) => (await PriceListsAsync(db, t, inv, (await s.SavePriceListAsync(id, r, ct)).Id, ct)).Single())
             .RequirePermission(SalesPermissions.CustomersManage);
-        g.MapGet("/prices", async (string itemIds, CustomerService s, CancellationToken ct, Guid? customerId = null) =>
+        g.MapGet("/prices", async (string itemIds, CustomerService s, CancellationToken ct, Guid? customerId = null, decimal? exchangeRate = null) =>
         {
             var ids = itemIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).ToList();
-            return (await s.PricesAsync(customerId, ids, ct)).Select(p => new PriceDto(p.Key, p.Value));
+            return (await s.PricesAsync(customerId, ids, ct, exchangeRate is > 0 ? exchangeRate.Value : 1m)).Select(p => new PriceDto(p.Key, p.Value));
         }).RequirePermission(SalesPermissions.CustomersRead);
 
         // Quotations
@@ -279,7 +282,7 @@ internal static class SalesEndpoints
             CancellationToken ct) => await OrderAsync(db, t, inv, (await run(s, id, ct)).Id, ct)).RequirePermission(permission);
 
     private static CustomerDto ToDto(Customer c) => new(c.Id, c.Code, c.NameEn, c.NameAr, c.Country, c.TaxCardNo, c.CrNo, c.Email, c.Phone, c.AddressEn,
-        c.AddressAr, c.PaymentTermsDays, c.CreditLimit, c.PriceListId, c.SalespersonUserId, c.IsActive);
+        c.AddressAr, c.PaymentTermsDays, c.CreditLimit, c.PriceListId, c.SalespersonUserId, c.IsActive, c.Currency);
 
     private static async Task<Dictionary<Guid, Customer>> CustomersAsync(ErpDbContext db, IEnumerable<Guid> ids, CancellationToken ct)
     {
@@ -330,7 +333,7 @@ internal static class SalesEndpoints
         return list.Select(x => new QuotationDto(x.Id, x.QuoteNo, x.CustomerId, customers[x.CustomerId].Code, customers[x.CustomerId].NameEn,
             customers[x.CustomerId].NameAr, x.QuoteDate, x.ValidUntil,
             x.Status is QuotationStatus.Draft or QuotationStatus.Sent && x.ValidUntil < clock.Today, x.Status.ToString(), x.Total, x.Notes, x.SalesOrderId,
-            x.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, 0, 0, items, codes)).ToList())).ToList();
+            x.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, 0, 0, items, codes)).ToList(), x.Currency, x.ExchangeRate)).ToList();
     }
 
     private static async Task<SalesOrderDto> OrderAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid id, CancellationToken ct) =>
@@ -350,8 +353,8 @@ internal static class SalesEndpoints
         return orders.Select(o => new SalesOrderDto(o.Id, o.SoNo, o.CustomerId, customers[o.CustomerId].Code, customers[o.CustomerId].NameEn,
             customers[o.CustomerId].NameAr, o.OrderDate, o.ExpectedDate, o.WarehouseId, o.CustomerRef, o.QuotationId, o.Status.ToString(), o.Total, o.Notes,
             o.CreditWarning, o.CreditApprovedAt,
-            o.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, l.QuantityDelivered, l.QuantityInvoiced, items, codes)).ToList()))
-            .ToList();
+            o.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, l.QuantityDelivered, l.QuantityInvoiced, items, codes)).ToList(),
+            o.Currency, o.ExchangeRate)).ToList();
     }
 
     private static async Task<List<DeliveryNoteDto>> DeliveriesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? orderId,
@@ -393,7 +396,9 @@ internal static class SalesEndpoints
             i.CreditedAmount, i.OpenAmount, i.Status.ToString(), i.Notes, i.EInvoiceUuid, i.IssuedAt, i.JournalEntryId,
             i.Lines.OrderBy(l => l.LineNo).Select(l => new SalesInvoiceLineDto(l.Id, l.LineNo, l.LineType.ToString(), l.DeliveryNoteLineId, l.SalesOrderLineId,
                 l.ItemId, l.ItemId is { } a ? items[a].Sku : null, l.ItemId is { } b ? items[b].NameEn : null, l.ItemId is { } c ? items[c].NameAr : null,
-                l.Description, l.Quantity, l.UnitPrice, l.DiscountPercent, l.Amount, l.UnitCost, l.Cost, l.QuantityReturned)).ToList(), i.IsOpening)).ToList();
+                l.Description, l.Quantity, l.UnitPrice, l.DiscountPercent, l.Amount, l.UnitCost, l.Cost, l.QuantityReturned, l.UomId, l.UomQuantity, l.UomPrice))
+                .ToList(), i.IsOpening,
+            i.Currency, i.ExchangeRate, i.TotalBase, i.OpenBase)).ToList();
     }
 
     private static async Task<List<CreditNoteDto>> CreditNotesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? customerId,
@@ -411,7 +416,7 @@ internal static class SalesEndpoints
         return list.Select(n => new CreditNoteDto(n.Id, n.CreditNoteNo, n.CustomerId, customers[n.CustomerId].NameEn, customers[n.CustomerId].NameAr,
             n.SalesInvoiceId, invoiceNos[n.SalesInvoiceId], n.NoteDate, n.WarehouseId, n.Reason, n.Total, n.CostReturned, n.Status.ToString(), n.JournalEntryId,
             n.Lines.OrderBy(l => l.LineNo).Select(l => new CreditNoteLineDto(l.LineNo, l.LineType.ToString(), l.SalesInvoiceLineId, l.ItemId,
-                l.ItemId is { } item ? items[item].Sku : null, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.Cost)).ToList())).ToList();
+                l.ItemId is { } item ? items[item].Sku : null, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.Cost)).ToList(), n.UnappliedAmount)).ToList();
     }
 
     private static async Task<List<ReceiptDto>> ReceiptsAsync(ErpDbContext db, ITenantContext t, Guid? id, Guid? customerId, string? status, CancellationToken ct)
@@ -427,7 +432,8 @@ internal static class SalesEndpoints
         return list.Select(r => new ReceiptDto(r.Id, r.ReceiptNo, r.CustomerId, customers[r.CustomerId].NameEn, customers[r.CustomerId].NameAr, r.ReceiptDate,
             r.Method.ToString(), r.DepositAccountId, r.Reference, r.ChequeNo, r.ChequeDate, r.ChequeBank, r.Amount, r.Status.ToString(), r.ClearedDate,
             r.StatusReason, r.JournalEntryId,
-            r.Allocations.Select(a => new ReceiptAllocationDto(a.SalesInvoiceId, invoiceNos[a.SalesInvoiceId], a.Amount)).ToList())).ToList();
+            r.Allocations.Select(a => new ReceiptAllocationDto(a.SalesInvoiceId, invoiceNos[a.SalesInvoiceId], a.Amount)).ToList(), r.UnappliedAmount,
+            r.Currency, r.ExchangeRate, r.AmountBase, r.FxDifference)).ToList();
     }
 
     private static async Task<StatementDto> StatementAsync(Guid id, ErpDbContext db, ITenantContext t, IFinanceQueries finance, IClock clock, CancellationToken ct,
@@ -456,13 +462,19 @@ internal static class SalesEndpoints
                           join c in db.Set<Customer>() on i.CustomerId equals c.Id
                           where i.CompanyId == t.RequireCompanyId() && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.PartiallyPaid)
                                 && i.InvoiceDate <= date
-                          select new { c.Id, c.Code, c.NameEn, c.NameAr, c.CreditLimit, i.DueDate, Open = i.Total - i.PaidAmount - i.CreditedAmount })
+                          select new { c.Id, c.Code, c.NameEn, c.NameAr, c.CreditLimit, i.DueDate, Open = i.TotalBase - i.PaidBase - i.CreditedBase })
             .ToListAsync(ct);
-        var rows = open.GroupBy(x => new { x.Id, x.Code, x.NameEn, x.NameAr, x.CreditLimit }).Select(g =>
+        // Unapplied credits (receipts on account, credit notes beyond the invoice) reduce what the customer owes.
+        var credits = (await new CustomerCreditServiceQueries(db, t).UnappliedAsync(date, ct));
+        var customers = open.Select(x => new { x.Id, x.Code, x.NameEn, x.NameAr, x.CreditLimit })
+            .Concat(credits.Select(c => new { Id = c.CustomerId, c.Code, c.NameEn, c.NameAr, c.CreditLimit })).DistinctBy(x => x.Id);
+        var rows = customers.Select(k =>
         {
-            decimal Bucket(int b) => g.Where(x => SalesRules.AgingBucket(x.DueDate, date) == b).Sum(x => x.Open);
-            return new CustomerAgingRow(g.Key.Id, g.Key.Code, g.Key.NameEn, g.Key.NameAr, Bucket(0), Bucket(1), Bucket(2), Bucket(3), Bucket(4), g.Sum(x => x.Open),
-                g.Key.CreditLimit);
+            var mine = open.Where(x => x.Id == k.Id).ToList();
+            decimal Bucket(int b) => mine.Where(x => SalesRules.AgingBucket(x.DueDate, date) == b).Sum(x => x.Open);
+            var credit = credits.Where(c => c.CustomerId == k.Id).Sum(c => c.Amount);
+            return new CustomerAgingRow(k.Id, k.Code, k.NameEn, k.NameAr, Bucket(0), Bucket(1), Bucket(2), Bucket(3), Bucket(4), mine.Sum(x => x.Open) - credit,
+                k.CreditLimit, -credit);
         }).OrderByDescending(r => r.Total).ToList();
         var ledger = await finance.GetRoleBalanceAsync(AccountRoles.AccountsReceivable, date, ct);
         return new CustomerAgingReport(date, rows, rows.Sum(r => r.Total), ledger);
@@ -543,5 +555,26 @@ internal static class SalesEndpoints
         }).OrderByDescending(r => r.NetRevenue).ToList();
         return new SalesAnalysisReport(start, end, byCustomer ? "customer" : "item", rows, rows.Sum(r => r.NetRevenue), rows.Sum(r => r.Cost),
             rows.Sum(r => r.Margin));
+    }
+}
+
+/// <summary>Unapplied customer credits as of a date (documents dated on or before it).</summary>
+internal sealed class CustomerCreditServiceQueries(ErpDbContext db, ITenantContext t)
+{
+    public sealed record Credit(Guid CustomerId, string Code, string NameEn, string NameAr, decimal? CreditLimit, decimal Amount);
+
+    public async Task<List<Credit>> UnappliedAsync(DateOnly asOf, CancellationToken ct)
+    {
+        var companyId = t.RequireCompanyId();
+        var receipts = await (from r in db.Set<CustomerReceipt>().AsNoTracking()
+                              join c in db.Set<Customer>() on r.CustomerId equals c.Id
+                              where r.CompanyId == companyId && r.UnappliedAmount > 0 && r.ReceiptDate <= asOf
+                                    && (r.Status == ReceiptStatus.Posted || r.Status == ReceiptStatus.PdcHeld || r.Status == ReceiptStatus.PdcCleared)
+                              select new Credit(c.Id, c.Code, c.NameEn, c.NameAr, c.CreditLimit, r.UnappliedAmount)).ToListAsync(ct);
+        var notes = await (from n in db.Set<CreditNote>().AsNoTracking()
+                           join c in db.Set<Customer>() on n.CustomerId equals c.Id
+                           where n.CompanyId == companyId && n.UnappliedAmount > 0 && n.NoteDate <= asOf && n.Status == DocumentStatus.Posted
+                           select new Credit(c.Id, c.Code, c.NameEn, c.NameAr, c.CreditLimit, n.UnappliedAmount)).ToListAsync(ct);
+        return [.. receipts, .. notes];
     }
 }

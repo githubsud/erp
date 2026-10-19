@@ -42,6 +42,7 @@ internal sealed class QuotationConfiguration : IEntityTypeConfiguration<Quotatio
     public void Configure(EntityTypeBuilder<Quotation> b)
     {
         b.ToTable("quotation", "sal");
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.QuotationId);
     }
 }
@@ -65,6 +66,7 @@ internal sealed class SalesOrderConfiguration : IEntityTypeConfiguration<SalesOr
     public void Configure(EntityTypeBuilder<SalesOrder> b)
     {
         b.ToTable("sales_order", "sal");
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.Property(x => x.Version).HasXminConcurrency();
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.SalesOrderId);
     }
@@ -111,6 +113,7 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
     public void Configure(EntityTypeBuilder<SalesInvoice> b)
     {
         b.ToTable("sales_invoice", "sal");
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.Property(x => x.Version).HasXminConcurrency();
         b.Property(x => x.EInvoiceUuid).HasColumnName("einvoice_uuid");
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.SalesInvoiceId);
@@ -122,6 +125,9 @@ internal sealed class SalesInvoiceLineConfiguration : IEntityTypeConfiguration<S
     public void Configure(EntityTypeBuilder<SalesInvoiceLine> b)
     {
         b.ToTable("sales_invoice_line", "sal");
+        b.Property(x => x.UomFactor).AsQuantity();
+        b.Property(x => x.UomQuantity).AsQuantity();
+        b.Property(x => x.UomPrice).AsQuantity();
         b.Property(x => x.Quantity).AsQuantity();
         b.Property(x => x.UnitPrice).AsQuantity();
         b.Property(x => x.DiscountPercent).HasPrecision(9, 4);
@@ -135,6 +141,7 @@ internal sealed class CreditNoteConfiguration : IEntityTypeConfiguration<CreditN
     public void Configure(EntityTypeBuilder<CreditNote> b)
     {
         b.ToTable("credit_note", "sal");
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.Property(x => x.EInvoiceUuid).HasColumnName("einvoice_uuid");
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.CreditNoteId);
     }
@@ -156,6 +163,7 @@ internal sealed class CustomerReceiptConfiguration : IEntityTypeConfiguration<Cu
     public void Configure(EntityTypeBuilder<CustomerReceipt> b)
     {
         b.ToTable("customer_receipt", "sal");
+        b.Property(x => x.ExchangeRate).AsQuantity();
         b.HasMany(x => x.Allocations).WithOne().HasForeignKey(x => x.CustomerReceiptId);
     }
 }

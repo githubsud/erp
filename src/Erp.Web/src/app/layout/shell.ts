@@ -52,6 +52,7 @@ const NAV: NavGroup[] = [
       { icon: 'receipt', label: 'nav.salesInvoices', link: '/sales/invoices', permission: 'sal.customers:read' },
       { icon: 'payments', label: 'nav.receipts', link: '/sales/receipts', permission: 'sal.customers:read' },
       { icon: 'assignment_return', label: 'nav.creditNotes', link: '/sales/credit-notes', permission: 'sal.customers:read' },
+      { icon: 'account_balance_wallet', label: 'nav.customerCredits', link: '/sales/credits', permission: 'sal.customers:read' },
       { icon: 'insights', label: 'nav.salesReports', link: '/sales/reports', permission: 'sal.reports:read' }
     ]
   },
@@ -64,6 +65,7 @@ const NAV: NavGroup[] = [
       { icon: 'request_quote', label: 'nav.invoices', link: '/purchasing/invoices', permission: 'pur.suppliers:read' },
       { icon: 'price_check', label: 'nav.supplierPayments', link: '/purchasing/payments', permission: 'pur.suppliers:read' },
       { icon: 'sailing', label: 'nav.landedCosts', link: '/purchasing/landed-costs', permission: 'pur.suppliers:read' },
+      { icon: 'account_balance_wallet', label: 'nav.supplierCredits', link: '/purchasing/credits', permission: 'pur.suppliers:read' },
       { icon: 'category', label: 'nav.items', link: '/inventory/items', permission: 'inv.items:read' },
       { icon: 'warehouse', label: 'nav.stock', link: '/inventory/stock', permission: 'inv.items:read' },
       { icon: 'event_busy', label: 'nav.expiry', link: '/inventory/expiry', permission: 'inv.items:read' },

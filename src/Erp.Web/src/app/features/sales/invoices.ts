@@ -1,3 +1,4 @@
+import { CURRENCIES } from '../../core/trade.models';
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormArray, FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
@@ -156,6 +157,19 @@ interface OpenDeliveryLine {
             </mat-select>
           </mat-form-field>
         }
+        <mat-form-field>
+          <mat-label>{{ 'fx.currency' | t }}</mat-label>
+          <mat-select formControlName="currency">
+            @for (cur of currencies; track cur) { <mat-option [value]="cur">{{ cur }}</mat-option> }
+          </mat-select>
+          <mat-hint>{{ 'fx.invoiceHint' | t }}</mat-hint>
+        </mat-form-field>
+        @if (form.value.currency !== 'QAR') {
+          <mat-form-field>
+            <mat-label>{{ 'fx.rate' | t: { c: form.value.currency ?? '' } }}</mat-label>
+            <input matInput type="number" min="0" step="0.0001" formControlName="exchangeRate" dir="ltr" />
+          </mat-form-field>
+        }
         <mat-form-field class="full">
           <mat-label>{{ 'app.notes' | t }}</mat-label>
           <input matInput formControlName="notes" />
@@ -241,8 +255,11 @@ export class SalesInvoiceFormPage implements OnInit {
     dueDate: [''],
     customerRef: [''],
     warehouseId: [''],
-    notes: ['']
+    notes: [''],
+    currency: ['QAR'],
+    exchangeRate: [null as number | null]
   });
+  protected readonly currencies = CURRENCIES;
   protected readonly lines = new FormArray<InvoiceLineGroup>([]);
   private readonly version = signal(0);
   private readonly customerId = signal('');
@@ -326,6 +343,8 @@ export class SalesInvoiceFormPage implements OnInit {
       dueDate: v.dueDate || null,
       customerRef: v.customerRef || null,
       notes: v.notes || null,
+      currency: v.currency,
+      exchangeRate: v.currency === 'QAR' ? null : Number(v.exchangeRate),
       warehouseId: this.needsWarehouse() ? v.warehouseId : null,
       lines: this.lines.getRawValue().map((l) => ({
         deliveryNoteLineId: l.deliveryNoteLineId,

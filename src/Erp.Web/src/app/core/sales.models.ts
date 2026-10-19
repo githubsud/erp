@@ -26,6 +26,7 @@ export interface Customer {
   priceListId: string | null;
   salespersonUserId: string | null;
   isActive: boolean;
+  currency: string;
 }
 
 export interface CustomerExposure {
@@ -98,6 +99,8 @@ export interface Quotation {
   notes: string | null;
   salesOrderId: string | null;
   lines: SalesLine[];
+  currency: string;
+  exchangeRate: number;
 }
 
 export interface SalesOrder {
@@ -118,6 +121,8 @@ export interface SalesOrder {
   creditWarning: string | null;
   creditApprovedAt: string | null;
   lines: SalesLine[];
+  currency: string;
+  exchangeRate: number;
 }
 
 export interface DeliveryLine {
@@ -197,6 +202,10 @@ export interface SalesInvoice {
   issuedAt: string | null;
   journalEntryId: string | null;
   lines: SalesInvoiceLine[];
+  currency: string;
+  exchangeRate: number;
+  totalBase: number;
+  openBase: number;
 }
 
 export interface CreditNoteLine {
@@ -228,6 +237,7 @@ export interface CreditNote {
   status: 'Posted' | 'Reversed';
   journalEntryId: string | null;
   lines: CreditNoteLine[];
+  unappliedAmount: number;
 }
 
 export interface CustomerReceipt {
@@ -249,6 +259,11 @@ export interface CustomerReceipt {
   statusReason: string | null;
   journalEntryId: string | null;
   allocations: { salesInvoiceId: string; invoiceNo: string; amount: number }[];
+  unappliedAmount: number;
+  currency: string;
+  exchangeRate: number;
+  amountBase: number;
+  fxDifference: number;
 }
 
 export interface CustomerAgingRow {

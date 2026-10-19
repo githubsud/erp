@@ -24,8 +24,8 @@ export class SalesApi {
   priceLists = () => this.api.get<PriceList[]>('sales/price-lists');
   savePriceList = (id: string | null, body: unknown) =>
     id ? this.api.put<PriceList>(`sales/price-lists/${id}`, body) : this.api.post<PriceList>('sales/price-lists', body);
-  prices = (customerId: string | null, itemIds: string[]) =>
-    this.api.get<{ itemId: string; unitPrice: number | null }[]>('sales/prices', { customerId, itemIds: itemIds.join(',') });
+  prices = (customerId: string | null, itemIds: string[], exchangeRate?: number | null) =>
+    this.api.get<{ itemId: string; unitPrice: number | null }[]>('sales/prices', { customerId, itemIds: itemIds.join(','), exchangeRate });
 
   quotations = (status?: string, customerId?: string) => this.api.get<Quotation[]>('sales/quotations', { status, customerId });
   quotation = (id: string) => this.api.get<Quotation>(`sales/quotations/${id}`);

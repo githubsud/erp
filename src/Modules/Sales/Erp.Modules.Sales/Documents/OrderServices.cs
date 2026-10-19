@@ -15,12 +15,14 @@ namespace Erp.Modules.Sales.Documents;
 public sealed record SalesLineRequest(Guid ItemId, string? Description, decimal Quantity, decimal? UnitPrice = null, decimal DiscountPercent = 0,
     Guid? UomId = null);
 
-public sealed record QuotationRequest(Guid CustomerId, DateOnly QuoteDate, DateOnly? ValidUntil, string? Notes, IReadOnlyList<SalesLineRequest> Lines);
+/// <summary>Currency defaults to the customer's; a foreign currency needs the exchange rate to QAR.</summary>
+public sealed record QuotationRequest(Guid CustomerId, DateOnly QuoteDate, DateOnly? ValidUntil, string? Notes, IReadOnlyList<SalesLineRequest> Lines,
+    string? Currency = null, decimal? ExchangeRate = null);
 
 public sealed record ConvertQuotationRequest(Guid WarehouseId, DateOnly? OrderDate, DateOnly? ExpectedDate, string? CustomerRef);
 
 public sealed record SalesOrderRequest(Guid CustomerId, DateOnly OrderDate, DateOnly? ExpectedDate, Guid WarehouseId, string? CustomerRef, string? Notes,
-    IReadOnlyList<SalesLineRequest> Lines);
+    IReadOnlyList<SalesLineRequest> Lines, string? Currency = null, decimal? ExchangeRate = null);
 
 public sealed record DeliveryLineRequest(Guid SalesOrderLineId, decimal Quantity);
 
@@ -35,14 +37,14 @@ internal static class SalesLines
 {
     /// <summary>Validates items (active) and prices each line; missing prices come from the customer's price list or the item.</summary>
     public static async Task<List<PricedLine>> PriceAsync(CustomerService customers, IInventoryQueries inventory, Guid customerId,
-        IReadOnlyList<SalesLineRequest>? lines, CancellationToken ct)
+        IReadOnlyList<SalesLineRequest>? lines, CancellationToken ct, decimal exchangeRate = 1m)
     {
         if (lines is not { Count: > 0 })
             throw new BusinessRuleException("sal.no_lines", "Add at least one line.", "أضف سطراً واحداً على الأقل.");
         var ids = lines.Select(l => l.ItemId).Distinct().ToList();
         var items = await inventory.GetItemsAsync(ids, ct);
         var units = await inventory.GetUnitsAsync(ids, ct);
-        var prices = lines.Any(l => l.UnitPrice is null) ? await customers.PricesAsync(customerId, ids, ct) : new Dictionary<Guid, decimal?>();
+        var prices = lines.Any(l => l.UnitPrice is null) ? await customers.PricesAsync(customerId, ids, ct, exchangeRate) : new Dictionary<Guid, decimal?>();
         return lines.Select(l =>
         {
             if (!items.TryGetValue(l.ItemId, out var item) || !item.IsActive) throw new NotFoundException("Item", l.ItemId);
@@ -90,7 +92,9 @@ internal sealed class QuotationService(ErpDbContext db, ITenantContext tenant, I
     {
         var customer = await CustomerService.ActiveCustomerAsync(db, tenant, r.CustomerId, ct);
         var settings = await db.Set<SalesSettings>().AsNoTracking().SingleAsync(s => s.CompanyId == customer.CompanyId, ct);
-        var lines = await SalesLines.PriceAsync(customers, inventory, customer.Id, r.Lines, ct);
+        quote.Currency = SalesRules.CurrencyCode(r.Currency ?? customer.Currency);
+        quote.ExchangeRate = SalesRules.ExchangeRate(quote.Currency, r.ExchangeRate);
+        var lines = await SalesLines.PriceAsync(customers, inventory, customer.Id, r.Lines, ct, quote.ExchangeRate);
         quote.CustomerId = customer.Id;
         quote.QuoteDate = r.QuoteDate;
         quote.ValidUntil = r.ValidUntil ?? r.QuoteDate.AddDays(settings.QuotationValidityDays);
@@ -129,7 +133,8 @@ internal sealed class QuotationService(ErpDbContext db, ITenantContext tenant, I
                     $"انتهت صلاحية عرض السعر في {quote.ValidUntil:dd/MM/yyyy}؛ مدد صلاحيته أولاً.");
             var order = await orders.CreateAsync(new SalesOrderRequest(quote.CustomerId, orderDate, r.ExpectedDate, r.WarehouseId, r.CustomerRef, quote.Notes,
                 quote.Lines.OrderBy(l => l.LineNo)
-                    .Select(l => new SalesLineRequest(l.ItemId, l.Description, l.UomQuantity, l.UomPrice, l.DiscountPercent, l.UomId)).ToList()),
+                    .Select(l => new SalesLineRequest(l.ItemId, l.Description, l.UomQuantity, l.UomPrice, l.DiscountPercent, l.UomId)).ToList(),
+                quote.Currency, quote.ExchangeRate),
                 token);
             order.QuotationId = quote.Id;
             quote.Status = QuotationStatus.Accepted;
@@ -201,7 +206,9 @@ internal sealed class SalesOrderService(ErpDbContext db, ITenantContext tenant, 
         var customer = await CustomerService.ActiveCustomerAsync(db, tenant, r.CustomerId, ct);
         var warehouse = await inventory.GetWarehouseAsync(r.WarehouseId, ct);
         if (warehouse is not { IsActive: true }) throw new NotFoundException("Warehouse", r.WarehouseId);
-        var lines = await SalesLines.PriceAsync(customers, inventory, customer.Id, r.Lines, ct);
+        order.Currency = SalesRules.CurrencyCode(r.Currency ?? customer.Currency);
+        order.ExchangeRate = SalesRules.ExchangeRate(order.Currency, r.ExchangeRate);
+        var lines = await SalesLines.PriceAsync(customers, inventory, customer.Id, r.Lines, ct, order.ExchangeRate);
         order.CustomerId = customer.Id;
         order.OrderDate = r.OrderDate;
         order.ExpectedDate = r.ExpectedDate;
@@ -229,7 +236,7 @@ internal sealed class SalesOrderService(ErpDbContext db, ITenantContext tenant, 
             if (order.Status != SalesOrderStatus.Draft)
                 throw new ConflictException("sal.so_not_draft", "Only draft orders can be confirmed.", "يمكن تأكيد أوامر البيع المسودة فقط.");
             var customer = await CustomerService.ActiveCustomerAsync(db, tenant, order.CustomerId, token);
-            var decision = await credit.CheckAsync(customer, order.Total, order.Id, token);
+            var decision = await credit.CheckAsync(customer, SalesRules.ToBase(order.Total, order.ExchangeRate), order.Id, token);
             order.ConfirmedAt = clock.UtcNow;
             order.CreditWarning = decision.Outcome == CreditOutcome.Allowed ? null : CreditControlService.WarningText(decision);
             order.Status = decision.Outcome == CreditOutcome.Hold ? SalesOrderStatus.CreditHold : SalesOrderStatus.Confirmed;

@@ -49,7 +49,7 @@ public sealed record DebitNoteLineDto(int LineNo, string LineType, Guid? Supplie
 
 public sealed record DebitNoteDto(Guid Id, string DebitNoteNo, Guid SupplierId, string SupplierNameEn, string SupplierNameAr, Guid SupplierInvoiceId,
     string InvoiceNo, string SupplierRef, DateOnly NoteDate, Guid? WarehouseId, string Reason, decimal Total, string Status, Guid? JournalEntryId,
-    IReadOnlyList<DebitNoteLineDto> Lines);
+    IReadOnlyList<DebitNoteLineDto> Lines, decimal UnappliedAmount = 0, decimal WhtReduction = 0);
 
 public sealed record ChargeDto(int LineNo, string ChargeType, string? Description, decimal Amount, Guid? SupplierInvoiceId);
 
@@ -74,7 +74,7 @@ public sealed record GrniRow(Guid GoodsReceiptId, string GrnNo, DateOnly Receipt
 public sealed record GrniReport(IReadOnlyList<GrniRow> Rows, decimal Total, decimal LedgerBalance, decimal Difference);
 
 public sealed record AgingRow(Guid SupplierId, string Code, string NameEn, string NameAr, decimal Current, decimal Days1To30, decimal Days31To60,
-    decimal Days61To90, decimal Over90, decimal Total);
+    decimal Days61To90, decimal Over90, decimal Total, decimal UnappliedCredit = 0);
 
 public sealed record AgingReport(DateOnly AsOf, IReadOnlyList<AgingRow> Rows, decimal Total, decimal LedgerBalance);
 
@@ -328,7 +328,7 @@ internal static class PurchasingEndpoints
             n.SupplierInvoiceId, invoices[n.SupplierInvoiceId].InvoiceNo, invoices[n.SupplierInvoiceId].SupplierRef, n.NoteDate, n.WarehouseId, n.Reason, n.Total,
             n.Status.ToString(), n.JournalEntryId,
             n.Lines.OrderBy(l => l.LineNo).Select(l => new DebitNoteLineDto(l.LineNo, l.LineType.ToString(), l.SupplierInvoiceLineId, l.ItemId,
-                l.ItemId is { } item ? items[item].Sku : null, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.StockValue)).ToList())).ToList();
+                l.ItemId is { } item ? items[item].Sku : null, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.StockValue)).ToList(), n.UnappliedAmount, n.WhtReduction)).ToList();
     }
 
     private static async Task<List<LandedCostDto>> LandedCostsAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, CancellationToken ct)
@@ -403,11 +403,20 @@ internal static class PurchasingEndpoints
                           where i.CompanyId == t.RequireCompanyId() && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.PartiallyPaid)
                                 && i.InvoiceDate <= date
                           select new { s.Id, s.Code, s.NameEn, s.NameAr, i.DueDate, Open = i.TotalBase - i.PaidBase - i.DebitedBase }).ToListAsync(ct);
-        var rows = open.GroupBy(x => new { x.Id, x.Code, x.NameEn, x.NameAr }).Select(g =>
+        // Supplier credits not yet set off reduce what is owed to the supplier.
+        var credits = await (from n in db.Set<DebitNote>().AsNoTracking()
+                             join s in db.Set<Supplier>() on n.SupplierId equals s.Id
+                             where n.CompanyId == t.RequireCompanyId() && n.Status == DocumentStatus.Posted && n.UnappliedAmount > 0 && n.NoteDate <= date
+                             select new { s.Id, s.Code, s.NameEn, s.NameAr, n.UnappliedAmount }).ToListAsync(ct);
+        var suppliers = open.Select(x => new { x.Id, x.Code, x.NameEn, x.NameAr })
+            .Concat(credits.Select(x => new { x.Id, x.Code, x.NameEn, x.NameAr })).DistinctBy(x => x.Id);
+        var rows = suppliers.Select(k =>
         {
-            decimal Bucket(int from, int to) => g.Where(x => (date.DayNumber - x.DueDate.DayNumber) is var d && d >= from && d <= to).Sum(x => x.Open);
-            return new AgingRow(g.Key.Id, g.Key.Code, g.Key.NameEn, g.Key.NameAr, Bucket(int.MinValue, 0), Bucket(1, 30), Bucket(31, 60), Bucket(61, 90),
-                Bucket(91, int.MaxValue), g.Sum(x => x.Open));
+            var mine = open.Where(x => x.Id == k.Id).ToList();
+            decimal Bucket(int from, int to) => mine.Where(x => (date.DayNumber - x.DueDate.DayNumber) is var d && d >= from && d <= to).Sum(x => x.Open);
+            var credit = credits.Where(x => x.Id == k.Id).Sum(x => x.UnappliedAmount);
+            return new AgingRow(k.Id, k.Code, k.NameEn, k.NameAr, Bucket(int.MinValue, 0), Bucket(1, 30), Bucket(31, 60), Bucket(61, 90),
+                Bucket(91, int.MaxValue), mine.Sum(x => x.Open) - credit, -credit);
         }).OrderByDescending(r => r.Total).ToList();
         var ledger = -await finance.GetRoleBalanceAsync(AccountRoles.AccountsPayable, date, ct);
         return new AgingReport(date, rows, rows.Sum(r => r.Total), ledger);

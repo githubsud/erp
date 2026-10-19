@@ -473,7 +473,7 @@ internal sealed class SupplierPaymentService(ErpDbContext db, ITenantContext ten
                 if (amount > invoice.OpenAmount)
                     throw new BusinessRuleException("pur.overpayment", $"Invoice {invoice.InvoiceNo} has only {invoice.OpenAmount:N2} open.",
                         $"المتبقي على الفاتورة {invoice.InvoiceNo} هو {invoice.OpenAmount:N2} فقط.");
-                var wht = PurchasingRules.WhtOnPayment(invoice.Total, invoice.WhtAmount, invoice.WhtWithheld, invoice.OpenAmount, amount);
+                var wht = PurchasingRules.WhtOnPayment(invoice.Total - invoice.DebitedAmount, invoice.WhtAmount, invoice.WhtWithheld, invoice.OpenAmount, amount);
                 var cleared = PurchasingRules.BaseCleared(amount, invoice.OpenAmount, invoice.OpenBase, invoice.ExchangeRate);
                 invoice.PaidAmount += amount;
                 invoice.PaidBase += cleared;

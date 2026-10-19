@@ -76,6 +76,19 @@ export const receiptChip = (s: ReceiptStatus) =>
             <mat-label>{{ 'pay.reference' | t }}</mat-label>
             <input matInput formControlName="reference" dir="ltr" />
           </mat-form-field>
+          @if (receiptCurrency() === 'QAR') {
+            <mat-form-field>
+              <mat-label>{{ 'rcpt.onAccount' | t }}</mat-label>
+              <input matInput type="number" min="0" formControlName="onAccount" dir="ltr" />
+              <mat-hint>{{ 'rcpt.onAccountHint' | t }}</mat-hint>
+            </mat-form-field>
+          } @else {
+            <mat-form-field>
+              <mat-label>{{ 'fx.rate' | t: { c: receiptCurrency() } }}</mat-label>
+              <input matInput type="number" min="0" step="0.0001" formControlName="exchangeRate" dir="ltr" />
+              <mat-hint>{{ 'fx.paymentRateHint' | t }}</mat-hint>
+            </mat-form-field>
+          }
         </form>
         @if (openInvoices().length) {
           <table class="line-editor">
@@ -87,7 +100,7 @@ export const receiptChip = (s: ReceiptStatus) =>
                 <tr>
                   <td><span class="ltr">{{ inv.invoiceNo }}</span> <span class="secondary ltr">{{ inv.customerRef }}</span></td>
                   <td class="ltr" [class.overdue]="inv.dueDate < today">{{ inv.dueDate | d }}</td>
-                  <td class="num ltr">{{ inv.openAmount | money }}</td>
+                  <td class="num ltr">@if (inv.currency !== 'QAR') { <span class="secondary">{{ inv.currency }}</span> } {{ inv.openAmount | money }}</td>
                   <td class="narrow"><mat-form-field><input matInput type="number" min="0" [max]="inv.openAmount" [formControl]="amounts[inv.id]" dir="ltr" /></mat-form-field></td>
                 </tr>
               }
@@ -213,7 +226,15 @@ export class ReceiptsPage implements OnInit {
     chequeNo: [''],
     chequeDate: [''],
     chequeBank: [''],
-    reference: ['']
+    reference: [''],
+    onAccount: [null as number | null],
+    exchangeRate: [null as number | null]
+  });
+  /** Receipts follow the currency of the invoices being paid. */
+  protected readonly receiptCurrency = computed(() => {
+    this.version();
+    const paying = this.openInvoices().filter((i) => Number(this.amounts[i.id]?.value) > 0);
+    return (paying[0] ?? this.openInvoices()[0])?.currency ?? 'QAR';
   });
   protected readonly total = computed(() => {
     this.version();
@@ -250,13 +271,14 @@ export class ReceiptsPage implements OnInit {
 
   protected invalid(): boolean {
     const v = this.form.getRawValue();
-    if (this.form.invalid || this.total() <= 0) return true;
+    if (this.form.invalid || this.total() + (Number(v.onAccount) || 0) <= 0) return true;
+    if (this.receiptCurrency() !== 'QAR' && !(Number(v.exchangeRate) > 0)) return true;
     if (this.pdc()) return !v.chequeNo || !v.chequeDate;
     return !v.depositAccountId || (this.cheque() && !v.chequeNo);
   }
 
   protected open(): void {
-    this.form.patchValue({ customerId: '', date: todayIso(), reference: '', chequeNo: '', chequeDate: '', chequeBank: '' });
+    this.form.patchValue({ customerId: '', date: todayIso(), reference: '', chequeNo: '', chequeDate: '', chequeBank: '', onAccount: null, exchangeRate: null });
     this.openInvoices.set([]);
     this.showForm.set(true);
   }
@@ -276,7 +298,9 @@ export class ReceiptsPage implements OnInit {
         customerId: v.customerId, date: v.date, method: v.method, reference: v.reference || null,
         depositAccountId: this.pdc() ? null : v.depositAccountId,
         chequeNo: this.cheque() ? v.chequeNo : null, chequeDate: this.pdc() ? v.chequeDate : null, chequeBank: this.cheque() ? v.chequeBank || null : null,
-        allocations
+        allocations,
+        onAccount: this.receiptCurrency() === 'QAR' ? Number(v.onAccount) || 0 : 0,
+        exchangeRate: this.receiptCurrency() === 'QAR' ? null : Number(v.exchangeRate)
       })
       .subscribe({
         next: () => {

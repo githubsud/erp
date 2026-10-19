@@ -23,11 +23,16 @@ public sealed class SalesModule : IModule
         services.AddScoped<SalesInvoiceService>();
         services.AddScoped<CreditNoteService>();
         services.AddScoped<CustomerReceiptService>();
+        services.AddScoped<CustomerCreditService>();
         services.AddScoped<CustomerOpeningService>();
         services.AddScoped<SalesPdfDocuments>();
         services.AddScoped<ITenantProvisioner, SalesProvisioner>();
         services.AddSingleton<IPermissionProvider, SalesPermissionProvider>();
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder app) => SalesEndpoints.Map(app);
+    public void MapEndpoints(IEndpointRouteBuilder app)
+    {
+        SalesEndpoints.Map(app);
+        CustomerCreditEndpoints.Map(app);
+    }
 }

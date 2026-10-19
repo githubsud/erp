@@ -20,6 +20,7 @@ public sealed class PurchasingModule : IModule
         services.AddScoped<IApprovalDocument, PurchaseOrderApproval>();
         services.AddScoped<PurchaseRequestService>();
         services.AddScoped<FxRevaluationService>();
+        services.AddScoped<SupplierCreditService>();
         services.AddScoped<IApprovalDocument, PurchaseRequestApproval>();
         services.AddScoped<GoodsReceiptService>();
         services.AddScoped<SupplierInvoiceService>();
@@ -36,5 +37,6 @@ public sealed class PurchasingModule : IModule
         PurchasingEndpoints.Map(app);
         PurchaseRequestEndpoints.Map(app);
         FxRevaluationEndpoints.Map(app);
+        SupplierCreditEndpoints.Map(app);
     }
 }

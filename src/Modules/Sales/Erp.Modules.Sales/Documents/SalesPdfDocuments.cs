@@ -79,7 +79,7 @@ internal sealed class SalesPdfDocuments(ErpDbContext db, ITenantContext tenant, 
             totals.Add(("Gross amount", i.Total + i.DiscountTotal, "الإجمالي قبل الخصم", false));
             totals.Add(("Discount", -i.DiscountTotal, "الخصم", false));
         }
-        totals.Add(("Total (QAR)", i.Total, "الإجمالي (ريال قطري)", true));
+        totals.Add(($"Total ({i.Currency})", i.Total, $"الإجمالي ({CurrencyAr(i.Currency)})", true));
         if (i.PaidAmount + i.CreditedAmount > 0)
         {
             totals.Add(("Paid / credited", -(i.PaidAmount + i.CreditedAmount), "المدفوع / المخصوم", false));
@@ -118,7 +118,7 @@ internal sealed class SalesPdfDocuments(ErpDbContext db, ITenantContext tenant, 
                 new("Date", n.NoteDate.ToString("dd/MM/yyyy"), "التاريخ"),
                 new("Original invoice", invoiceNo, "الفاتورة الأصلية"),
                 new("Reason", n.Reason, "السبب")
-            ]), lines, true, [("Total credited (QAR)", n.Total, "إجمالي المبلغ الدائن (ريال قطري)", true)], n.Total, null,
+            ]), lines, true, [($"Total credited ({n.Currency})", n.Total, $"إجمالي المبلغ الدائن ({CurrencyAr(n.Currency)})", true)], n.Total, null,
             [("Issued by", "أصدرها"), ("Approved by", "الاعتماد")], false, n.Status == DocumentStatus.Reversed);
         return (bytes, $"credit_note_{n.CreditNoteNo}.pdf");
     }
@@ -359,4 +359,10 @@ internal sealed class SalesPdfDocuments(ErpDbContext db, ITenantContext tenant, 
                 right.Bold();
             }
         });
+
+    private static string CurrencyAr(string code) => code switch
+    {
+        "QAR" => "ريال قطري", "USD" => "دولار أمريكي", "EUR" => "يورو", "GBP" => "جنيه إسترليني", "SAR" => "ريال سعودي", "AED" => "درهم إماراتي",
+        "KWD" => "دينار كويتي", "OMR" => "ريال عماني", "BHD" => "دينار بحريني", "INR" => "روبية هندية", "CNY" => "يوان صيني", _ => code
+    };
 }

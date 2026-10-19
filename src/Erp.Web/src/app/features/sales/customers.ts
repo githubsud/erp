@@ -1,3 +1,4 @@
+import { CURRENCIES } from '../../core/trade.models';
 import { Component, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, Validators } from '@angular/forms';
@@ -45,6 +46,12 @@ import { salesInvoiceChip } from './invoices';
         <mat-form-field>
           <mat-label>{{ 'sup.terms' | t }}</mat-label>
           <input matInput type="number" min="0" max="365" formControlName="paymentTermsDays" dir="ltr" />
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>{{ 'fx.currency' | t }}</mat-label>
+          <mat-select formControlName="currency">
+            @for (cur of currencies; track cur) { <mat-option [value]="cur">{{ cur }}</mat-option> }
+          </mat-select>
         </mat-form-field>
         <mat-form-field>
           <mat-label>{{ 'cust.priceList' | t }}</mat-label>
@@ -109,8 +116,10 @@ export class CustomerDialog {
     email: [this.c?.email ?? '', Validators.email],
     addressEn: [this.c?.addressEn ?? ''],
     addressAr: [this.c?.addressAr ?? ''],
-    isActive: [this.c?.isActive ?? true]
+    isActive: [this.c?.isActive ?? true],
+    currency: [this.c?.currency ?? 'QAR']
   });
+  protected readonly currencies = CURRENCIES;
 
   constructor() {
     this.sales.priceLists().subscribe((p) => this.priceLists.set(p.filter((x) => x.isActive || x.id === this.c?.priceListId)));

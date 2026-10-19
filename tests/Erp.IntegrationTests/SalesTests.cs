@@ -273,5 +273,21 @@ public sealed class SalesTests(ErpFixture fixture)
         {
             customerId = customer, quoteDate = Today, lines = new[] { new { itemId = bag, quantity = 1m, uomId = box } }
         })).StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+
+        // A counter sale of one pallet issues 40 bags from stock at the pallet price.
+        (await c.PostJsonAsync("/api/inventory/adjustments", new
+        {
+            warehouseId = main, date = Today, reason = "Opening", lines = new[] { new { itemId = bag, quantity = 100m, unitCost = 12m } }
+        })).EnsureSuccessStatusCode();
+        var counter = await c.PostAsync<JsonElement>("/api/sales/invoices", new
+        {
+            customerId = customer, invoiceDate = Today, warehouseId = main, lines = new[] { new { itemId = bag, quantity = 1m, uomId = pallet } }
+        });
+        var cLine = counter.GetProperty("lines")[0];
+        cLine.GetProperty("quantity").GetDecimal().ShouldBe(40m);
+        cLine.GetProperty("uomPrice").GetDecimal().ShouldBe(800m);
+        counter.GetProperty("total").GetDecimal().ShouldBe(800m);
+        var posted = await c.PostAsync<Invoice>($"/api/sales/invoices/{counter.GetProperty("id").GetGuid()}/post", new { });
+        posted.Lines[0].Cost.ShouldBe(480m);
     }
 }

@@ -1,3 +1,4 @@
+import { CURRENCIES } from '../../core/trade.models';
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormArray, FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
@@ -217,6 +218,18 @@ type SalesLineGroup = FormGroup<{
             <input matInput formControlName="customerRef" dir="ltr" />
           </mat-form-field>
         }
+        <mat-form-field>
+          <mat-label>{{ 'fx.currency' | t }}</mat-label>
+          <mat-select formControlName="currency">
+            @for (cur of currencies; track cur) { <mat-option [value]="cur">{{ cur }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        @if (form.value.currency !== 'QAR') {
+          <mat-form-field>
+            <mat-label>{{ 'fx.rate' | t: { c: form.value.currency ?? '' } }}</mat-label>
+            <input matInput type="number" min="0" step="0.0001" formControlName="exchangeRate" dir="ltr" (change)="repriceAll()" />
+          </mat-form-field>
+        }
         <mat-form-field class="full">
           <mat-label>{{ 'app.notes' | t }}</mat-label>
           <input matInput formControlName="notes" />
@@ -302,8 +315,11 @@ export class SalesDocFormPage implements OnInit {
     warehouseId: [''],
     expectedDate: [''],
     customerRef: [''],
-    notes: ['']
+    notes: [''],
+    currency: ['QAR'],
+    exchangeRate: [null as number | null]
   });
+  protected readonly currencies = CURRENCIES;
   protected readonly lines = new FormArray<SalesLineGroup>([]);
   private readonly itemUnits = signal(new Map<string, ItemUnit[]>());
   private readonly version = signal(0);
@@ -322,6 +338,8 @@ export class SalesDocFormPage implements OnInit {
     merge(this.lines.valueChanges).pipe(takeUntilDestroyed()).subscribe(() => this.version.update((v) => v + 1));
     this.form.controls.customerId.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
       this.customerId.set(id);
+      const customer = this.customers().find((c) => c.id === id);
+      if (customer && !this.id()) this.form.controls.currency.setValue(customer.currency ?? 'QAR');
       this.repriceAll();
     });
   }
@@ -407,7 +425,8 @@ export class SalesDocFormPage implements OnInit {
   protected priceLine(line: SalesLineGroup): void {
     const itemId = line.controls.itemId.value;
     if (!itemId) return;
-    this.sales.prices(this.customerId() || null, [itemId]).subscribe(([p]) => {
+    const rate = this.form.value.currency !== 'QAR' ? Number(this.form.value.exchangeRate) || null : null;
+    this.sales.prices(this.customerId() || null, [itemId], rate).subscribe(([p]) => {
       if (p?.unitPrice !== null && p?.unitPrice !== undefined) line.controls.unitPrice.setValue(Math.round(p.unitPrice * this.factor(line) * 1000000) / 1000000);
     });
   }
@@ -419,10 +438,11 @@ export class SalesDocFormPage implements OnInit {
       discountPercent: Number(l.discountPercent) || 0, uomId: l.uomId
     }));
     const quote = this.kind() === 'quote';
+    const fx = { currency: v.currency, exchangeRate: v.currency === 'QAR' ? null : Number(v.exchangeRate) };
     const body = quote
-      ? { customerId: v.customerId, quoteDate: v.date, validUntil: v.validUntil || null, notes: v.notes || null, lines }
+      ? { customerId: v.customerId, quoteDate: v.date, validUntil: v.validUntil || null, notes: v.notes || null, lines, ...fx }
       : { customerId: v.customerId, orderDate: v.date, expectedDate: v.expectedDate || null, warehouseId: v.warehouseId, customerRef: v.customerRef || null,
-          notes: v.notes || null, lines };
+          notes: v.notes || null, lines, ...fx };
     this.busy.set(true);
     const saved: Observable<{ id: string }> = quote
       ? this.sales.saveQuotation(this.id() ?? null, body).pipe(switchMap((q) => (andNext && q.status === 'Draft' ? this.sales.quotationAction(q.id, 'send') : [q])))

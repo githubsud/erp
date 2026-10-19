@@ -47,13 +47,14 @@ internal sealed class CustomerOpeningService(ErpDbContext db, ITenantContext ten
                     CustomerRef = reference,
                     IsOpening = true,
                     Total = amount,
+                    TotalBase = amount,
                     Status = InvoiceStatus.Posted,
                     Notes = "Opening balance · رصيد افتتاحي"
                 };
                 invoice.Lines.Add(new SalesInvoiceLine
                 {
                     SalesInvoiceId = invoice.Id, LineNo = 1, LineType = InvoiceLineType.Service, Description = $"Opening balance {reference}",
-                    Quantity = 1, UnitPrice = amount, Amount = amount
+                    Quantity = 1, UnitPrice = amount, Amount = amount, UomQuantity = 1, UomPrice = amount
                 });
                 db.Add(invoice);
                 invoice.JournalEntryId = (await posting.PostAsync(new PostingRequest

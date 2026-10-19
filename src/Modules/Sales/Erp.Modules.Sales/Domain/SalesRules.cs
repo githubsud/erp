@@ -21,6 +21,29 @@ public static class SalesRules
         return Money.Round(quantity * unitPrice * (100m - discountPercent) / 100m);
     }
 
+    /// <summary>The document currency: QAR when not given, otherwise a three-letter ISO code.</summary>
+    public static string CurrencyCode(string? currency)
+    {
+        var code = string.IsNullOrWhiteSpace(currency) ? Money.BaseCurrency : currency.Trim().ToUpperInvariant();
+        if (code.Length != 3 || !code.All(char.IsAsciiLetterUpper))
+            throw new BusinessRuleException("sal.currency", "Use a three-letter currency code (QAR, USD, EUR…).", "استخدم رمز عملة من ثلاثة أحرف.");
+        return code;
+    }
+
+    /// <summary>QAR per unit of the document currency: 1 for QAR, otherwise required and positive.</summary>
+    public static decimal ExchangeRate(string currency, decimal? rate)
+    {
+        if (currency == Money.BaseCurrency) return 1m;
+        if (rate is not > 0)
+            throw new BusinessRuleException("sal.exchange_rate", $"Enter the exchange rate from {currency} to QAR.", $"أدخل سعر صرف {currency} مقابل الريال القطري.");
+        return Math.Round(rate.Value, 6, MidpointRounding.AwayFromZero);
+    }
+
+    public static decimal ToBase(decimal amount, decimal rate) => Money.Round(amount * rate);
+
+    /// <summary>QAR a settlement clears from an invoice: all the remaining QAR when it settles it, otherwise the amount at the invoice rate.</summary>
+    public static decimal BaseCleared(decimal amount, decimal open, decimal openBase, decimal rate) => amount >= open ? openBase : ToBase(amount, rate);
+
     /// <summary>The discount given on a line: gross (quantity × price) less the net amount.</summary>
     public static decimal LineDiscount(decimal quantity, decimal unitPrice, decimal amount) => Money.Round(quantity * unitPrice) - amount;
 
