@@ -28,6 +28,7 @@ internal static class ChartOfAccountsTemplate
         new("1", null, "Assets", "الأصول", A, false),
         new("11", "1", "Current Assets", "الأصول المتداولة", A, false),
         new("1110", "11", "Cash on Hand", "النقد في الصندوق", A, Subtype: "cash"),
+        new("1115", "11", "Card Payments Clearing", "حساب وسيط مدفوعات البطاقات", A),
         new("1120", "11", "Bank - Current Account", "البنك - الحساب الجاري", A, Subtype: "bank"),
         new("1130", "11", "Accounts Receivable", "الذمم المدينة", A, Control: ControlSubledger.Customer),
         new("1140", "11", "Post-dated Cheques Receivable", "شيكات آجلة برسم التحصيل", A),
@@ -91,6 +92,7 @@ internal static class ChartOfAccountsTemplate
         new("5320", "53", "Utilities", "المرافق", X),
         new("5330", "53", "Government Fees and Renewals", "الرسوم الحكومية والتجديدات", X),
         new("5340", "53", "Bank Charges", "الرسوم البنكية", X),
+        new("5345", "53", "Cash Over and Short", "زيادة وعجز النقدية", X),
         new("5350", "53", "Depreciation", "الإهلاك", X),
         new("5360", "53", "Purchased Services and Supplies", "خدمات ومستلزمات مشتراة", X),
         new("5390", "53", "Rounding Differences", "فروقات التقريب", X)
@@ -130,7 +132,8 @@ internal static class ChartOfAccountsTemplate
         (AccountRoles.ServiceRevenue, "4120"),
         (AccountRoles.SalesReturns, "4130"),
         (AccountRoles.PdcReceivable, "1140"),
-        (AccountRoles.RetentionReceivable, "1145")
+        (AccountRoles.RetentionReceivable, "1145"),
+        (AccountRoles.CashOverShort, "5345")
     ];
 
     public static NormalBalance DefaultNormal(AccountType type) =>

@@ -54,8 +54,14 @@ public interface IStockService
     Task<IReadOnlyList<StockLineResult>> ReverseAsync(string sourceType, Guid sourceId, DateOnly date, CancellationToken ct = default);
 }
 
+/// <summary>An active, priced item as a till sees it (barcode lookups and an offline copy).</summary>
+public sealed record CatalogItem(Guid Id, string Sku, string? Barcode, string NameEn, string NameAr, string UomCode, ItemType Type, decimal SalesPrice);
+
 public interface IInventoryQueries
 {
+    /// <summary>Active items that have a sales price.</summary>
+    Task<IReadOnlyList<CatalogItem>> GetCatalogAsync(CancellationToken ct = default);
+
     Task<IReadOnlyDictionary<Guid, ItemInfo>> GetItemsAsync(IEnumerable<Guid> ids, CancellationToken ct = default);
 
     Task<WarehouseInfo?> GetWarehouseAsync(Guid id, CancellationToken ct = default);

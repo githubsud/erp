@@ -119,4 +119,7 @@ public static class AccountRoles
     public const string PdcReceivable = "sal.pdc_receivable";
     /// <summary>Retentions held back by customers on progress invoices.</summary>
     public const string RetentionReceivable = "sal.retention_receivable";
+
+    /// <summary>Cash counted over or short at the close of a till shift.</summary>
+    public const string CashOverShort = "sal.cash_over_short";
 }
