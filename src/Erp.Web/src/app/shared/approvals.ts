@@ -46,7 +46,9 @@ export class ApprovalDecisionDialog {
               <span class="role">{{ 'role.' + s.roleCode | t }}</span>
               @if (s.decision) {
                 <span class="chip" [class.ok]="s.decision === 'Approved'" [class.bad]="s.decision === 'Rejected'">{{ 'approval.decision.' + s.decision | t }}</span>
-                <span class="secondary">{{ s.decidedByName }} · <span class="ltr">{{ s.decidedAt!.slice(0, 10) | d }}</span></span>
+                <span class="secondary">{{ s.decidedByName }}
+                  @if (s.onBehalfOfName) { ({{ 'approval.onBehalfOf' | t: { name: s.onBehalfOfName } }}) }
+                  · <span class="ltr">{{ s.decidedAt!.slice(0, 10) | d }}</span></span>
                 @if (s.comment) { <div class="comment">“{{ s.comment }}”</div> }
               } @else if (r.status === 'Pending' && s.stepNo === r.currentStep) {
                 <span class="chip warn">{{ 'approval.waiting' | t }}</span>

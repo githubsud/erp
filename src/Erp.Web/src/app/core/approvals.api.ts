@@ -21,6 +21,27 @@ export interface ApprovalStep {
   decidedByName: string | null;
   decidedAt: string | null;
   comment: string | null;
+  onBehalfOfName?: string | null;
+}
+
+export interface Delegation {
+  id: string;
+  delegatorUserId: string;
+  delegatorName: string;
+  delegateUserId: string;
+  delegateName: string;
+  fromDate: string;
+  toDate: string;
+  docType: string | null;
+  reason: string | null;
+  active: boolean;
+  revokedAt: string | null;
+}
+
+export interface Colleague {
+  id: string;
+  displayNameEn: string;
+  displayNameAr: string;
 }
 
 export interface ApprovalRequest {
@@ -61,4 +82,9 @@ export class ApprovalsApi {
   requests = (params: { docType?: string; docId?: string; mine?: boolean }) => this.api.get<ApprovalRequest[]>('approvals/requests', params);
   approve = (id: string, comment: string | null) => this.api.post<void>(`approvals/${id}/approve`, { comment });
   reject = (id: string, comment: string) => this.api.post<void>(`approvals/${id}/reject`, { comment });
+  delegations = () => this.api.get<Delegation[]>('approvals/delegations');
+  colleagues = () => this.api.get<Colleague[]>('approvals/delegates');
+  delegate = (body: { delegateUserId: string; fromDate: string; toDate: string; docType: string | null; reason: string | null }) =>
+    this.api.post<string>('approvals/delegations', body);
+  revoke = (id: string) => this.api.post<void>(`approvals/delegations/${id}/revoke`, {});
 }

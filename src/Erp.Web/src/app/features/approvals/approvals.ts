@@ -3,7 +3,8 @@ import { FormArray, FormBuilder, FormControl, FormGroup, Validators } from '@ang
 import { MatDialog } from '@angular/material/dialog';
 import { filter, forkJoin, switchMap } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { APPROVAL_LINKS, ApprovalDocumentType, ApprovalRequest, ApprovalsApi } from '../../core/approvals.api';
+import { APPROVAL_LINKS, ApprovalDocumentType, ApprovalRequest, ApprovalsApi, Colleague, Delegation } from '../../core/approvals.api';
+import { todayIso } from '../../core/dates';
 import { Role } from '../../core/models';
 import { NotifyService } from '../../core/notify.service';
 import { ApprovalDecisionDialog } from '../../shared/approvals';
@@ -18,9 +19,43 @@ import { SHARED } from '../../shared/shared';
     <mat-tab-group mat-stretch-tabs="false" (selectedIndexChange)="tab.set($event)">
       <mat-tab [label]="('approval.toApprove' | t) + (inbox().length ? ' (' + inbox().length + ')' : '')" />
       <mat-tab [label]="'approval.mine' | t" />
+      <mat-tab [label]="'approval.delegations' | t" />
     </mat-tab-group>
     @if (busy()) { <mat-progress-bar mode="indeterminate" /> }
-    <div class="cards">
+    @if (tab() === 2) {
+      <div class="delegations">
+        <p class="secondary">{{ 'approval.delegationHint' | t }}</p>
+        <form [formGroup]="delegationForm" class="form-grid">
+          <mat-form-field><mat-label>{{ 'approval.delegateTo' | t }}</mat-label>
+            <mat-select formControlName="delegateUserId">@for (c of colleagues(); track c.id) { <mat-option [value]="c.id">{{ c | bi:'displayName' }}</mat-option> }</mat-select>
+          </mat-form-field>
+          <mat-form-field><mat-label>{{ 'app.from' | t }}</mat-label><input matInput type="date" formControlName="fromDate" /></mat-form-field>
+          <mat-form-field><mat-label>{{ 'app.to' | t }}</mat-label><input matInput type="date" formControlName="toDate" /></mat-form-field>
+          <mat-form-field><mat-label>{{ 'approval.docType' | t }}</mat-label>
+            <mat-select formControlName="docType"><mat-option [value]="''">{{ 'approval.allDocuments' | t }}</mat-option>
+              @for (d of docTypes; track d) { <mat-option [value]="d">{{ 'approval.doc.' + d | t }}</mat-option> }</mat-select>
+          </mat-form-field>
+          <mat-form-field><mat-label>{{ 'app.reason' | t }}</mat-label><input matInput formControlName="reason" /></mat-form-field>
+          <div><button mat-flat-button type="button" [disabled]="delegationForm.invalid" (click)="addDelegation()">{{ 'approval.delegate' | t }}</button></div>
+        </form>
+        <table class="line-editor">
+          <thead><tr><th>{{ 'approval.from' | t }}</th><th>{{ 'approval.delegateTo' | t }}</th><th>{{ 'app.date' | t }}</th><th>{{ 'approval.docType' | t }}</th>
+            <th>{{ 'app.status' | t }}</th><th></th></tr></thead>
+          <tbody>
+            @for (d of delegations(); track d.id) {
+              <tr>
+                <td>{{ d.delegatorName }}</td><td>{{ d.delegateName }}</td>
+                <td class="ltr">{{ d.fromDate | d }} – {{ d.toDate | d }}</td>
+                <td>{{ d.docType ? ('approval.doc.' + d.docType | t) : ('approval.allDocuments' | t) }}</td>
+                <td><span class="chip" [class.ok]="d.active">{{ (d.active ? 'approval.active' : (d.revokedAt ? 'approval.revoked' : 'approval.ended')) | t }}</span></td>
+                <td>@if (d.active) { <button mat-button (click)="revoke(d.id)">{{ 'approval.revoke' | t }}</button> }</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    <div class="cards" [hidden]="tab() === 2">
       @for (r of (tab() === 0 ? inbox() : mine()); track r.id) {
         <mat-card appearance="outlined" class="card">
           <div class="row">
@@ -63,6 +98,7 @@ import { SHARED } from '../../shared/shared';
     .steps { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .empty { color: var(--mat-sys-on-surface-variant); padding: 24px 0; }
+    .delegations { margin-top: 16px; max-width: 960px; }
   `
 })
 export class ApprovalsPage implements OnInit {
@@ -73,9 +109,47 @@ export class ApprovalsPage implements OnInit {
   protected readonly inbox = signal<ApprovalRequest[]>([]);
   protected readonly mine = signal<ApprovalRequest[]>([]);
   protected readonly busy = signal(false);
+  protected readonly delegations = signal<Delegation[]>([]);
+  protected readonly colleagues = signal<Colleague[]>([]);
+  protected readonly docTypes = Object.keys(APPROVAL_LINKS);
+  protected readonly delegationForm = inject(FormBuilder).nonNullable.group({
+    delegateUserId: ['', Validators.required],
+    fromDate: [todayIso(), Validators.required],
+    toDate: [todayIso(), Validators.required],
+    docType: [''],
+    reason: ['']
+  });
 
   ngOnInit(): void {
     this.reload();
+    this.loadDelegations();
+    this.api.colleagues().subscribe((c) => this.colleagues.set(c));
+  }
+
+  private loadDelegations(): void {
+    this.api.delegations().subscribe({ next: (d) => this.delegations.set(d), error: (e) => this.notify.error(e) });
+  }
+
+  protected addDelegation(): void {
+    const v = this.delegationForm.getRawValue();
+    this.api.delegate({ ...v, docType: v.docType || null, reason: v.reason || null }).subscribe({
+      next: () => {
+        this.notify.success();
+        this.delegationForm.patchValue({ delegateUserId: '', reason: '' });
+        this.loadDelegations();
+      },
+      error: (e) => this.notify.error(e)
+    });
+  }
+
+  protected revoke(id: string): void {
+    this.api.revoke(id).subscribe({
+      next: () => {
+        this.notify.success();
+        this.loadDelegations();
+      },
+      error: (e) => this.notify.error(e)
+    });
   }
 
   reload(): void {

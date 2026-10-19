@@ -88,6 +88,59 @@ public sealed class ApprovalTests(ErpFixture fixture)
     }
 
     [Fact]
+    public async Task A_delegate_approves_on_behalf_of_an_absent_approver_within_the_same_segregation_rules()
+    {
+        var t = await fixture.CreateTenantAsync();
+        var (main, _, _) = await InventoryTests.DefaultsAsync(t.Client);
+        var cement = await InventoryTests.CreateItemAsync(t.Client, "CEM");
+        var supplier = await PurchasingTests.SupplierAsync(t.Client, "S1");
+        (await t.Client.PutAsJsonAsync("/api/approvals/rules/purchase_order", new[]
+        {
+            new { minAmount = 10_000m, roleCode = "general_manager" }, new { minAmount = 50_000m, roleCode = "accountant" }
+        }, ErpFixture.Json)).EnsureSuccessStatusCode();
+        var buyer = await UserAsync(t, "buyer@t.qa", "purchaser");
+        var gm = await UserAsync(t, "gm@t.qa", "general_manager");
+        var accountant = await UserAsync(t, "acc@t.qa", "accountant");
+        var people = await gm.GetAsync<List<JsonElement>>("/api/approvals/delegates");
+        Guid Id(string email) => people.Single(p => p.GetProperty("displayNameEn").GetString() == email).GetProperty("id").GetGuid();
+
+        // The GM goes on leave and hands purchase-order approvals to the accountant; the buyer cannot be a delegate for their own orders.
+        var delegation = await gm.PostAsync<Guid>("/api/approvals/delegations", new
+        {
+            delegateUserId = Id("acc@t.qa"), fromDate = Today, toDate = Today.AddDays(10), docType = "purchase_order", reason = "Annual leave"
+        });
+        await gm.PostAsync<Guid>("/api/approvals/delegations", new { delegateUserId = Id("buyer@t.qa"), fromDate = Today, toDate = Today.AddDays(10) });
+        (await (await accountant.PostJsonAsync("/api/approvals/delegations", new
+        {
+            delegatorUserId = Id("gm@t.qa"), delegateUserId = Id("acc@t.qa"), fromDate = Today, toDate = Today
+        })).ProblemAsync()).GetProperty("status").GetInt32().ShouldBe(403);
+
+        var small = await PurchasingTests.OrderAsync(buyer, supplier, main, (cement, 1m, 20_000m));
+        (await buyer.GetAsync<List<Request>>("/api/approvals/inbox")).ShouldBeEmpty();
+        var inbox = await accountant.GetAsync<List<Request>>("/api/approvals/inbox");
+        inbox.Single().DocId.ShouldBe(small.Id);
+        (await accountant.PostJsonAsync($"/api/approvals/{inbox.Single().Id}/approve", new { comment = "For the GM" })).EnsureSuccessStatusCode();
+        (await t.Client.GetAsync<PurchasingTests.Order>($"/api/purchasing/orders/{small.Id}")).Status.ShouldBe("Approved");
+        var history = await t.Client.GetAsync<List<JsonElement>>($"/api/approvals/requests?docType=purchase_order&docId={small.Id}");
+        history.Single().GetProperty("steps")[0].GetProperty("onBehalfOfName").GetString().ShouldBe("gm@t.qa");
+
+        // Two steps: having approved step 1 for the GM, the accountant cannot also approve step 2 — the GM's own approval is needed instead.
+        var big = await PurchasingTests.OrderAsync(buyer, supplier, main, (cement, 1m, 60_000m));
+        var bigRequest = (await accountant.GetAsync<List<Request>>("/api/approvals/inbox")).Single().Id;
+        (await accountant.PostJsonAsync($"/api/approvals/{bigRequest}/approve", new { })).EnsureSuccessStatusCode();
+        (await accountant.GetAsync<List<Request>>("/api/approvals/inbox")).ShouldBeEmpty();
+        (await accountant.PostJsonAsync($"/api/approvals/{bigRequest}/approve", new { })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // Revoked: back to normal.
+        (await gm.PostJsonAsync($"/api/approvals/delegations/{delegation}/revoke", new { })).EnsureSuccessStatusCode();
+        await PurchasingTests.OrderAsync(buyer, supplier, main, (cement, 1m, 15_000m));
+        (await accountant.GetAsync<List<Request>>("/api/approvals/inbox")).ShouldBeEmpty();
+        var mine = await gm.GetAsync<List<JsonElement>>("/api/approvals/delegations");
+        mine.Count.ShouldBe(2);
+        mine.Single(d => d.GetProperty("id").GetGuid() == delegation).GetProperty("active").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Purchase_request_is_approved_and_turned_into_a_draft_order()
     {
         var t = await fixture.CreateTenantAsync();

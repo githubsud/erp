@@ -51,6 +51,27 @@ public sealed class ApprovalStep : TenantEntity
     public Guid? DecidedBy { get; set; }
     public DateTimeOffset? DecidedAt { get; set; }
     public string? Comment { get; set; }
+
+    /// <summary>The approver this decision was made for, when a delegate made it.</summary>
+    public Guid? OnBehalfOf { get; set; }
+}
+
+/// <summary>An approver hands their approvals (all, or one document type) to a colleague for a period.</summary>
+public sealed class ApprovalDelegation : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public Guid DelegatorUserId { get; init; }
+    public Guid DelegateUserId { get; init; }
+    public DateOnly FromDate { get; init; }
+    public DateOnly ToDate { get; init; }
+    public string? DocType { get; init; }
+    public string? Reason { get; init; }
+    public DateTimeOffset? RevokedAt { get; set; }
+}
+
+internal sealed class ApprovalDelegationConfiguration : IEntityTypeConfiguration<ApprovalDelegation>
+{
+    public void Configure(EntityTypeBuilder<ApprovalDelegation> b) => b.ToTable("approval_delegation", "core");
 }
 
 internal sealed class ApprovalRuleConfiguration : IEntityTypeConfiguration<ApprovalRule>
@@ -76,7 +97,10 @@ public sealed record ApprovalStepRuleDto(decimal MinAmount, string RoleCode);
 public sealed record ApprovalDocumentTypeDto(string DocType, string NameEn, string NameAr, IReadOnlyList<ApprovalStepRuleDto> Steps);
 public sealed record ApprovalSettingsDto(bool AllowSelfApproval);
 public sealed record ApprovalStepDto(int StepNo, string RoleCode, string? Decision, Guid? DecidedBy, string? DecidedByName, DateTimeOffset? DecidedAt,
-    string? Comment);
+    string? Comment, string? OnBehalfOfName = null);
+public sealed record DelegationRequest(Guid? DelegatorUserId, Guid DelegateUserId, DateOnly FromDate, DateOnly ToDate, string? DocType, string? Reason);
+public sealed record DelegationDto(Guid Id, Guid DelegatorUserId, string DelegatorName, Guid DelegateUserId, string DelegateName, DateOnly FromDate,
+    DateOnly ToDate, string? DocType, string? Reason, bool Active, DateTimeOffset? RevokedAt);
 public sealed record ApprovalRequestDto(Guid Id, string DocType, string DocTypeEn, string DocTypeAr, Guid DocId, string DocNo, decimal Amount,
     string SummaryEn, string SummaryAr, string Status, int CurrentStep, Guid RequestedBy, string? RequestedByName, DateTimeOffset RequestedAt,
     DateTimeOffset? DecidedAt, IReadOnlyList<ApprovalStepDto> Steps, bool CanDecide);
@@ -142,14 +166,15 @@ internal sealed class ApprovalService(ErpDbContext db, ITenantContext tenant, IC
         db.RequireTransaction("Deciding an approval");
         var userId = tenant.UserId ?? throw new ForbiddenException();
         var step = request.Steps.Single(s => s.StepNo == request.CurrentStep);
-        if (!await CanDecideAsync(request, step, userId, ct))
-            throw new ForbiddenException("You are not an approver for this step.");
+        var (allowed, onBehalfOf) = await AuthorityAsync(request, step, userId, ct);
+        if (!allowed) throw new ForbiddenException("You are not an approver for this step.");
         if (!approve && string.IsNullOrWhiteSpace(comment))
             throw new BusinessRuleException("core.approval_reason", "Give a reason for rejecting.", "اذكر سبب الرفض.");
 
         step.Decision = approve ? ApprovalDecision.Approved : ApprovalDecision.Rejected;
         step.DecidedBy = userId;
         step.DecidedAt = clock.UtcNow;
+        step.OnBehalfOf = onBehalfOf;
         step.Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim()[..Math.Min(comment.Trim().Length, 500)];
 
         var handler = Document(request.DocType);
@@ -184,17 +209,74 @@ internal sealed class ApprovalService(ErpDbContext db, ITenantContext tenant, IC
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>Holder of the step's role (owners approve anything), not the submitter unless allowed, and not an earlier approver.</summary>
-    internal async Task<bool> CanDecideAsync(ApprovalRequest request, ApprovalStep step, Guid userId, CancellationToken ct)
+    internal async Task<bool> CanDecideAsync(ApprovalRequest request, ApprovalStep step, Guid userId, CancellationToken ct) =>
+        (await AuthorityAsync(request, step, userId, ct)).Allowed;
+
+    /// <summary>
+    /// Holder of the step's role (owners approve anything) — or the delegate of a holder for today — not the submitter unless allowed,
+    /// and not someone who decided an earlier step. Both the delegate and the person they stand in for are held to those rules.
+    /// </summary>
+    internal async Task<(bool Allowed, Guid? OnBehalfOf)> AuthorityAsync(ApprovalRequest request, ApprovalStep step, Guid userId, CancellationToken ct)
     {
-        if (request.Status != ApprovalStatus.Pending || step.StepNo != request.CurrentStep) return false;
-        var roles = await RolesOfAsync(userId, ct);
+        if (request.Status != ApprovalStatus.Pending || step.StepNo != request.CurrentStep) return (false, null);
         var isOwner = (await permissions.GetPermissionsAsync(userId, ct)).Contains(DefaultRoles.Wildcard);
-        if (!isOwner && !roles.Contains(step.RoleCode)) return false;
-        if (request.Steps.Any(s => s.StepNo < step.StepNo && s.DecidedBy == userId)) return false;
-        if (request.RequestedBy == userId)
-            return await db.Set<Company>().AsNoTracking().Where(c => c.Id == request.CompanyId).Select(c => c.AllowSelfApproval).SingleAsync(ct);
-        return true;
+        var people = new List<(Guid Approver, Guid? OnBehalfOf)>();
+        if (isOwner || (await RolesOfAsync(userId, ct)).Contains(step.RoleCode)) people.Add((userId, null));
+        foreach (var delegator in await DelegatorsAsync(userId, request.CompanyId, request.DocType, ct))
+            if ((await RolesOfAsync(delegator, ct)).Contains(step.RoleCode)) people.Add((delegator, delegator));
+        var allowSelf = await db.Set<Company>().AsNoTracking().Where(c => c.Id == request.CompanyId).Select(c => c.AllowSelfApproval).SingleAsync(ct);
+        foreach (var (approver, onBehalfOf) in people)
+        {
+            Guid[] involved = onBehalfOf is null ? [userId] : [userId, approver];
+            if (request.Steps.Any(s => s.StepNo < step.StepNo && (involved.Contains(s.DecidedBy ?? Guid.Empty) || involved.Contains(s.OnBehalfOf ?? Guid.Empty))))
+                continue;
+            if (involved.Contains(request.RequestedBy) && !allowSelf) continue;
+            return (true, onBehalfOf);
+        }
+        return (false, null);
+    }
+
+    /// <summary>People who have delegated their approvals to this user for today (and this document type).</summary>
+    private async Task<List<Guid>> DelegatorsAsync(Guid userId, Guid companyId, string docType, CancellationToken ct)
+    {
+        var today = clock.Today;
+        return await db.Set<ApprovalDelegation>().AsNoTracking()
+            .Where(d => d.DelegateUserId == userId && d.CompanyId == companyId && d.RevokedAt == null && d.FromDate <= today && d.ToDate >= today
+                        && (d.DocType == null || d.DocType == docType))
+            .Select(d => d.DelegatorUserId).Distinct().ToListAsync(ct);
+    }
+
+    public async Task<ApprovalDelegation> DelegateAsync(DelegationRequest r, CancellationToken ct)
+    {
+        var userId = tenant.UserId ?? throw new ForbiddenException();
+        var delegator = r.DelegatorUserId ?? userId;
+        if (delegator != userId && !await permissions.HasAsync(CorePermissions.ApprovalsManage, ct))
+            throw new ForbiddenException("Only an administrator can delegate on someone else's behalf.");
+        if (delegator == r.DelegateUserId)
+            throw new BusinessRuleException("core.delegate_self", "Choose someone else to delegate to.", "اختر شخصاً آخر للتفويض.");
+        if (r.ToDate < r.FromDate || r.ToDate < clock.Today || r.ToDate.DayNumber - r.FromDate.DayNumber > 366)
+            throw new BusinessRuleException("core.delegate_dates", "Check the dates (up to one year, not in the past).", "تحقق من التواريخ (حتى سنة، وليست في الماضي).");
+        var users = await db.Set<AppUser>().Where(u => (u.Id == delegator || u.Id == r.DelegateUserId) && u.IsActive).Select(u => u.Id).ToListAsync(ct);
+        if (!users.Contains(delegator)) throw new NotFoundException("User", delegator);
+        if (!users.Contains(r.DelegateUserId)) throw new NotFoundException("User", r.DelegateUserId);
+        if (r.DocType is not null) Document(r.DocType);
+        var delegation = new ApprovalDelegation
+        {
+            CompanyId = tenant.RequireCompanyId(), DelegatorUserId = delegator, DelegateUserId = r.DelegateUserId, FromDate = r.FromDate, ToDate = r.ToDate,
+            DocType = r.DocType, Reason = string.IsNullOrWhiteSpace(r.Reason) ? null : r.Reason.Trim()
+        };
+        db.Add(delegation);
+        await db.SaveChangesAsync(ct);
+        return delegation;
+    }
+
+    public async Task RevokeAsync(Guid id, CancellationToken ct)
+    {
+        var d = await db.Set<ApprovalDelegation>().SingleOrDefaultAsync(x => x.Id == id && x.CompanyId == tenant.RequireCompanyId(), ct)
+                ?? throw new NotFoundException("Delegation", id);
+        if (d.DelegatorUserId != tenant.UserId && !await permissions.HasAsync(CorePermissions.ApprovalsManage, ct)) throw new ForbiddenException();
+        d.RevokedAt ??= clock.UtcNow;
+        await db.SaveChangesAsync(ct);
     }
 
     internal Task<List<string>> RolesOfAsync(Guid userId, CancellationToken ct) =>
@@ -269,6 +351,29 @@ internal static class ApprovalEndpoints
             var list = await q.OrderByDescending(r => r.RequestedAt).Take(200).ToListAsync(ct);
             return await ToDtosAsync(list, s, db, t, ct, canDecide: null);
         });
+        g.MapGet("/delegations", async (ErpDbContext db, ITenantContext t, IPermissionService p, IClock clock, CancellationToken ct) =>
+        {
+            var userId = t.UserId ?? throw new ForbiddenException();
+            var all = await p.HasAsync(CorePermissions.ApprovalsManage, ct);
+            var list = await db.Set<ApprovalDelegation>().AsNoTracking()
+                .Where(d => d.CompanyId == t.RequireCompanyId() && (all || d.DelegatorUserId == userId || d.DelegateUserId == userId))
+                .OrderByDescending(d => d.FromDate).Take(200).ToListAsync(ct);
+            var ids = list.SelectMany(d => new[] { d.DelegatorUserId, d.DelegateUserId }).Distinct().ToList();
+            var names = await db.Set<AppUser>().AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayNameEn, ct);
+            return list.Select(d => new DelegationDto(d.Id, d.DelegatorUserId, names.GetValueOrDefault(d.DelegatorUserId, ""), d.DelegateUserId,
+                names.GetValueOrDefault(d.DelegateUserId, ""), d.FromDate, d.ToDate, d.DocType, d.Reason,
+                d.RevokedAt == null && d.ToDate >= clock.Today, d.RevokedAt));
+        });
+        // Colleagues to delegate to: staff accounts only (self-service employees have no approver role).
+        g.MapGet("/delegates", async (ErpDbContext db, CancellationToken ct) =>
+            await db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive && u.Email != null).OrderBy(u => u.DisplayNameEn)
+                .Select(u => new { u.Id, u.DisplayNameEn, u.DisplayNameAr }).ToListAsync(ct));
+        g.MapPost("/delegations", async (DelegationRequest r, ApprovalService s, CancellationToken ct) => (await s.DelegateAsync(r, ct)).Id);
+        g.MapPost("/delegations/{id:guid}/revoke", async (Guid id, ApprovalService s, CancellationToken ct) =>
+        {
+            await s.RevokeAsync(id, ct);
+            return Results.NoContent();
+        });
         g.MapPost("/{id:guid}/approve", async (Guid id, ApprovalDecisionRequest? r, ApprovalService s, CancellationToken ct) =>
         {
             await s.DecideByIdAsync(id, true, r?.Comment, ct);
@@ -315,7 +420,7 @@ internal static class ApprovalEndpoints
         CancellationToken ct, bool? canDecide)
     {
         var userIds = list.Select(r => r.RequestedBy).Concat(list.SelectMany(r => r.Steps).Where(x => x.DecidedBy != null).Select(x => x.DecidedBy!.Value))
-            .Distinct().ToList();
+            .Concat(list.SelectMany(r => r.Steps).Where(x => x.OnBehalfOf != null).Select(x => x.OnBehalfOf!.Value)).Distinct().ToList();
         var names = await db.Set<AppUser>().AsNoTracking().Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayNameEn, ct);
         var types = s.Documents.ToDictionary(d => d.DocType);
         var result = new List<ApprovalRequestDto>();
@@ -328,7 +433,8 @@ internal static class ApprovalEndpoints
                 r.SummaryEn, r.SummaryAr, r.Status.ToString(), r.CurrentStep, r.RequestedBy, names.GetValueOrDefault(r.RequestedBy), r.RequestedAt,
                 r.DecidedAt,
                 r.Steps.OrderBy(x => x.StepNo).Select(x => new ApprovalStepDto(x.StepNo, x.RoleCode, x.Decision?.ToString(), x.DecidedBy,
-                    x.DecidedBy is { } d ? names.GetValueOrDefault(d) : null, x.DecidedAt, x.Comment)).ToList(), decide));
+                    x.DecidedBy is { } d ? names.GetValueOrDefault(d) : null, x.DecidedAt, x.Comment,
+                    x.OnBehalfOf is { } o ? names.GetValueOrDefault(o) : null)).ToList(), decide));
         }
         return result;
     }

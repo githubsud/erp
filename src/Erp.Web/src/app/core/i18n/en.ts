@@ -1535,7 +1535,21 @@ export const en = {
   'sc.clearanceConfirm': 'Record that the subcontractor presented a tax clearance certificate? Everything held for tax becomes payable to them.',
   'sc.hint': 'Retention is released at handover. The tax clearance retention is released when the subcontractor shows a tax clearance certificate; confirm the rate with your tax adviser.',
   'tset.taxClearance': 'Tax clearance retention % (subcontracts)',
-  'tset.taxClearanceHint': 'Confirm the rate with your tax adviser.'
+  'tset.taxClearanceHint': 'Confirm the rate with your tax adviser.',
+  'approval.delegations': 'Delegation',
+  'approval.delegationHint': 'Away? Hand your approvals to a colleague for a period. They approve on your behalf under the same rules, and every decision shows it.',
+  'approval.delegateTo': 'Delegate to',
+  'approval.from': 'Delegated by',
+  'approval.docType': 'Documents',
+  'approval.allDocuments': 'All documents',
+  'approval.doc.purchase_order': 'Purchase orders',
+  'approval.doc.purchase_request': 'Purchase requests',
+  'approval.delegate': 'Delegate',
+  'approval.active': 'Active',
+  'approval.revoked': 'Revoked',
+  'approval.ended': 'Ended',
+  'approval.revoke': 'Revoke',
+  'approval.onBehalfOf': 'on behalf of {name}'
 } as const;
 
 export type TranslationKey = keyof typeof en;

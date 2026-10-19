@@ -1537,5 +1537,19 @@ export const ar: Record<TranslationKey, string> = {
   'sc.clearanceConfirm': 'تسجيل تقديم المقاول لشهادة المخالصة الضريبية؟ يصبح كل المحتجز للضريبة مستحقاً له.',
   'sc.hint': 'يُفرج عن المحتجزات عند التسليم. ويُفرج عن محتجزات المخالصة الضريبية عند تقديم المقاول لشهادة المخالصة؛ تأكد من النسبة مع مستشارك الضريبي.',
   'tset.taxClearance': 'نسبة محتجزات المخالصة الضريبية (عقود الباطن)',
-  'tset.taxClearanceHint': 'تأكد من النسبة مع مستشارك الضريبي.'
+  'tset.taxClearanceHint': 'تأكد من النسبة مع مستشارك الضريبي.',
+  'approval.delegations': 'التفويض',
+  'approval.delegationHint': 'ستغيب؟ فوّض اعتماداتك لزميل لفترة محددة. يعتمد نيابة عنك بنفس القواعد، ويظهر ذلك في كل قرار.',
+  'approval.delegateTo': 'التفويض إلى',
+  'approval.from': 'المفوِّض',
+  'approval.docType': 'المستندات',
+  'approval.allDocuments': 'جميع المستندات',
+  'approval.doc.purchase_order': 'أوامر الشراء',
+  'approval.doc.purchase_request': 'طلبات الشراء',
+  'approval.delegate': 'تفويض',
+  'approval.active': 'سارٍ',
+  'approval.revoked': 'ملغى',
+  'approval.ended': 'منتهٍ',
+  'approval.revoke': 'إلغاء',
+  'approval.onBehalfOf': 'نيابة عن {name}'
 };
