@@ -166,7 +166,9 @@ export class SetupWizardPage implements OnInit {
     this.api.get<ModuleInfo[]>('core/modules').subscribe((m) => this.modules.set(m));
     this.trade.items({ pageSize: 500 }).pipe(catchError(() => of({ items: [] as { sku: string }[] }))).subscribe((r) =>
       (this.existingSkus = new Set(r.items.map((i) => i.sku.toUpperCase()))));
-    this.api.get<{ id: string }[]>('sales/pos/registers').pipe(catchError(() => of([]))).subscribe((r) => this.hasTill.set(r.length > 0));
+    // Tills can only be listed while the till module is on; otherwise the wizard creates one if the business needs it.
+    if (!this.modulesService.disabled().has('pos'))
+      this.api.get<{ id: string }[]>('sales/pos/registers').pipe(catchError(() => of([]))).subscribe((r) => this.hasTill.set(r.length > 0));
     this.staffNames.valueChanges.subscribe(() => this.version.update((v) => v + 1));
   }
 
