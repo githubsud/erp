@@ -512,6 +512,8 @@ export interface Company {
   phone: string | null;
   email: string | null;
   baseCurrency: string;
+  receiptFooterEn: string | null;
+  receiptFooterAr: string | null;
 }
 
 export interface AppUser {

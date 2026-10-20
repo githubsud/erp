@@ -9,6 +9,7 @@ import { map } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 import { ModulesService } from '../core/modules.service';
 import { I18nService } from '../core/i18n/i18n.service';
+import { PwaService } from '../core/pwa.service';
 import { SHARED } from '../shared/shared';
 
 interface NavItem {
@@ -159,6 +160,9 @@ const NAV: NavGroup[] = [
             <mat-icon>menu</mat-icon>
           </button>
           <span class="spacer"></span>
+          @if (!pwa.online()) {
+            <span class="offline" [matTooltip]="'pwa.offlineHint' | t"><mat-icon>cloud_off</mat-icon> {{ 'pwa.offline' | t }}</span>
+          }
           <button mat-stroked-button (click)="i18n.toggle()" class="lang">
             <mat-icon>translate</mat-icon>
             {{ 'app.language' | t }}
@@ -166,6 +170,12 @@ const NAV: NavGroup[] = [
           <button mat-icon-button [matMenuTriggerFor]="userMenu"><mat-icon>account_circle</mat-icon></button>
           <mat-menu #userMenu="matMenu">
             <div class="menu-user">{{ auth.user()?.email ?? auth.user()?.username }}</div>
+            @if (pwa.canInstall() || pwa.iosHint()) {
+              <button mat-menu-item (click)="pwa.install()">
+                <mat-icon>install_mobile</mat-icon>
+                <span>{{ 'pwa.install' | t }}</span>
+              </button>
+            }
             <a mat-menu-item routerLink="/change-password">
               <mat-icon>password</mat-icon>
               <span>{{ 'password.change' | t }}</span>
@@ -194,6 +204,10 @@ const NAV: NavGroup[] = [
     .toolbar { position: sticky; top: 0; z-index: 2; background: var(--mat-sys-surface); border-bottom: 1px solid var(--mat-sys-outline-variant); gap: 8px; }
     .spacer { flex: 1; }
     .lang mat-icon { margin-inline-end: 4px; }
+    .offline { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 16px; font-size: 13px;
+      background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container); }
+    .offline mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    @media (max-width: 600px) { .lang { min-width: 0; padding-inline: 8px; } }
     .menu-user { padding: 8px 16px; font-size: 12px; color: var(--mat-sys-on-surface-variant); }
     .content { padding: 24px; max-width: 1400px; margin-inline: auto; }
     @media (max-width: 600px) { .content { padding: 16px; } }
@@ -202,6 +216,7 @@ const NAV: NavGroup[] = [
 export class Shell {
   protected readonly auth = inject(AuthService);
   protected readonly i18n = inject(I18nService);
+  protected readonly pwa = inject(PwaService);
   protected readonly handset = toSignal(
     inject(BreakpointObserver).observe('(max-width: 960px)').pipe(map((r) => r.matches)),
     { initialValue: false }

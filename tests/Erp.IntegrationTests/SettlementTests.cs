@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 using Erp.Infrastructure.Email;
-using Erp.Infrastructure.Outbox;
 using Erp.IntegrationTests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -179,10 +178,10 @@ public sealed class SettlementTests(ErpFixture fixture)
         result.GetProperty("queued").GetInt32().ShouldBe(1);
         result.GetProperty("withoutEmail").GetInt32().ShouldBe(1);
 
-        var dispatcher = fixture.Factory.Services.GetRequiredService<OutboxDispatcher>();
-        while (await dispatcher.DispatchBatchAsync(CancellationToken.None) > 0) { }
+        var sender = fixture.Factory.Services.GetRequiredService<CapturingEmailSender>();
+        await fixture.DeliverOutboxAsync(() => sender.Sent.Any(m => m.To.Contains(mailbox)));
 
-        var mail = fixture.Factory.Services.GetRequiredService<CapturingEmailSender>().Sent.Single(m => m.To.Contains(mailbox));
+        var mail = sender.Sent.Single(m => m.To.Contains(mailbox));
         mail.Subject.ShouldContain("Your payslip for");
         var attachment = mail.Attachments.ShouldNotBeNull().ShouldHaveSingleItem();
         attachment.ContentType.ShouldBe("application/pdf");

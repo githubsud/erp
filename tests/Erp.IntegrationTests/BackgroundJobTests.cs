@@ -1,5 +1,4 @@
 using Erp.Infrastructure.Email;
-using Erp.Infrastructure.Outbox;
 using Erp.IntegrationTests.Infrastructure;
 using Erp.Modules.HR.Documents;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,10 +24,7 @@ public sealed class BackgroundJobTests(ErpFixture fixture)
         const string pending = "SELECT count(*) FROM core.outbox_message WHERE type = 'hr.document_expiry_reminder' AND sent_at IS NULL";
         (await PlatformTests.CountAsync(connection, pending)).ShouldBe(1);
 
-        var dispatcher = fixture.Factory.Services.GetRequiredService<OutboxDispatcher>();
-        while (await dispatcher.DispatchBatchAsync(CancellationToken.None) > 0) { }
-
-        (await PlatformTests.CountAsync(connection, pending)).ShouldBe(0);
+        await fixture.DeliverOutboxAsync(async () => await PlatformTests.CountAsync(connection, pending) == 0);
         (await PlatformTests.CountAsync(connection,
             "SELECT count(*) FROM core.outbox_message WHERE type = 'hr.document_expiry_reminder' AND sent_at IS NOT NULL AND payload->>'docNo' = 'BL-778'"))
             .ShouldBe(1);

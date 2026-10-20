@@ -208,7 +208,7 @@ internal sealed class PosService(ErpDbContext db, ITenantContext tenant, INumber
             var items = await inventory.GetItemsAsync(r.Lines.Select(l => l.ItemId), token);
             var sale = new PosSale
             {
-                ShiftId = shift.Id, ReceiptNo = await numbering.NextAsync(SourceType, $"{register.Code}-", clock.Today, ct: token), ClientId = r.ClientId,
+                ShiftId = shift.Id, ReceiptNo = await numbering.NextAsync($"{SourceType}:{register.Code}", register.Code, clock.Today, ct: token), ClientId = r.ClientId,
                 SoldAt = r.SoldAt ?? clock.UtcNow, CustomerName = Clean(r.CustomerName), CustomerPhone = Clean(r.CustomerPhone)
             };
             var no = 0;
@@ -300,7 +300,7 @@ internal sealed class PosService(ErpDbContext db, ITenantContext tenant, INumber
             var items = await inventory.GetItemsAsync(original.Lines.Select(l => l.ItemId), token);
             var refund = new PosSale
             {
-                ShiftId = shift.Id, ReceiptNo = await numbering.NextAsync(SourceType, $"{register.Code}-R", clock.Today, ct: token), ClientId = r.ClientId,
+                ShiftId = shift.Id, ReceiptNo = await numbering.NextAsync($"pos_refund:{register.Code}", $"{register.Code}-R", clock.Today, ct: token), ClientId = r.ClientId,
                 SoldAt = clock.UtcNow, RefundOfId = original.Id, CustomerName = original.CustomerName
             };
             var no = 0;

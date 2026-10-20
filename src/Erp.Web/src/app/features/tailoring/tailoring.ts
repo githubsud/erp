@@ -9,6 +9,7 @@ import { addDaysIso, todayIso } from '../../core/dates';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Account } from '../../core/models';
 import { NotifyService } from '../../core/notify.service';
+import { ReceiptService } from '../../core/receipt.service';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
 import { SHARED } from '../../shared/shared';
@@ -392,6 +393,7 @@ export class TailoringDetailDialog implements OnInit {
   private readonly trade = inject(TradeApi);
   private readonly notify = inject(NotifyService);
   private readonly i18n = inject(I18nService);
+  private readonly receipt = inject(ReceiptService);
   protected readonly o = signal(inject<TOrder>(MAT_DIALOG_DATA));
   protected readonly accounts = signal<Account[]>([]);
   protected readonly warehouses = signal<Master[]>([]);
@@ -464,20 +466,20 @@ export class TailoringDetailDialog implements OnInit {
 
   protected print(): void {
     const o = this.o();
-    const ar = this.i18n.isArabic();
-    const rows = o.lines.map((l) => `<tr><td>${l.description}</td><td style="text-align:end">${l.amount.toFixed(2)}</td></tr>`).join('');
+    const t = (k: Parameters<I18nService['t']>[0]) => this.i18n.t(k);
     const measures = Object.entries(o.measurements).map(([k, v]) => `${this.i18n.t('tl.m.' + k)}: ${v}`).join(' · ');
-    const w = window.open('', '_blank', 'width=380,height=640');
-    if (!w) return;
-    w.document.write(`<!doctype html><html dir="${ar ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><title>${o.orderNo}</title>
-      <style>body{font-family:system-ui,sans-serif;font-size:13px;width:300px;margin:8px auto}table{width:100%;border-collapse:collapse}
-      td{padding:3px 0;border-bottom:1px dashed #ccc}h3,p{text-align:center;margin:4px 0}.b{font-weight:700}</style></head><body>
-      <h3>${this.i18n.t('tl.title')}</h3><p class="b">${o.orderNo}</p><p>${o.customerName} · ${o.phone ?? ''}</p>
-      <p>${this.i18n.t('tl.due')}: ${o.dueDate.split('-').reverse().join('/')}</p><p style="font-size:11px">${measures}</p>
-      <table>${rows}<tr class="b"><td>${this.i18n.t('app.total')}</td><td style="text-align:end">${o.total.toFixed(2)}</td></tr>
-      <tr><td>${this.i18n.t('tl.paid')}</td><td style="text-align:end">${o.paid.toFixed(2)}</td></tr>
-      <tr class="b"><td>${this.i18n.t('tl.balance')}</td><td style="text-align:end">${o.balance.toFixed(2)}</td></tr></table>
-      <p>${this.i18n.t('tl.keepReceipt')}</p><script>window.print()</script></body></html>`);
-    w.document.close();
+    this.receipt.print({
+      title: t('tl.title'),
+      number: o.orderNo,
+      meta: [[o.customerName, o.phone].filter(Boolean).join(' · '), `${t('tl.due')}: ${o.dueDate.split('-').reverse().join('/')}`],
+      lines: o.lines.map((l) => ({ text: l.description, amount: l.amount })),
+      totals: [
+        { label: t('app.total'), amount: o.total, bold: true },
+        { label: t('tl.paid'), amount: o.paid },
+        { label: t('tl.balance'), amount: o.balance, bold: true }
+      ],
+      note: measures || undefined,
+      footer: t('tl.keepReceipt')
+    });
   }
 }

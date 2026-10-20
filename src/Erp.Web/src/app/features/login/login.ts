@@ -39,6 +39,8 @@ const LAST_COMPANY = 'erp.lastCompany';
               <input matInput type="password" formControlName="password" autocomplete="current-password" dir="ltr" />
               <mat-icon matSuffix>lock</mat-icon>
             </mat-form-field>
+            <mat-checkbox formControlName="remember">{{ 'login.remember' | t }}</mat-checkbox>
+            <div class="remember-hint">{{ 'login.rememberHint' | t }}</div>
             @if (error()) { <div class="error-panel" role="alert">{{ error() }}</div> }
             <button mat-flat-button type="submit" [disabled]="form.invalid || busy()" class="submit">{{ 'login.submit' | t }}</button>
           </form>
@@ -68,6 +70,7 @@ const LAST_COMPANY = 'erp.lastCompany';
     h1 { font: var(--mat-sys-headline-small); margin: 12px 0 4px; }
     .sub { color: var(--mat-sys-on-surface-variant); margin: 0 0 20px; }
     form { display: flex; flex-direction: column; gap: 4px; }
+    .remember-hint { font-size: 12px; color: var(--mat-sys-on-surface-variant); margin-inline-start: 40px; margin-top: -8px; }
     .submit { height: 44px; margin-top: 8px; }
     .mfa-hint { display: flex; gap: 8px; align-items: center; color: var(--mat-sys-on-surface-variant); }
     .code { letter-spacing: 0.4em; font-size: 20px; text-align: center; }
@@ -87,14 +90,16 @@ export class LoginPage {
   protected readonly form = inject(FormBuilder).nonNullable.group({
     tenantCode: [localStorage.getItem(LAST_COMPANY) ?? '', Validators.required],
     email: ['', Validators.required],
-    password: ['', Validators.required]
+    password: ['', Validators.required],
+    // The installed app on the owner's phone or the till stays signed in unless they untick it.
+    remember: [window.matchMedia('(display-mode: standalone)').matches]
   });
 
   submit(): void {
     if (this.form.invalid) return;
-    const { tenantCode, email, password } = this.form.getRawValue();
+    const { tenantCode, email, password, remember } = this.form.getRawValue();
     this.start();
-    this.auth.login(tenantCode.trim(), email.trim(), password).subscribe({
+    this.auth.login(tenantCode.trim(), email.trim(), password, remember).subscribe({
       next: (r) => {
         localStorage.setItem(LAST_COMPANY, tenantCode.trim());
         if (r.mfaRequired && r.mfaToken) {

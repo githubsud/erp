@@ -9,6 +9,7 @@ import { addDaysIso, todayIso } from '../../core/dates';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Account } from '../../core/models';
 import { NotifyService } from '../../core/notify.service';
+import { ReceiptService } from '../../core/receipt.service';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
 import { SHARED } from '../../shared/shared';
@@ -461,6 +462,7 @@ export class JobDialog implements OnInit {
   private readonly trade = inject(TradeApi);
   private readonly notify = inject(NotifyService);
   private readonly i18n = inject(I18nService);
+  private readonly receipt = inject(ReceiptService);
   private readonly dialogs = inject(MatDialog);
   private readonly fb = inject(FormBuilder).nonNullable;
   protected readonly aiOn = inject(AiService).enabled();
@@ -594,25 +596,21 @@ export class JobDialog implements OnInit {
 
   protected print(): void {
     const j = this.j();
-    const ar = this.i18n.isArabic();
-    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
-    const rows = j.lines.map((l) => `<tr><td>${esc(l.description)}</td><td style="text-align:end">${l.quantity}</td><td style="text-align:end">${l.amount.toFixed(2)}</td></tr>`).join('');
-    const w = window.open('', '_blank', 'width=720,height=900');
-    if (!w) return;
-    w.document.write(`<!doctype html><html dir="${ar ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><title>${j.jobNo}</title>
-      <style>body{font-family:system-ui,sans-serif;font-size:13px;max-width:680px;margin:16px auto}table{width:100%;border-collapse:collapse;margin-top:8px}
-      td,th{padding:4px;border-bottom:1px solid #ccc;text-align:start}h2{margin:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin:8px 0}
-      .sign{margin-top:40px;display:flex;justify-content:space-between}</style></head><body>
-      <h2>${this.i18n.t('ws.jobCard')} ${j.jobNo}</h2>
-      <div class="grid"><div>${this.i18n.t('ws.customer')}: ${esc(j.customerName)} ${j.phone ?? ''}</div><div>${this.i18n.t('ws.plate')}: <b>${j.plateNo}</b></div>
-      <div>${this.i18n.t('ws.car')}: ${esc(j.vehicle ?? '')}</div><div>${this.i18n.t('ws.mileage')}: ${j.mileage ?? ''}</div>
-      <div>${this.i18n.t('ws.received')}: ${j.receivedOn.split('-').reverse().join('/')}</div><div>${this.i18n.t('ws.promised')}: ${(j.promisedOn ?? '').split('-').reverse().join('/')}</div></div>
-      <p><b>${this.i18n.t('ws.complaint')}:</b> ${esc(j.complaint)}</p>${j.diagnosis ? `<p><b>${this.i18n.t('ws.diagnosis')}:</b> ${esc(j.diagnosis)}</p>` : ''}
-      <table><tr><th>${this.i18n.t('tl.description')}</th><th style="text-align:end">${this.i18n.t('po.qty')}</th><th style="text-align:end">${this.i18n.t('app.amount')}</th></tr>${rows}
-      <tr><th colspan="2">${this.i18n.t('app.total')}</th><th style="text-align:end">${j.total.toFixed(2)}</th></tr>
-      <tr><td colspan="2">${this.i18n.t('tl.paid')}</td><td style="text-align:end">${j.paid.toFixed(2)}</td></tr></table>
-      <div class="sign"><span>${this.i18n.t('ws.customerSignature')}: ____________</span><span>${this.i18n.t('ws.technician')}: ${esc(j.technicianName ?? '')}</span></div>
-      <script>window.print()</script></body></html>`);
-    w.document.close();
+    const t = (k: Parameters<I18nService['t']>[0]) => this.i18n.t(k);
+    const esc = (s: string | null | undefined) => (s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+    const date = (d: string | null) => (d ?? '').split('-').reverse().join('/');
+    const rows = j.lines.map((l) => `<tr><td>${esc(l.description)}</td><td class="n">${l.quantity}</td><td class="n">${l.amount.toFixed(2)}</td></tr>`).join('');
+    this.receipt.printPage(j.jobNo, `
+      <style>.grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin:8px 0}.job td,.job th{padding:4px;border-bottom:1px solid #ccc}
+      .sign{margin-top:40px;display:flex;justify-content:space-between}h2{text-align:start}</style>
+      <h2>${t('ws.jobCard')} <span class="ltr">${esc(j.jobNo)}</span></h2>
+      <div class="grid"><div>${t('ws.customer')}: ${esc(j.customerName)} <span class="ltr">${esc(j.phone)}</span></div><div>${t('ws.plate')}: <b class="ltr">${esc(j.plateNo)}</b></div>
+      <div>${t('ws.car')}: ${esc(j.vehicle)}</div><div>${t('ws.mileage')}: ${j.mileage ?? ''}</div>
+      <div>${t('ws.received')}: ${date(j.receivedOn)}</div><div>${t('ws.promised')}: ${date(j.promisedOn)}</div></div>
+      <p style="text-align:start"><b>${t('ws.complaint')}:</b> ${esc(j.complaint)}</p>${j.diagnosis ? `<p style="text-align:start"><b>${t('ws.diagnosis')}:</b> ${esc(j.diagnosis)}</p>` : ''}
+      <table class="job"><tr><th>${t('tl.description')}</th><th class="n">${t('po.qty')}</th><th class="n">${t('app.amount')}</th></tr>${rows}
+      <tr><th colspan="2">${t('app.total')}</th><th class="n">${j.total.toFixed(2)}</th></tr>
+      <tr><td colspan="2">${t('tl.paid')}</td><td class="n">${j.paid.toFixed(2)}</td></tr></table>
+      <div class="sign"><span>${t('ws.customerSignature')}: ____________</span><span>${t('ws.technician')}: ${esc(j.technicianName)}</span></div>`);
   }
 }

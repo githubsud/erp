@@ -1,17 +1,23 @@
 {
-  "name": "Employee self-service · الخدمة الذاتية للموظف",
-  "short_name": "My HR",
-  "description": "Payslips, leave and documents · قسائم الراتب والإجازات والمستندات",
-  "start_url": "/me",
+  "name": "Qatar SME ERP · نظام المنشآت القطرية",
+  "short_name": "ERP",
+  "description": "Sales, till, stock, payroll and HR for Qatari shops · المبيعات والصندوق والمخزون والرواتب للمحلات القطرية",
+  "id": "/",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "dir": "auto",
   "lang": "ar",
   "background_color": "#f4fbfa",
   "theme_color": "#006a6a",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Till · الصندوق", "url": "/sales/pos", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Today · اليوم", "url": "/dashboard", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
   ]
 }

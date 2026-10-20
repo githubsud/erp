@@ -8,8 +8,10 @@ import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Account } from '../../core/models';
 import { NotifyService } from '../../core/notify.service';
+import { ReceiptService } from '../../core/receipt.service';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
+import { PrinterSettingsDialog } from '../../shared/printer-settings';
 import { SHARED } from '../../shared/shared';
 
 interface Register {
@@ -82,6 +84,8 @@ interface Sale {
   changeGiven: number;
   isRefund: boolean;
   lines: SaleLine[];
+  /** Rung up without a connection: the receipt number comes when it reaches the server. */
+  offline?: boolean;
 }
 
 interface ZReport {
@@ -118,6 +122,8 @@ interface QueuedSale {
 
 const CATALOG_KEY = 'erp.pos.catalog';
 const QUEUE_KEY = 'erp.pos.queue';
+const REGISTERS_KEY = 'erp.pos.registers';
+const SHIFT_KEY = 'erp.pos.shift';
 
 function readStore<T>(key: string, fallback: T): T {
   try {
@@ -151,6 +157,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
         <span class="chip warn" [matTooltip]="'pos.queuedHint' | t">{{ 'pos.queued' | t }}: {{ queue().length }}</span>
         <button mat-button (click)="sync()"><mat-icon>sync</mat-icon> {{ 'pos.syncNow' | t }}</button>
       }
+      <button mat-icon-button (click)="printerSettings()" [matTooltip]="'printer.title' | t"><mat-icon>print</mat-icon></button>
       @if (canManage) { <button mat-stroked-button (click)="editRegister(null)"><mat-icon>add</mat-icon> {{ 'pos.newRegister' | t }}</button> }
     </div>
 
@@ -243,7 +250,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
             <button mat-stroked-button class="account-btn" [disabled]="!cart().length || busy()" (click)="onAccount()"><mat-icon>menu_book</mat-icon> {{ 'pos.onAccount' | t }}</button>
             @if (last(); as s) {
               <div class="last">
-                <span>{{ 'pos.lastReceipt' | t }}: <b class="ltr">{{ s.receiptNo }}</b></span>
+                <span>{{ 'pos.lastReceipt' | t }}: @if (s.offline) { <b>{{ 'pos.provisional' | t }}</b> } @else { <b class="ltr">{{ s.receiptNo }}</b> }</span>
                 <button mat-button (click)="print(s)"><mat-icon>print</mat-icon> {{ 'pos.print' | t }}</button>
               </div>
             }
@@ -294,8 +301,9 @@ export class PosPage implements OnInit, OnDestroy {
   private readonly dialog = inject(MatDialog);
   private readonly notify = inject(NotifyService);
   private readonly i18n = inject(I18nService);
+  private readonly receipt = inject(ReceiptService);
   protected readonly canManage = inject(AuthService).can('sal.pos:manage');
-  protected readonly registers = signal<Register[]>([]);
+  protected readonly registers = signal<Register[]>(readStore<Register[]>(REGISTERS_KEY, []));
   protected readonly catalog = signal<CatalogItem[]>(readStore<CatalogItem[]>(CATALOG_KEY, []));
   protected readonly shift = signal<Shift | null>(null);
   protected readonly register = computed(() => this.registers().find((r) => r.id === this.shift()?.registerId) ?? null);
@@ -318,6 +326,7 @@ export class PosPage implements OnInit, OnDestroy {
   protected readonly due = computed(() => round2(this.total() - this.paid().cash - this.paid().card));
   protected readonly change_ = computed(() => -this.due());
   private timer?: ReturnType<typeof setInterval>;
+  private syncing = false;
   private readonly onOnline = () => this.sync();
 
   ngOnInit(): void {
@@ -336,7 +345,14 @@ export class PosPage implements OnInit, OnDestroy {
   }
 
   private load(): void {
-    this.api.get<Register[]>('sales/pos/registers').subscribe({ next: (r) => this.registers.set(r), error: (e) => this.notify.error(e) });
+    this.api.get<Register[]>('sales/pos/registers').subscribe({
+      next: (r) => {
+        this.registers.set(r);
+        writeStore(REGISTERS_KEY, r);
+      },
+      // Offline: the tills kept from last time.
+      error: (e) => (isOffline(e) ? undefined : this.notify.error(e))
+    });
     this.api.get<CatalogItem[]>('sales/pos/catalog').subscribe({
       next: (c) => {
         this.catalog.set(c);
@@ -359,7 +375,7 @@ export class PosPage implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (s) => {
-          this.shift.set(s);
+          this.setShift(s);
           this.registers.update((list) => list.map((x) => (x.id === r.id ? { ...x, openShiftId: s.id } : x)));
         },
         error: (e) => this.notify.error(e)
@@ -368,9 +384,22 @@ export class PosPage implements OnInit, OnDestroy {
 
   protected resume(r: Register): void {
     this.api.get<Shift[]>('sales/pos/shifts', { registerId: r.id }).subscribe({
-      next: (list) => this.shift.set(list.find((s) => s.id === r.openShiftId) ?? null),
-      error: (e) => this.notify.error(e)
+      next: (list) => this.setShift(list.find((s) => s.id === r.openShiftId) ?? null),
+      error: (e) => {
+        if (!isOffline(e) || !r.openShiftId) return this.notify.error(e);
+        // Offline: carry on with the open shift (the copy this device kept, or just its id; sales only need that).
+        const kept = readStore<Shift | null>(SHIFT_KEY, null);
+        this.shift.set(kept?.id === r.openShiftId ? kept : {
+          id: r.openShiftId, shiftNo: '', registerId: r.id, registerCode: r.code, openedAt: '', openingFloat: 0, status: 'Open', closedAt: null,
+          businessDate: '', expectedCash: null, countedCash: null, difference: null
+        });
+      }
     });
+  }
+
+  private setShift(s: Shift | null): void {
+    this.shift.set(s);
+    writeStore(SHIFT_KEY, s);
   }
 
   protected leave(): void {
@@ -469,7 +498,8 @@ export class PosPage implements OnInit, OnDestroy {
         this.busy.set(false);
         if (isOffline(e)) {
           this.enqueue(sale);
-          this.last.set(null);
+          this.last.set(this.provisional(sale));
+          if (this.receipt.settings().autoPrint) this.print(this.last()!);
           this.reset();
           this.notify.info(this.i18n.t('pos.savedOffline'));
         } else this.notify.error(e);
@@ -477,8 +507,22 @@ export class PosPage implements OnInit, OnDestroy {
     });
   }
 
+  /** What the customer's receipt shows for a sale kept on this device until the connection is back. */
+  private provisional(q: QueuedSale): Sale {
+    const lines = this.cart().map((l, i) => ({
+      id: String(i), lineNo: i + 1, itemId: l.item.id, sku: l.item.sku, nameEn: l.item.nameEn, nameAr: l.item.nameAr, quantity: l.quantity,
+      unitPrice: l.item.salesPrice, discountPercent: l.discountPercent, amount: lineAmount(l), refundable: 0
+    }));
+    const gross = round2(this.cart().reduce((sum, l) => sum + l.quantity * l.item.salesPrice, 0));
+    return {
+      id: q.clientId, receiptNo: '', soldAt: q.soldAt, customerName: null, total: q.total, discountTotal: round2(gross - q.total),
+      cashAmount: q.cash, cardAmount: q.card, changeGiven: Math.max(0, round2(q.cash + q.card - q.total)), isRefund: false, lines, offline: true
+    };
+  }
+
   private done(s: Sale): void {
     this.last.set(s);
+    if (this.receipt.settings().autoPrint) this.print(s);
     this.reset();
     if (s.changeGiven > 0) this.notify.info(`${this.i18n.t('pos.change')}: ${s.changeGiven.toFixed(2)}`);
   }
@@ -496,15 +540,20 @@ export class PosPage implements OnInit, OnDestroy {
 
   /** Sends queued sales in order; stops at the first network failure and keeps business errors for the cashier to see. */
   protected sync(): void {
+    // One sale at a time: the timer, the "online" event and the button must not send the same sale twice at once.
+    if (this.syncing) return;
     const next = this.queue().find((q) => !q.error);
     if (!next) return;
+    this.syncing = true;
     this.api.post<Sale>('sales/pos/sales', next).subscribe({
       next: () => {
+        this.syncing = false;
         this.queue.update((q) => q.filter((x) => x.clientId !== next.clientId));
         writeStore(QUEUE_KEY, this.queue());
         this.sync();
       },
       error: (e) => {
+        this.syncing = false;
         if (isOffline(e)) return;
         this.queue.update((q) => q.map((x) => (x.clientId === next.clientId ? { ...x, error: this.notify.message(e) } : x)));
         writeStore(QUEUE_KEY, this.queue());
@@ -548,6 +597,7 @@ export class PosPage implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (z) => {
+          writeStore(SHIFT_KEY, null);
           this.leave();
           this.dialog.open(ZReportDialog, { data: z, width: '560px' });
         },
@@ -585,26 +635,35 @@ export class PosPage implements OnInit, OnDestroy {
       });
   }
 
+  protected printerSettings(): void {
+    this.dialog.open(PrinterSettingsDialog, { width: '440px' });
+  }
+
   protected print(s: Sale): void {
     const ar = this.i18n.isArabic();
-    const rows = s.lines
-      .map((l) => `<tr><td>${ar ? l.nameAr : l.nameEn}<br><small>${l.quantity} × ${l.unitPrice.toFixed(2)}${l.discountPercent ? ` −${l.discountPercent}%` : ''}</small></td>
-        <td style="text-align:end">${l.amount.toFixed(2)}</td></tr>`)
-      .join('');
-    const w = window.open('', '_blank', 'width=360,height=600');
-    if (!w) return;
-    w.document.write(`<!doctype html><html dir="${ar ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><title>${s.receiptNo}</title>
-      <style>body{font-family:system-ui,sans-serif;font-size:13px;width:280px;margin:8px auto}table{width:100%;border-collapse:collapse}
-      td{padding:3px 0;border-bottom:1px dashed #ccc}h3,p{text-align:center;margin:4px 0}.t{font-weight:700;font-size:15px}</style></head><body>
-      <h3>${this.register() ? (ar ? this.register()!.nameAr : this.register()!.nameEn) : ''}</h3>
-      <p>${s.isRefund ? this.i18n.t('pos.refund') : this.i18n.t('pos.receipt')} ${s.receiptNo}</p><p>${new Date(s.soldAt).toLocaleString('en-GB')}</p>
-      <table>${rows}</table>
-      <table><tr class="t"><td>${this.i18n.t('app.total')}</td><td style="text-align:end">${s.total.toFixed(2)}</td></tr>
-      <tr><td>${this.i18n.t('pos.cash')}</td><td style="text-align:end">${s.cashAmount.toFixed(2)}</td></tr>
-      <tr><td>${this.i18n.t('pos.card')}</td><td style="text-align:end">${s.cardAmount.toFixed(2)}</td></tr>
-      <tr><td>${this.i18n.t('pos.change')}</td><td style="text-align:end">${s.changeGiven.toFixed(2)}</td></tr></table>
-      <p>${this.i18n.t('pos.thanks')}</p><script>window.print()</script></body></html>`);
-    w.document.close();
+    const reg = this.register();
+    const t = (k: Parameters<I18nService['t']>[0]) => this.i18n.t(k);
+    const paid = [
+      { label: t('pos.cash'), amount: s.cashAmount },
+      { label: t('pos.card'), amount: s.cardAmount },
+      { label: t('pos.change'), amount: s.changeGiven }
+    ].filter((x) => x.amount > 0);
+    this.receipt.print({
+      title: s.isRefund ? t('pos.refund') : t('pos.receipt'),
+      number: s.offline ? undefined : s.receiptNo,
+      meta: [new Date(s.soldAt).toLocaleString('en-GB'), ...(reg ? [ar ? reg.nameAr : reg.nameEn] : []), ...(s.customerName ? [s.customerName] : [])],
+      lines: s.lines.map((l) => ({
+        text: ar ? l.nameAr : l.nameEn,
+        sub: `${l.quantity} × ${l.unitPrice.toFixed(2)}${l.discountPercent ? ` −${l.discountPercent}%` : ''}`,
+        amount: l.amount
+      })),
+      totals: [
+        ...(s.discountTotal > 0 ? [{ label: t('pos.discount'), amount: s.discountTotal }] : []),
+        { label: t('app.total'), amount: s.total, bold: true },
+        ...paid
+      ],
+      note: s.offline ? t('pos.provisionalNote') : undefined
+    });
   }
 }
 

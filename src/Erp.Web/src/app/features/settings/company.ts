@@ -1,9 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
 import { FormBuilder, Validators } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { blankToNull } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
+import { ReceiptService } from '../../core/receipt.service';
+import { PrinterSettingsDialog } from '../../shared/printer-settings';
 import { SHARED } from '../../shared/shared';
 
 @Component({
@@ -56,6 +59,23 @@ import { SHARED } from '../../shared/shared';
           </mat-form-field>
         </div>
       </mat-card>
+      <mat-card appearance="outlined" class="block receipts">
+        <div class="head">
+          <h2>{{ 'company.receipts' | t }}</h2>
+          <button mat-stroked-button type="button" (click)="printer()"><mat-icon>print</mat-icon> {{ 'printer.title' | t }}</button>
+        </div>
+        <p class="secondary">{{ 'company.receiptsHint' | t }}</p>
+        <div class="form-grid">
+          <mat-form-field class="full">
+            <mat-label>{{ 'company.footerAr' | t }}</mat-label>
+            <textarea matInput rows="2" maxlength="300" formControlName="receiptFooterAr" dir="rtl"></textarea>
+          </mat-form-field>
+          <mat-form-field class="full">
+            <mat-label>{{ 'company.footerEn' | t }}</mat-label>
+            <textarea matInput rows="2" maxlength="300" formControlName="receiptFooterEn" dir="ltr"></textarea>
+          </mat-form-field>
+        </div>
+      </mat-card>
       @if (canEdit) {
         <div class="actions end"><button mat-flat-button [disabled]="form.invalid || busy()">{{ 'app.save' | t }}</button></div>
       }
@@ -63,12 +83,18 @@ import { SHARED } from '../../shared/shared';
   `,
   styles: `
     .block { padding: 20px; }
+    .receipts { margin-block-start: 16px; }
+    .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+    .head h2 { margin: 0; font-size: 1.1rem; }
+    .secondary { color: var(--mat-sys-on-surface-variant); }
     .end { justify-content: flex-end; margin-top: 16px; }
   `
 })
 export class CompanyPage {
   private readonly api = inject(ApiService);
   private readonly notify = inject(NotifyService);
+  private readonly receipt = inject(ReceiptService);
+  private readonly dialog = inject(MatDialog);
   protected readonly canEdit = inject(AuthService).can('core.company:manage');
   protected readonly busy = signal(false);
   protected readonly form = inject(FormBuilder).group({
@@ -81,12 +107,18 @@ export class CompanyPage {
     addressEn: [''],
     addressAr: [''],
     phone: [''],
-    email: ['']
+    email: [''],
+    receiptFooterEn: [''],
+    receiptFooterAr: ['']
   });
 
   constructor() {
     if (!this.canEdit) this.form.disable();
     this.api.company().subscribe((c) => this.form.patchValue(c));
+  }
+
+  protected printer(): void {
+    this.dialog.open(PrinterSettingsDialog, { width: '440px' });
   }
 
   save(): void {
@@ -95,6 +127,7 @@ export class CompanyPage {
     this.api.updateCompany({ ...v, foreignOwnershipPct: Number(v.foreignOwnershipPct ?? 0) } as never).subscribe({
       next: () => {
         this.busy.set(false);
+        this.receipt.refreshCompany();
         this.notify.success();
       },
       error: (e) => {

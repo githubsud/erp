@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { ApiService } from './api.service';
 import { AuthService } from './auth.service';
 import { ModulesService } from './modules.service';
@@ -52,6 +52,9 @@ export interface DocumentFields {
 
 export type DraftKind = 'payment_reminder' | 'order_ready' | 'appointment_reminder' | 'document_renewal' | 'thank_you' | 'custom';
 
+/** Models often leave a blank line after every bullet; on a phone that doubles the card's height. */
+const tidy = (s: AiSummary): AiSummary => ({ ...s, text: s.text.replace(/\r/g, '').replace(/\n\s*\n+/g, '\n').trim() });
+
 /** The AI assistant: questions, daily summary, message drafts and ID photo reading. All of it is optional (module "ai"). */
 @Injectable({ providedIn: 'root' })
 export class AiService {
@@ -66,8 +69,8 @@ export class AiService {
 
   status = (): Observable<AiStatus | null> => this.api.get<AiStatus | null>('ai/status');
   ask = (question: string, history: { role: string; text: string }[]) => this.api.post<AskAnswer>('ai/ask', { question, history });
-  latestSummary = (language: string) => this.api.get<AiSummary | null>('ai/summary/latest', { language });
-  writeSummary = (language: string) => this.api.post<AiSummary>('ai/summary', { language });
+  latestSummary = (language: string) => this.api.get<AiSummary | null>('ai/summary/latest', { language }).pipe(map((s) => s && tidy(s)));
+  writeSummary = (language: string) => this.api.post<AiSummary>('ai/summary', { language }).pipe(map(tidy));
   draft = (kind: DraftKind, language: string, facts: Record<string, string>, phone?: string | null, instructions?: string | null) =>
     this.api.post<AiDraft>('ai/draft', { kind, language, facts, phone, instructions });
 

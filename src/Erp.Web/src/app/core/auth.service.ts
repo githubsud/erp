@@ -10,8 +10,9 @@ import { LoginResponse } from './models';
 const STORAGE_KEY = 'erp.session';
 
 /**
- * Session held in sessionStorage (cleared when the tab closes). Access tokens are short-lived; the rotating refresh
- * token renews them silently. Two-factor sign-in adds a code step after the password.
+ * Session held in sessionStorage (cleared when the tab closes), or in localStorage when the user chose "keep me signed in"
+ * on their own phone or the shop's till. Access tokens are short-lived; the rotating refresh token renews them silently.
+ * Two-factor sign-in adds a code step after the password.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -20,6 +21,8 @@ export class AuthService {
   private readonly router = inject(Router);
   private readonly i18n = inject(I18nService);
   private refreshing: Observable<boolean> | null = null;
+  /** Keep the session on this device after the app closes. */
+  private remember = false;
 
   readonly session = signal<LoginResponse | null>(this.restore());
   readonly user = computed(() => this.session()?.user ?? null);
@@ -44,7 +47,8 @@ export class AuthService {
   }
 
   /** Completes with the server response; when `mfaRequired` is true call {@link verifyMfa} next. */
-  login(tenantCode: string, email: string, password: string): Observable<LoginResponse> {
+  login(tenantCode: string, email: string, password: string, remember = false): Observable<LoginResponse> {
+    this.remember = remember;
     return this.http
       .post<LoginResponse>(this.url('login'), { tenantCode, email, password })
       .pipe(tap((r) => { if (!r.mfaRequired) this.store(r, true); }));
@@ -61,7 +65,8 @@ export class AuthService {
     this.refreshing ??= this.http.post<LoginResponse>(this.url('refresh'), { refreshToken }).pipe(
       tap((r) => this.store(r, false)),
       map(() => true),
-      catchError(() => of(false)),
+      // No connection is not a rejected session: keep it and let the caller see the network error.
+      catchError((e: unknown) => (e instanceof HttpErrorResponse && (e.status === 0 || e.status >= 502) ? throwError(() => e) : of(false))),
       finalize(() => (this.refreshing = null)),
       shareReplay(1)
     );
@@ -74,6 +79,7 @@ export class AuthService {
     this.session.set(null);
     try {
       sessionStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEY);
     } catch {
       /* ignore */
     }
@@ -103,7 +109,7 @@ export class AuthService {
   private store(response: LoginResponse, applyLanguage: boolean): void {
     this.session.set(response);
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(response));
+      (this.remember ? localStorage : sessionStorage).setItem(STORAGE_KEY, JSON.stringify(response));
     } catch {
       /* ignore */
     }
@@ -121,7 +127,9 @@ export class AuthService {
 
   private restore(): LoginResponse | null {
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const kept = localStorage.getItem(STORAGE_KEY);
+      this.remember = !!kept;
+      const raw = sessionStorage.getItem(STORAGE_KEY) ?? kept;
       return raw ? (JSON.parse(raw) as LoginResponse) : null;
     } catch {
       return null;

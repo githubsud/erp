@@ -47,6 +47,10 @@ public sealed class Company : TenantEntity
     public string? AddressAr { get; set; }
     public string? Phone { get; set; }
     public string? Email { get; set; }
+
+    /// <summary>Printed at the bottom of receipts (return policy, thanks).</summary>
+    public string? ReceiptFooterEn { get; set; }
+    public string? ReceiptFooterAr { get; set; }
     public string BaseCurrency { get; init; } = Money.BaseCurrency;
 
     /// <summary>Segregation of duties: when false nobody approves a document they submitted themselves.</summary>

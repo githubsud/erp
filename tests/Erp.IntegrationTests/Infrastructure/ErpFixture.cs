@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Erp.Infrastructure.Outbox;
 using Erp.Modules.Ai.Providers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -108,6 +109,25 @@ public sealed class ErpFixture : IAsyncLifetime
             return _container.GetConnectionString();
         }
     }
+
+    /// <summary>
+    /// Delivers outbox messages until <paramref name="delivered"/> holds. Tests run in parallel and dispatch too; FOR UPDATE SKIP LOCKED
+    /// hides a message another test's dispatcher is still delivering, so an empty batch does not mean ours has gone out.
+    /// </summary>
+    public async Task DeliverOutboxAsync(Func<Task<bool>> delivered)
+    {
+        var dispatcher = Factory.Services.GetRequiredService<OutboxDispatcher>();
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (true)
+        {
+            while (await dispatcher.DispatchBatchAsync(CancellationToken.None) > 0) { }
+            if (await delivered()) return;
+            if (DateTime.UtcNow > deadline) throw new TimeoutException("Outbox messages were not delivered within 60 seconds.");
+            await Task.Delay(200);
+        }
+    }
+
+    public Task DeliverOutboxAsync(Func<bool> delivered) => DeliverOutboxAsync(() => Task.FromResult(delivered()));
 
     /// <summary>Provisions a fresh tenant and returns a client logged in as its owner.</summary>
     public async Task<TenantSession> CreateTenantAsync(string? code = null)

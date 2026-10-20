@@ -2,7 +2,6 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Erp.Infrastructure.Email;
-using Erp.Infrastructure.Outbox;
 using Erp.IntegrationTests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -36,10 +35,10 @@ public sealed class ReportScheduleTests(ErpFixture fixture)
         DateOnly.Parse(schedule.GetProperty("nextRunOn").GetString()!).Day.ShouldBe(1);
 
         (await c.PostJsonAsync($"/api/core/report-schedules/{id}/send-now", new { })).StatusCode.ShouldBe(HttpStatusCode.Accepted);
-        var dispatcher = fixture.Factory.Services.GetRequiredService<OutboxDispatcher>();
-        while (await dispatcher.DispatchBatchAsync(CancellationToken.None) > 0) { }
+        var sender = fixture.Factory.Services.GetRequiredService<CapturingEmailSender>();
+        await fixture.DeliverOutboxAsync(() => sender.Sent.Any(m => m.To.Contains(mailbox)));
 
-        var mail = fixture.Factory.Services.GetRequiredService<CapturingEmailSender>().Sent.Single(m => m.To.Contains(mailbox));
+        var mail = sender.Sent.Single(m => m.To.Contains(mailbox));
         mail.To.ShouldContain("gm@t.qa");
         mail.Subject.ShouldContain("Items to reorder");
         var file = mail.Attachments.ShouldNotBeNull().ShouldHaveSingleItem();

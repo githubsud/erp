@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { PwaService } from '../../core/pwa.service';
 import { SHARED } from '../../shared/shared';
 
 const TABS = [
@@ -24,6 +25,9 @@ const TABS = [
           <div class="hello">{{ 'me.hello' | t }}</div>
           <div class="name">{{ auth.user() | bi:'displayName' }}</div>
         </div>
+        @if (pwa.canInstall() || pwa.iosHint()) {
+          <button mat-icon-button (click)="pwa.install()" [attr.aria-label]="'pwa.install' | t"><mat-icon>install_mobile</mat-icon></button>
+        }
         <button mat-icon-button (click)="i18n.toggle()" [attr.aria-label]="'app.language' | t"><mat-icon>translate</mat-icon></button>
       </header>
       <main class="body"><router-outlet /></main>
@@ -58,5 +62,6 @@ const TABS = [
 export class MeShell {
   protected readonly auth = inject(AuthService);
   protected readonly i18n = inject(I18nService);
+  protected readonly pwa = inject(PwaService);
   protected readonly tabs = TABS;
 }

@@ -12,6 +12,8 @@ export interface ModuleInfo {
   licensed?: boolean;
 }
 
+const CACHE_KEY = 'erp.modules';
+
 /** Which optional modules are switched on for the company; the menu hides the others (the API refuses them too). */
 @Injectable({ providedIn: 'root' })
 export class ModulesService {
@@ -29,9 +31,24 @@ export class ModulesService {
   /** Loads the switches once (shared by the menu and the route guard). */
   ensureLoaded(): Observable<void> {
     this.loading ??= this.api.get<ModuleInfo[]>('core/modules').pipe(
-      tap((m) => this.modules.set(m)),
+      tap((m) => {
+        this.modules.set(m);
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(m));
+        } catch {
+          /* storage blocked */
+        }
+      }),
       map(() => undefined),
-      catchError(() => of(undefined)),
+      // Offline: the switches kept from last time, so the menu stays the same.
+      catchError(() => {
+        try {
+          this.modules.set(JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as ModuleInfo[]);
+        } catch {
+          /* nothing kept */
+        }
+        return of(undefined);
+      }),
       shareReplay(1)
     );
     return this.loading;

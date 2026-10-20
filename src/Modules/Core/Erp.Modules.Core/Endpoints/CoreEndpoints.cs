@@ -21,9 +21,11 @@ namespace Erp.Modules.Core.Endpoints;
 public sealed record BranchDto(Guid Id, string Code, string NameEn, string NameAr, bool IsActive);
 public sealed record CreateBranchRequest(string Code, string? NameEn, string? NameAr);
 public sealed record CompanyDto(Guid Id, string NameEn, string NameAr, string? CrNo, string? EstablishmentId, string? Tin,
-    decimal ForeignOwnershipPct, string? AddressEn, string? AddressAr, string? Phone, string? Email, string BaseCurrency);
+    decimal ForeignOwnershipPct, string? AddressEn, string? AddressAr, string? Phone, string? Email, string BaseCurrency,
+    string? ReceiptFooterEn, string? ReceiptFooterAr);
 public sealed record UpdateCompanyRequest(string? NameEn, string? NameAr, string? CrNo, string? EstablishmentId, string? Tin,
-    decimal ForeignOwnershipPct, string? AddressEn, string? AddressAr, string? Phone, string? Email);
+    decimal ForeignOwnershipPct, string? AddressEn, string? AddressAr, string? Phone, string? Email,
+    string? ReceiptFooterEn = null, string? ReceiptFooterAr = null);
 public sealed record UserDto(Guid Id, string Email, string DisplayNameEn, string DisplayNameAr, string PreferredLanguage, bool IsActive,
     DateTimeOffset? LastLoginAt, IReadOnlyList<string> Roles);
 public sealed record CreateUserRequest(string Email, string? DisplayNameEn, string? DisplayNameAr, string Password,
@@ -124,12 +126,14 @@ internal static class CoreEndpoints
         c.AddressAr = request.AddressAr;
         c.Phone = request.Phone;
         c.Email = request.Email;
+        c.ReceiptFooterEn = request.ReceiptFooterEn?.Trim();
+        c.ReceiptFooterAr = request.ReceiptFooterAr?.Trim();
         await db.SaveChangesAsync(ct);
         return ToDto(c);
     }
 
     private static CompanyDto ToDto(Company c) => new(c.Id, c.NameEn, c.NameAr, c.CrNo, c.EstablishmentId, c.Tin, c.ForeignOwnershipPct,
-        c.AddressEn, c.AddressAr, c.Phone, c.Email, c.BaseCurrency);
+        c.AddressEn, c.AddressAr, c.Phone, c.Email, c.BaseCurrency, c.ReceiptFooterEn, c.ReceiptFooterAr);
 
     private static async Task<List<BranchDto>> ListBranches(ErpDbContext db, ITenantContext tenant, CancellationToken ct) =>
         await db.Set<Branch>().AsNoTracking()

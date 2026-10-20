@@ -54,6 +54,7 @@ public sealed class PosTests(ErpFixture fixture)
         sale.Total.ShouldBe(27m);
         sale.DiscountTotal.ShouldBe(3m);
         sale.ChangeGiven.ShouldBe(23m);
+        sale.ReceiptNo.ShouldMatch(@"^T1-\d{4}-000001$");
         // The till resends the same sale after a dropped connection: nothing posts twice.
         (await c.PostAsync<Sale>("/api/sales/pos/sales", SaleBody())).Id.ShouldBe(sale.Id);
 
@@ -74,6 +75,8 @@ public sealed class PosTests(ErpFixture fixture)
         });
         refund.Total.ShouldBe(-10.8m);
         refund.IsRefund.ShouldBeTrue();
+        // Refunds have their own series per till.
+        refund.ReceiptNo.ShouldMatch(@"^T1-R-\d{4}-000001$");
         (await c.GetAsync<Sale>($"/api/sales/pos/sales/by-receipt/{sale.ReceiptNo}")).Lines[0].Refundable.ShouldBe(6m);
         (await (await c.PostJsonAsync("/api/sales/pos/refunds", new
         {
