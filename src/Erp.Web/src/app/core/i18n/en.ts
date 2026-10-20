@@ -2157,7 +2157,9 @@ export const en = {
   'ai.tool.money_leaks': 'possible money leaks',
   'ai.tool.seasonal_demand': 'season planning',
   'ai.tool.workshop_jobs': 'workshop jobs',
-  'season.days': 'Next {n} days'
+  'season.days': 'Next {n} days',
+  'boai.fallbacks': 'Fallback models',
+  'boai.fallbacksHint': 'Tried in turn when the model\'s free allowance is used up or it is busy (comma-separated). Gemini allows 20 free requests a day per model.'
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -1,5 +1,6 @@
 using System.Net;
 using Erp.Modules.Ai.Privacy;
+using Erp.Modules.Ai.Providers;
 using Erp.Modules.Ai.Services;
 using Erp.SharedKernel.Domain;
 
@@ -80,4 +81,45 @@ public sealed class AiUnitTests
     [InlineData("1.1.1.1", false)]
     [InlineData("142.250.74.110", false)]
     public void Internal_addresses_are_recognised(string ip, bool expected) => AiSettingsService.IsInternal(IPAddress.Parse(ip)).ShouldBe(expected);
+
+    [Theory]
+    [InlineData(429, """[{"error":{"code":429,"details":[{"retryDelay":"17s"}]}}]""", 17.0)]
+    [InlineData(429, "{}", 20.0)]
+    [InlineData(503, "{}", 3.0)]
+    [InlineData(429, """{"retryDelay":"45s"}""", null)]
+    public void Busy_providers_are_retried_after_the_wait_they_ask_for(int status, string body, double? seconds) =>
+        HttpAiChatClient.RetryWait(new HttpResponseMessage((System.Net.HttpStatusCode)status), body, status)?.TotalSeconds.ShouldBe(seconds!.Value);
+
+    private sealed class ScriptedHandler(Func<string, HttpResponseMessage> answer) : HttpMessageHandler
+    {
+        public List<string> Models { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var model = System.Text.Json.JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct)).RootElement.GetProperty("model").GetString()!;
+            Models.Add(model);
+            return answer(model);
+        }
+    }
+
+    private sealed class Factory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
+
+    [Fact]
+    public async Task When_a_models_daily_allowance_is_used_up_the_next_model_answers()
+    {
+        var handler = new ScriptedHandler(model => model == "main"
+            ? new HttpResponseMessage((System.Net.HttpStatusCode)429) { Content = new StringContent("""[{"error":{"code":429,"details":[{"retryDelay":"43952s"}]}}]""") }
+            : new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("""{"choices":[{"message":{"content":"OK"}}]}""") });
+        var client = new HttpAiChatClient(new Factory(handler));
+        var endpoint = new AiEndpoint("gemini", "Gemini", Erp.Modules.Ai.Domain.AiProviderKind.OpenAiCompatible, "https://x.invalid/v1/", "main", null, "k",
+            false, 20, ["backup-1", "backup-2"]);
+
+        var answer = await client.CompleteAsync(endpoint, new AiRequest("s", [AiMessage.User("hi")]), CancellationToken.None);
+
+        answer.Text.ShouldBe("OK");
+        handler.Models.ShouldBe(["main", "backup-1"]);
+    }
 }

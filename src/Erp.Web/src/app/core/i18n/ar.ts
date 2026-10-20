@@ -2159,5 +2159,7 @@ export const ar: Record<TranslationKey, string> = {
   'ai.tool.money_leaks': 'التسربات المالية',
   'ai.tool.seasonal_demand': 'التخطيط للمواسم',
   'ai.tool.workshop_jobs': 'أعمال الورشة',
-  'season.days': 'الأيام الـ {n} القادمة'
+  'season.days': 'الأيام الـ {n} القادمة',
+  'boai.fallbacks': 'نماذج بديلة',
+  'boai.fallbacksHint': 'تُجرّب بالترتيب عند نفاد الحصة المجانية للنموذج أو انشغاله (مفصولة بفواصل). يسمح Gemini بـ 20 طلباً مجانياً يومياً لكل نموذج.'
 };

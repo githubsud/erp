@@ -33,7 +33,8 @@ internal sealed class AiGateway(ErpDbContext db, ITenantContext tenant, IAiChatC
     }
 
     public static AiEndpoint ToEndpoint(AiProvider p) =>
-        new(p.Code, p.Name, p.Kind, p.BaseUrl, p.Model, p.VisionModel, p.ApiKey, p.IsPrivate, p.DailyLimit);
+        new(p.Code, p.Name, p.Kind, p.BaseUrl, p.Model, p.VisionModel, p.ApiKey, p.IsPrivate, p.DailyLimit,
+            (p.FallbackModels ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
     public async Task<AiResponse> CompleteAsync(AiEndpoint endpoint, AiRequest request, CancellationToken ct)
     {
@@ -50,6 +51,9 @@ internal sealed class AiGateway(ErpDbContext db, ITenantContext tenant, IAiChatC
         {
             logger.LogWarning("AI provider {Provider} failed: {Message}", endpoint.ProviderCode, ex.Message);
             await RecordAsync(tenantId, endpoint.ProviderCode, 0, 0, ct);
+            if (ex.Busy)
+                throw new BusinessRuleException("ai.busy", "The AI service is busy right now (the free tier allows a few questions a minute). Please try again in a minute.",
+                    "خدمة الذكاء الاصطناعي مشغولة الآن (الطبقة المجانية تسمح ببضعة أسئلة في الدقيقة). يرجى المحاولة بعد دقيقة.");
             throw new BusinessRuleException("ai.provider_error", $"The AI service did not answer: {ex.Message}", $"لم تستجب خدمة الذكاء الاصطناعي: {ex.Message}");
         }
         await RecordAsync(tenantId, endpoint.ProviderCode, response.InputTokens, response.OutputTokens, ct);

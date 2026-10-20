@@ -18,6 +18,10 @@ public sealed class AiProvider : Entity
     public required string BaseUrl { get; set; }
     public required string Model { get; set; }
     public string? VisionModel { get; set; }
+
+    /// <summary>Comma-separated models tried in turn when the main one is out of its free allowance or overloaded.</summary>
+    public string? FallbackModels { get; set; }
+
     [Sensitive] public string? ApiKey { get; set; }
 
     /// <summary>Private: what is sent is not kept or used for training (our own server, or a paid tier). Otherwise only figures and placeholders go out.</summary>

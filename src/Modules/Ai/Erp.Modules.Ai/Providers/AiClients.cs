@@ -8,9 +8,10 @@ namespace Erp.Modules.Ai.Providers;
 
 /// <summary>Where a request goes. <see cref="ProviderCode"/> is the platform provider's code, or "own" for the company's own subscription.</summary>
 public sealed record AiEndpoint(string ProviderCode, string Name, AiProviderKind Kind, string BaseUrl, string Model, string? VisionModel, string? ApiKey,
-    bool IsPrivate, int? DailyLimit);
+    bool IsPrivate, int? DailyLimit, IReadOnlyList<string>? FallbackModels = null);
 
-public sealed record AiToolCall(string Id, string Name, string Arguments);
+/// <summary><see cref="ProviderData"/>: what the provider attached to the call and wants back with it (Gemini's thought signature), as JSON.</summary>
+public sealed record AiToolCall(string Id, string Name, string Arguments, string? ProviderData = null);
 
 public sealed record AiImage(string MediaType, byte[] Data);
 
@@ -28,7 +29,11 @@ public sealed record AiRequest(string System, IReadOnlyList<AiMessage> Messages,
 
 public sealed record AiResponse(string? Text, IReadOnlyList<AiToolCall> ToolCalls, int InputTokens, int OutputTokens);
 
-public sealed class AiProviderException(string message) : Exception(message);
+/// <summary><see cref="Busy"/>: the provider is overloaded or its free allowance per minute is used up (try again shortly).</summary>
+public sealed class AiProviderException(string message, bool busy = false) : Exception(message)
+{
+    public bool Busy { get; } = busy;
+}
 
 /// <summary>Sends a chat to a model. One implementation talks to real providers; tests replace it.</summary>
 public interface IAiChatClient
@@ -44,47 +49,92 @@ internal sealed class HttpAiChatClient(IHttpClientFactory http) : IAiChatClient
 {
     public const string HttpClientName = "ai";
 
+    public const int MaxRetryWaitSeconds = 30;
+
     public async Task<AiResponse> CompleteAsync(AiEndpoint endpoint, AiRequest request, CancellationToken ct)
     {
-        var model = request.Vision ? endpoint.VisionModel ?? endpoint.Model : endpoint.Model;
-        var (url, body) = endpoint.Kind == AiProviderKind.Anthropic ? Anthropic.Build(endpoint, model, request) : OpenAi.Build(endpoint, model, request);
-        using var message = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
-        if (endpoint.Kind == AiProviderKind.Anthropic)
+        var main = request.Vision ? endpoint.VisionModel ?? endpoint.Model : endpoint.Model;
+        var models = new[] { main }.Concat(endpoint.FallbackModels ?? []).Distinct().ToList();
+        for (var i = 0; ; i++)
         {
-            message.Headers.Add("x-api-key", endpoint.ApiKey ?? "");
-            message.Headers.Add("anthropic-version", "2023-06-01");
+            try
+            {
+                return await SendAsync(endpoint, models[i], request, ct);
+            }
+            catch (AiProviderException ex) when (ex.Busy && i + 1 < models.Count)
+            {
+                // Out of this model's allowance or overloaded: the next model has its own.
+            }
         }
-        else if (!string.IsNullOrWhiteSpace(endpoint.ApiKey))
-            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", endpoint.ApiKey);
+    }
 
-        HttpResponseMessage response;
-        try
+    private async Task<AiResponse> SendAsync(AiEndpoint endpoint, string model, AiRequest request, CancellationToken ct)
+    {
+        var (url, body) = endpoint.Kind == AiProviderKind.Anthropic ? Anthropic.Build(endpoint, model, request) : OpenAi.Build(endpoint, model, request);
+        var payload = body.ToJsonString();
+        // Free tiers allow a few requests a minute and are sometimes overloaded: wait as asked and try once more.
+        for (var attempt = 1; ; attempt++)
         {
-            response = await http.CreateClient(HttpClientName).SendAsync(message, ct);
+            using var message = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(payload, Encoding.UTF8, "application/json") };
+            if (endpoint.Kind == AiProviderKind.Anthropic)
+            {
+                message.Headers.Add("x-api-key", endpoint.ApiKey ?? "");
+                message.Headers.Add("anthropic-version", "2023-06-01");
+            }
+            else if (!string.IsNullOrWhiteSpace(endpoint.ApiKey))
+                message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", endpoint.ApiKey);
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await http.CreateClient(HttpClientName).SendAsync(message, ct);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                throw new AiProviderException($"Could not reach {endpoint.Name}: {ex.Message}");
+            }
+            using (response)
+            {
+                var text = await response.Content.ReadAsStringAsync(ct);
+                var status = (int)response.StatusCode;
+                if (status is 429 or 503 or 529 && attempt == 1 && RetryWait(response, text, status) is { } wait)
+                {
+                    await Task.Delay(wait, ct);
+                    continue;
+                }
+                if (!response.IsSuccessStatusCode)
+                    throw new AiProviderException($"{endpoint.Name} answered {status}: {Short(text)}", status is 429 or 503 or 529);
+                var json = JsonNode.Parse(text) ?? throw new AiProviderException($"{endpoint.Name} sent an empty answer.");
+                return endpoint.Kind == AiProviderKind.Anthropic ? Anthropic.Parse(json) : OpenAi.Parse(json);
+            }
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+    }
+
+    /// <summary>How long the provider asks us to wait (Retry-After header, or Google's "retryDelay": "17s"); null if longer than we are willing to wait.</summary>
+    internal static TimeSpan? RetryWait(HttpResponseMessage response, string body, int status)
+    {
+        var seconds = response.Headers.RetryAfter?.Delta?.TotalSeconds;
+        if (seconds is null)
         {
-            throw new AiProviderException($"Could not reach {endpoint.Name}: {ex.Message}");
+            var m = System.Text.RegularExpressions.Regex.Match(body, @"""retryDelay""\s*:\s*""(\d+(?:\.\d+)?)s""");
+            if (m.Success) seconds = double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
         }
-        using (response)
-        {
-            var text = await response.Content.ReadAsStringAsync(ct);
-            if (!response.IsSuccessStatusCode)
-                throw new AiProviderException($"{endpoint.Name} answered {(int)response.StatusCode}: {Short(text)}");
-            var json = JsonNode.Parse(text) ?? throw new AiProviderException($"{endpoint.Name} sent an empty answer.");
-            return endpoint.Kind == AiProviderKind.Anthropic ? Anthropic.Parse(json) : OpenAi.Parse(json);
-        }
+        seconds ??= status == 429 ? 20 : 3;
+        return seconds <= MaxRetryWaitSeconds ? TimeSpan.FromSeconds(Math.Max(1, seconds.Value)) : null;
     }
 
     private static string Short(string text)
     {
         try
         {
+            // Most providers send {"error": {...}}; Google sends the same object inside a list.
             var node = JsonNode.Parse(text);
-            var msg = node?["error"]?["message"]?.GetValue<string>() ?? node?["error"]?.ToString() ?? text;
+            if (node is JsonArray { Count: > 0 } list) node = list[0];
+            var error = node is JsonObject obj ? obj["error"] : null;
+            var msg = (error is JsonObject e ? e["message"]?.ToString() : error?.ToString()) ?? text;
             return msg.Length > 300 ? msg[..300] : msg;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
             return text.Length > 300 ? text[..300] : text;
         }
@@ -112,9 +162,14 @@ internal sealed class HttpAiChatClient(IHttpClientFactory http) : IAiChatClient
                     };
                 else node["content"] = m.Text ?? "";
                 if (m.ToolCalls is { Count: > 0 } calls)
-                    node["tool_calls"] = new JsonArray(calls.Select(c => (JsonNode)new JsonObject
+                    node["tool_calls"] = new JsonArray(calls.Select(c =>
                     {
-                        ["id"] = c.Id, ["type"] = "function", ["function"] = new JsonObject { ["name"] = c.Name, ["arguments"] = c.Arguments }
+                        var call = new JsonObject
+                        {
+                            ["id"] = c.Id, ["type"] = "function", ["function"] = new JsonObject { ["name"] = c.Name, ["arguments"] = c.Arguments }
+                        };
+                        if (c.ProviderData is not null) call["extra_content"] = JsonNode.Parse(c.ProviderData);
+                        return (JsonNode)call;
                     }).ToArray());
                 if (m.ToolCallId is not null) node["tool_call_id"] = m.ToolCallId;
                 messages.Add(node);
@@ -137,7 +192,7 @@ internal sealed class HttpAiChatClient(IHttpClientFactory http) : IAiChatClient
             {
                 var args = c?["function"]?["arguments"];
                 return new AiToolCall(c?["id"]?.GetValue<string>() ?? $"call_{i}", c?["function"]?["name"]?.GetValue<string>() ?? "",
-                    args is JsonValue v && v.TryGetValue<string>(out var s) ? s : args?.ToJsonString() ?? "{}");
+                    args is JsonValue v && v.TryGetValue<string>(out var s) ? s : args?.ToJsonString() ?? "{}", c?["extra_content"]?.ToJsonString());
             }).ToList();
             var content = message["content"] is JsonValue cv && cv.TryGetValue<string>(out var text) ? text : null;
             return new AiResponse(content, calls, json["usage"]?["prompt_tokens"]?.GetValue<int>() ?? 0, json["usage"]?["completion_tokens"]?.GetValue<int>() ?? 0);
