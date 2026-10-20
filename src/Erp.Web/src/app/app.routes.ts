@@ -468,6 +468,11 @@ export const routes: Routes = [
         canActivate: [permissionGuard('core.audit:read')],
         loadComponent: () => import('./features/settings/platform').then((m) => m.AuditPage)
       },
+      {
+        path: 'settings/setup',
+        canActivate: [permissionGuard('core.company:manage')],
+        loadComponent: () => import('./features/settings/setup-wizard').then((m) => m.SetupWizardPage)
+      },
       { path: 'settings/report-schedules', loadComponent: () => import('./features/settings/report-schedules').then((m) => m.ReportSchedulesPage) },
       { path: 'settings/modules', loadComponent: () => import('./features/settings/platform').then((m) => m.ModulesPage) },
       {

@@ -30,6 +30,13 @@ interface DashboardTile {
     @if (loading()) {
       <mat-progress-bar mode="indeterminate" />
     }
+    @if (suggestSetup()) {
+      <mat-card appearance="outlined" class="setup-banner">
+        <mat-icon>rocket_launch</mat-icon>
+        <span>{{ 'setup.banner' | t }}</span>
+        <a mat-flat-button routerLink="/settings/setup">{{ 'setup.start' | t }}</a>
+      </mat-card>
+    }
 
     @if (approvals() > 0) {
       <mat-card appearance="outlined" class="stat approvals" routerLink="/approvals">
@@ -127,6 +134,9 @@ interface DashboardTile {
     }
   `,
   styles: `
+    .setup-banner { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin-bottom: 16px; flex-wrap: wrap;
+      background: var(--mat-sys-secondary-container); }
+    .setup-banner span { flex: 1; min-width: 200px; }
     .stat { cursor: pointer; }
     .stat.warn .value { color: #8a5300; }
     .stat.bad .value { color: #8c1d18; }
@@ -149,6 +159,8 @@ export class DashboardPage {
   protected readonly gratuityTotal = signal(0);
   protected readonly docColumns = ['owner', 'type', 'expiry', 'status'];
   protected readonly approvals = signal(0);
+  /** An owner whose company has no items yet is offered the quick-setup wizard. */
+  protected readonly suggestSetup = signal(false);
   private readonly tiles = signal<DashboardTile[]>([]);
   protected readonly sections = computed(() => {
     const order = ['today', 'finance', 'sales', 'purchasing', 'inventory'];
@@ -165,6 +177,8 @@ export class DashboardPage {
   constructor() {
     this.api.get<DashboardTile[]>('core/dashboard').pipe(catchError(() => of<DashboardTile[]>([]))).subscribe((t) => this.tiles.set(t));
     this.api.get<unknown[]>('approvals/inbox').pipe(catchError(() => of<unknown[]>([]))).subscribe((a) => this.approvals.set(a.length));
+    if (this.auth.can('core.company:manage'))
+      this.api.get<Paged<unknown>>('inventory/items', { pageSize: 1 }).pipe(catchError(() => of(null))).subscribe((p) => this.suggestSetup.set(p?.total === 0));
     const canHr = this.auth.can('hr.employees:read');
     const canPayroll = this.auth.can('hr.payroll:read');
     const none = <T>(value: T) => of(value);

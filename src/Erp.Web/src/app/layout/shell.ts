@@ -109,6 +109,7 @@ const NAV: NavGroup[] = [
       { icon: 'tune', label: 'nav.hrSettings', link: '/settings/payroll', permission: 'hr.payroll:read' },
       { icon: 'inventory_2', label: 'nav.tradeSettings', link: '/settings/trade', permission: 'inv.items:read' },
       { icon: 'rule', label: 'nav.approvalRules', link: '/settings/approvals', permission: 'core.approvals:manage' },
+      { icon: 'rocket_launch', label: 'nav.setup', link: '/settings/setup', permission: 'core.company:manage' },
       { icon: 'apartment', label: 'nav.company', link: '/settings/company' },
       { icon: 'shield_lock', label: 'nav.security', link: '/settings/security' },
       { icon: 'group', label: 'nav.users', link: '/settings/users', permission: 'core.users:read' },
