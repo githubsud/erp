@@ -3,6 +3,7 @@ import { FormBuilder, FormControl, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { NotifyService } from '../../core/notify.service';
+import { ModulesService } from '../../core/modules.service';
 import { SalesApi } from '../../core/sales.api';
 import { CreditControl } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
@@ -18,6 +19,7 @@ type MasterKind = 'warehouses' | 'groups' | 'uoms';
     <div class="page-header"><h1>{{ 'tset.title' | t }}</h1></div>
 
     <div class="cards">
+      @if (hasPurchasing) {
       <mat-card appearance="outlined" class="form-card">
         <div class="section-title">{{ 'nav.orders' | t }}</div>
         <form [formGroup]="purchase" class="form-grid" (ngSubmit)="savePurchase()">
@@ -36,6 +38,7 @@ type MasterKind = 'warehouses' | 'groups' | 'uoms';
           }
         </form>
       </mat-card>
+      }
       @if (canReadSales) {
         <mat-card appearance="outlined" class="form-card">
           <div class="section-title">{{ 'nav.sales' | t }}</div>
@@ -109,8 +112,9 @@ export class TradeSettingsPage {
   private readonly fb = inject(FormBuilder).nonNullable;
 
   private readonly sales = inject(SalesApi);
+  protected readonly hasPurchasing = !inject(ModulesService).disabled().has('purchasing');
+  protected readonly canReadSales = this.auth.can('sal.customers:read') && !inject(ModulesService).disabled().has('sales');
   protected readonly canManage = this.auth.can('inv.settings:manage') || this.auth.can('pur.settings:manage');
-  protected readonly canReadSales = this.auth.can('sal.customers:read');
   protected readonly canManageSales = this.auth.can('sal.settings:manage');
   protected readonly creditPolicies: CreditControl[] = ['Block', 'Warn', 'None'];
   protected readonly salesForm = this.fb.group({
@@ -143,7 +147,7 @@ export class TradeSettingsPage {
     this.load('groups');
     this.load('uoms');
     this.trade.inventorySettings().subscribe((s) => this.negative.setValue(s.allowNegativeStock));
-    this.trade.purchaseSettings().subscribe((s) => this.purchase.patchValue(s));
+    if (this.hasPurchasing) this.trade.purchaseSettings().subscribe((s) => this.purchase.patchValue(s));
     if (!this.canManage) {
       this.negative.disable();
       this.purchase.disable();

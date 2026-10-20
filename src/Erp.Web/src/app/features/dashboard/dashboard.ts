@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of, catchError } from 'rxjs';
 import { AiService, AiSummary } from '../../core/ai.service';
 import { ApiService } from '../../core/api.service';
@@ -30,6 +31,13 @@ interface DashboardTile {
     </div>
     @if (loading()) {
       <mat-progress-bar mode="indeterminate" />
+    }
+    @if (moduleOff(); as m) {
+      <mat-card appearance="outlined" class="setup-banner">
+        <mat-icon>extension_off</mat-icon>
+        <span>{{ 'dashboard.moduleOff' | t }}</span>
+        <a mat-button routerLink="/settings/modules">{{ 'nav.modules' | t }}</a>
+      </mat-card>
     }
     @if (suggestSetup()) {
       <mat-card appearance="outlined" class="setup-banner">
@@ -176,6 +184,8 @@ export class DashboardPage {
   /** An owner whose company has no items yet is offered the quick-setup wizard. */
   protected readonly suggestSetup = signal(false);
   protected readonly aiSummary = signal<AiSummary | null>(null);
+  /** Set when a screen of a switched-off module was opened by its address. */
+  protected readonly moduleOff = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('off'));
   private readonly tiles = signal<DashboardTile[]>([]);
   protected readonly sections = computed(() => {
     const order = ['today', 'finance', 'sales', 'purchasing', 'inventory'];

@@ -80,6 +80,7 @@ internal static class PlatformEndpoints
         (ModuleCodes.Budgets, "Budgets", "الموازنات"),
         (ModuleCodes.Tailoring, "Tailoring & abaya orders", "طلبات الخياطة والعبايات"),
         (ModuleCodes.Salon, "Salon & appointments", "الصالون والمواعيد"),
+        (ModuleCodes.Workshop, "Car workshop job cards", "بطاقات عمل ورشة السيارات"),
         (ModuleCodes.Ai, "AI assistant", "المساعد الذكي")
     ];
 

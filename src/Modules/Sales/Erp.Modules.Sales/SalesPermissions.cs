@@ -21,6 +21,7 @@ public static class SalesPermissions
     public const string PosManage = "sal.pos:manage";
     public const string TailoringUse = "sal.tailoring:use";
     public const string SalonUse = "sal.salon:use";
+    public const string WorkshopUse = "sal.workshop:use";
 }
 
 internal sealed class SalesPermissionProvider : IPermissionProvider
@@ -44,6 +45,7 @@ internal sealed class SalesPermissionProvider : IPermissionProvider
             Accountant, GeneralManager, Salesperson),
         new(SalesPermissions.PosSell, "Sell at the point of sale and run shifts", "البيع في نقطة البيع وإدارة الورديات", Salesperson, Storekeeper),
         new(SalesPermissions.TailoringUse, "Take and deliver tailoring orders", "استلام وتسليم طلبات الخياطة", Salesperson, GeneralManager, Accountant),
+        new(SalesPermissions.WorkshopUse, "Receive cars and deliver workshop jobs", "استلام السيارات وتسليم أعمال الورشة", Salesperson, GeneralManager, Accountant),
         new(SalesPermissions.SalonUse, "Book appointments and check out salon visits", "حجز المواعيد وتحصيل زيارات الصالون", Salesperson, GeneralManager, Accountant),
         new(SalesPermissions.PosManage, "Set up point-of-sale registers", "إعداد نقاط البيع", GeneralManager, Accountant)
     ];

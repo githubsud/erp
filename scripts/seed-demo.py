@@ -588,7 +588,7 @@ invoice("QSTEEL", "QST/26/0918", "2026-10-09", [
 step("PO 3 - tiles imported from Italy (non-resident): GTA notification, landed cost, part payment")
 po = order("ITILE", "2026-09-15", MAIN, [("TIL-6060", 1000, 28)], notes="CIF Hamad Port", expected="2026-10-07")
 post(f"/api/purchasing/orders/{po['id']}/submit")
-post(f"/api/purchasing/orders/{po['id']}/approve")
+as_user("gm@demo.qa", lambda: post(f"/api/purchasing/orders/{po['id']}/approve", {"comment": "Approved"}))   # not the submitter
 put(f"/api/purchasing/orders/{po['id']}/gta-notification", {"reference": "GTA-CN-2026-004512"})
 grn = receive(po, "2026-10-07", [1000], "BL MSCU7812345")
 inv = invoice("ITILE", "CI-2026-0412", "2026-10-07", [{"lineType": "Goods", "goodsReceiptLineId": grn["lines"][0]["id"], "quantity": 1000, "unitPrice": 28}])

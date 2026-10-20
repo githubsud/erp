@@ -2,6 +2,7 @@ using Erp.Infrastructure.Persistence;
 using Erp.Modules.Sales.Domain;
 using Erp.Modules.Sales.Pos;
 using Erp.Modules.Sales.Tailoring;
+using Erp.Modules.Sales.Workshop;
 using Erp.SharedKernel.Application;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,6 +36,7 @@ internal sealed class TodayDashboard(ErpDbContext db, ITenantContext tenant, ICl
         var lastClosed = await db.Set<PosShift>().AsNoTracking().Where(s => registers.Contains(s.RegisterId) && s.Status == ShiftStatus.Closed)
             .OrderByDescending(s => s.ClosedAt).FirstOrDefaultAsync(ct);
         var readyTailoring = await db.Set<TailoringOrder>().AsNoTracking().CountAsync(o => o.CompanyId == companyId && o.Status == TailoringStatus.Ready, ct);
+        var readyCars = await db.Set<JobCard>().AsNoTracking().CountAsync(j => j.CompanyId == companyId && j.Status == JobStatus.Ready, ct);
         var tiles = new List<DashboardTile>
         {
             new("today", "today.sales", "Sales today", "مبيعات اليوم", tillSales + invoiced, "money", "/sales/invoices"),
@@ -47,6 +49,8 @@ internal sealed class TodayDashboard(ErpDbContext db, ITenantContext tenant, ICl
                 $"Shift {lastClosed.ShiftNo}", $"الوردية {lastClosed.ShiftNo}", diff < 0 ? "bad" : diff > 0 ? "warn" : "ok"));
         if (readyTailoring > 0)
             tiles.Add(new("today", "today.tailoring_ready", "Orders ready, not collected", "طلبات جاهزة لم تُستلم", readyTailoring, "count", "/tailoring", Tone: "warn"));
+        if (readyCars > 0)
+            tiles.Add(new("today", "today.cars_ready", "Cars ready, not collected", "سيارات جاهزة لم تُستلم", readyCars, "count", "/workshop", Tone: "warn"));
         return tiles;
     }
 }

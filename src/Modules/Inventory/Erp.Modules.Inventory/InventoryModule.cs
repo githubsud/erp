@@ -24,6 +24,8 @@ public sealed class InventoryModule : IModule
         services.AddScoped<IScheduledReport, Endpoints.ReorderScheduledReport>();
         services.AddScoped<IDashboardProvider, Endpoints.InventoryDashboard>();
         services.AddScoped<IAiTool, Endpoints.LowStockAiTool>();
+        services.AddScoped<Endpoints.SeasonalDemandService>();
+        services.AddScoped<IAiTool, Endpoints.SeasonalDemandAiTool>();
         services.AddScoped<StockAdjustmentService>();
         services.AddScoped<StockTransferService>();
         services.AddScoped<StockCountService>();
@@ -36,5 +38,6 @@ public sealed class InventoryModule : IModule
         InventoryEndpoints.Map(app);
         SerialAndBinEndpoints.Map(app);
         Documents.KitEndpoints.Map(app);
+        SeasonalDemandEndpoints.Map(app);
     }
 }

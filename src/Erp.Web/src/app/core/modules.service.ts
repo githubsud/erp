@@ -1,4 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { CanActivateChildFn, Router } from '@angular/router';
+import { Observable, catchError, map, of, shareReplay, tap } from 'rxjs';
 import { ApiService } from './api.service';
 
 export interface ModuleInfo {
@@ -17,8 +19,22 @@ export class ModulesService {
   private readonly modules = signal<ModuleInfo[]>([]);
   readonly disabled = computed(() => new Set(this.modules().filter((m) => !m.enabled).map((m) => m.code)));
 
+  private loading: Observable<void> | null = null;
+
   load(): void {
-    this.api.get<ModuleInfo[]>('core/modules').subscribe({ next: (m) => this.modules.set(m), error: () => undefined });
+    this.loading = null;
+    this.ensureLoaded().subscribe();
+  }
+
+  /** Loads the switches once (shared by the menu and the route guard). */
+  ensureLoaded(): Observable<void> {
+    this.loading ??= this.api.get<ModuleInfo[]>('core/modules').pipe(
+      tap((m) => this.modules.set(m)),
+      map(() => undefined),
+      catchError(() => of(undefined)),
+      shareReplay(1)
+    );
+    return this.loading;
   }
 
   set(list: ModuleInfo[]): void {
@@ -36,6 +52,7 @@ export class ModulesService {
     if (starts('/finance/budgets')) return 'budgets';
     if (starts('/tailoring')) return 'tailoring';
     if (starts('/salon')) return 'salon';
+    if (starts('/workshop')) return 'workshop';
     if (starts('/ai') || link === '/settings/ai') return 'ai';
     if (link.startsWith('/sales')) return 'sales';
     if (link.startsWith('/purchasing')) return 'purchasing';
@@ -45,3 +62,15 @@ export class ModulesService {
     return null;
   }
 }
+
+/** Screens of a module that is off (not in the plan, or switched off) are not opened from a bookmark or typed address: back to the dashboard. */
+export const moduleGuard: CanActivateChildFn = (_route, state) => {
+  const modules = inject(ModulesService);
+  const router = inject(Router);
+  return modules.ensureLoaded().pipe(
+    map(() => {
+      const module = ModulesService.moduleOf(state.url.split('?')[0]);
+      return module && modules.disabled().has(module) ? router.createUrlTree(['/dashboard'], { queryParams: { off: module } }) : true;
+    })
+  );
+};

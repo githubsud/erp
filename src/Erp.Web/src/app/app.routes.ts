@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard, permissionGuard, selfServiceGuard, sessionGuard } from './core/auth.service';
 import { backOfficeGuard } from './core/backoffice.service';
+import { moduleGuard } from './core/modules.service';
 import { Shell } from './layout/shell';
 
 export const routes: Routes = [
@@ -34,6 +35,7 @@ export const routes: Routes = [
     path: '',
     component: Shell,
     canActivate: [authGuard],
+    canActivateChild: [moduleGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.DashboardPage) },
@@ -122,6 +124,11 @@ export const routes: Routes = [
         path: 'inventory/serials',
         canActivate: [permissionGuard('inv.items:read')],
         loadComponent: () => import('./features/inventory/serials').then((m) => m.SerialLookupPage)
+      },
+      {
+        path: 'inventory/season',
+        canActivate: [permissionGuard('inv.reports:read')],
+        loadComponent: () => import('./features/inventory/season').then((m) => m.SeasonPage)
       },
       {
         path: 'inventory/expiry',
@@ -363,6 +370,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/sales/receipts').then((m) => m.ReceiptsPage)
       },
       {
+        path: 'sales/leaks',
+        canActivate: [permissionGuard('sal.reports:read')],
+        loadComponent: () => import('./features/sales/leaks').then((m) => m.LeaksPage)
+      },
+      {
         path: 'sales/reports',
         canActivate: [permissionGuard('sal.reports:read')],
         loadComponent: () => import('./features/sales/reports').then((m) => m.SalesReportsPage)
@@ -468,6 +480,11 @@ export const routes: Routes = [
         path: 'settings/audit',
         canActivate: [permissionGuard('core.audit:read')],
         loadComponent: () => import('./features/settings/platform').then((m) => m.AuditPage)
+      },
+      {
+        path: 'workshop',
+        canActivate: [permissionGuard('sal.workshop:use')],
+        loadComponent: () => import('./features/workshop/workshop').then((m) => m.WorkshopPage)
       },
       {
         path: 'ai',

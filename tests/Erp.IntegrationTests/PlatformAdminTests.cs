@@ -22,7 +22,7 @@ public sealed class PlatformAdminTests(ErpFixture fixture)
 
         // Switching sales off also switches off what depends on it (CRM, projects, tailoring, salon); its API then answers 403 while HR works.
         var off = await (await c.PutAsJsonAsync("/api/core/modules", new { disabled = new[] { "sales" } }, ErpFixture.Json)).ReadAsync<List<Module>>();
-        off.Where(m => !m.Enabled).Select(m => m.Code).ShouldBe(["sales", "crm", "projects", "tailoring", "salon"], ignoreOrder: true);
+        off.Where(m => !m.Enabled).Select(m => m.Code).ShouldBe(["sales", "crm", "projects", "tailoring", "salon", "workshop"], ignoreOrder: true);
         (await c.GetAsync("/api/sales/customers")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await c.GetAsync("/api/hr/departments")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await c.PutAsJsonAsync("/api/core/modules", new { disabled = Array.Empty<string>() }, ErpFixture.Json)).EnsureSuccessStatusCode();

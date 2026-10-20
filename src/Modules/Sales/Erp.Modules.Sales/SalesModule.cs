@@ -30,12 +30,17 @@ public sealed class SalesModule : IModule
         services.AddScoped<Pos.PosService>();
         services.AddScoped<Tailoring.TailoringService>();
         services.AddScoped<Salon.SalonManager>();
+        services.AddScoped<Workshop.WorkshopService>();
         services.AddScoped<IScheduledReport, Reports.CustomerAgingScheduledReport>();
         services.AddScoped<IDashboardProvider, Reports.SalesDashboard>();
         services.AddScoped<IDashboardProvider, Reports.TodayDashboard>();
         services.AddScoped<IAiTool, Reports.CustomerBalancesAiTool>();
         services.AddScoped<IAiTool, Reports.SalesSummaryAiTool>();
         services.AddScoped<IAiTool, Reports.TailoringAiTool>();
+        services.AddScoped<IAiTool, Reports.WorkshopAiTool>();
+        services.AddScoped<Reports.LeakageService>();
+        services.AddScoped<IDashboardProvider, Reports.LeakageDashboard>();
+        services.AddScoped<IAiTool, Reports.LeakageAiTool>();
         services.AddScoped<CustomerOpeningService>();
         services.AddScoped<SalesPdfDocuments>();
         services.AddScoped<ITenantProvisioner, SalesProvisioner>();
@@ -51,5 +56,7 @@ public sealed class SalesModule : IModule
         Pos.PosEndpoints.Map(app);
         Tailoring.TailoringEndpoints.Map(app);
         Salon.SalonEndpoints.Map(app);
+        Workshop.WorkshopEndpoints.Map(app);
+        Reports.LeakageEndpoints.Map(app);
     }
 }

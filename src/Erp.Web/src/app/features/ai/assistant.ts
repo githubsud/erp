@@ -1,5 +1,6 @@
 import { Component, ElementRef, inject, OnInit, signal, viewChild } from '@angular/core';
 import { FormControl } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { AiService, AiStatus, AiSummary } from '../../core/ai.service';
 import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -12,7 +13,7 @@ interface Turn {
   tools?: string[];
 }
 
-const SUGGESTIONS = ['today', 'debtors', 'documents', 'bestsellers', 'reorder', 'profit', 'payroll', 'cash'];
+const SUGGESTIONS = ['today', 'debtors', 'leaks', 'season', 'documents', 'bestsellers', 'reorder', 'profit', 'payroll', 'cash'];
 
 /** "Ask your business": questions in Arabic or English answered from the ERP's reports, and the owner's daily summary. */
 @Component({
@@ -22,8 +23,8 @@ const SUGGESTIONS = ['today', 'debtors', 'documents', 'bestsellers', 'reorder', 
     <div class="page-header">
       <h1><mat-icon class="spark">auto_awesome</mat-icon> {{ 'ai.title' | t }}</h1>
       @if (status(); as s) {
-        <span class="chip" [class.ok]="s.isPrivate" [matTooltip]="(s.isPrivate ? 'ai.privateHint' : 'ai.sharedHint') | t">
-          <mat-icon>{{ s.isPrivate ? 'lock' : 'shield' }}</mat-icon> {{ (s.isPrivate ? 'ai.private' : 'ai.shared') | t }} · {{ s.name }}
+        <span class="chip" [class.ok]="s.isPrivate" [matTooltip]="s.name + ' — ' + ((s.isPrivate ? 'ai.privateHint' : 'ai.sharedHint') | t)">
+          <mat-icon>{{ s.isPrivate ? 'lock' : 'shield' }}</mat-icon> {{ (s.isPrivate ? 'ai.private' : 'ai.shared') | t }}
         </span>
         @if (s.dailyLimit !== null) { <span class="chip ltr">{{ s.usedToday }} / {{ s.dailyLimit }} {{ 'ai.today' | t }}</span> }
       } @else if (statusLoaded()) {
@@ -105,6 +106,7 @@ export class AssistantPage implements OnInit {
   private readonly ai = inject(AiService);
   private readonly notify = inject(NotifyService);
   protected readonly i18n = inject(I18nService);
+  private readonly route = inject(ActivatedRoute);
   protected readonly canSummary = inject(AuthService).can('ai.summary:view');
   protected readonly suggestions = SUGGESTIONS;
   protected readonly status = signal<AiStatus | null>(null);
@@ -125,6 +127,9 @@ export class AssistantPage implements OnInit {
       error: () => this.statusLoaded.set(true)
     });
     if (this.canSummary) this.ai.latestSummary(this.i18n.lang()).subscribe((s) => this.summary.set(s));
+    // Other screens send a question ("explain these leaks"): ask it straight away.
+    const q = this.route.snapshot.queryParamMap.get('q');
+    if (q) this.ask(q);
   }
 
   protected ask(text: string): void {

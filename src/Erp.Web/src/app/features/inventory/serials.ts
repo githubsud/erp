@@ -131,7 +131,7 @@ export class ItemBins {
       </mat-card>
     }
   `,
-  styles: `.search { display: flex; gap: 8px; align-items: baseline; } .wide { min-width: 320px; } .card { padding: 16px; margin-block-end: 12px; }`
+  styles: `.search { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .wide { min-width: min(320px, 100%); flex: 1; } .card { padding: 16px; margin-block-end: 12px; }`
 })
 export class SerialLookupPage {
   private readonly api = inject(ApiService);

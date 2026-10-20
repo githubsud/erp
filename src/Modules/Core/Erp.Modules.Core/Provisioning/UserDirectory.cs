@@ -13,4 +13,10 @@ internal sealed class UserDirectory(ErpDbContext db) : IUserDirectory
                join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
                where u.IsActive && (rp.Permission == permission || rp.Permission == DefaultRoles.Wildcard)
                select u.Email!).Where(e => e != null).Distinct().ToListAsync(ct);
+
+    public async Task<IReadOnlyDictionary<Guid, string>> NamesAsync(IEnumerable<Guid> userIds, CancellationToken ct = default)
+    {
+        var ids = userIds.Distinct().ToList();
+        return await db.Set<AppUser>().AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayNameEn, ct);
+    }
 }

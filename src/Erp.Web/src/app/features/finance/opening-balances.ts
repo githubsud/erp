@@ -7,6 +7,7 @@ import { FinanceApi, OpeningInvoiceResult } from '../../core/finance.api';
 import { NotifyService } from '../../core/notify.service';
 import { SalesApi } from '../../core/sales.api';
 import { TradeApi } from '../../core/trade.api';
+import { ModulesService } from '../../core/modules.service';
 import { SHARED } from '../../shared/shared';
 
 type Side = 'customers' | 'suppliers';
@@ -145,8 +146,9 @@ export class OpeningBalancesPage {
 
   constructor() {
     this.rows.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.version.update((v) => v + 1));
-    if (this.auth.can('sal.customers:read')) this.sales.customers().subscribe((c) => this.customers.set(c));
-    if (this.auth.can('pur.suppliers:read')) this.trade.suppliers().subscribe((s) => this.suppliers.set(s));
+    const off = inject(ModulesService).disabled();
+    if (this.auth.can('sal.customers:read') && !off.has('sales')) this.sales.customers().subscribe((c) => this.customers.set(c));
+    if (this.auth.can('pur.suppliers:read') && !off.has('purchasing')) this.trade.suppliers().subscribe((s) => this.suppliers.set(s));
     this.addRow();
   }
 

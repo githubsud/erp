@@ -6,6 +6,7 @@ using Erp.Modules.Sales.Domain;
 using Erp.Modules.Sales.Endpoints;
 using Erp.Modules.Sales.Pos;
 using Erp.Modules.Sales.Tailoring;
+using Erp.Modules.Sales.Workshop;
 using Erp.SharedKernel.Application;
 using Microsoft.EntityFrameworkCore;
 
@@ -118,6 +119,25 @@ internal sealed class TailoringAiTool(TailoringService tailoring) : IAiTool
         {
             b.Open, b.DueToday, b.Late, b.ReadyNotCollected, b.DepositsHeld,
             tailors = b.Tailors.Select(t => new { employee = t.Tailor, t.Received, t.InProgress, t.Fitting, t.DueThisWeek, t.Late })
+        };
+    }
+}
+
+/// <summary>Workshop job cards: open, waiting for the customer's approval or for parts, late, ready and not collected.</summary>
+internal sealed class WorkshopAiTool(WorkshopService workshop) : IAiTool
+{
+    public string Name => "workshop_jobs";
+    public string Description => "Car workshop job cards: how many cars are in, waiting for the customer's approval, waiting for parts, late, ready but not collected, deposits held, and each technician's open jobs.";
+    public string Permission => SalesPermissions.WorkshopUse;
+    public string? Module => ModuleCodes.Workshop;
+
+    public async Task<object> InvokeAsync(JsonElement args, CancellationToken ct)
+    {
+        var b = await workshop.BoardAsync(ct);
+        return new
+        {
+            cars_in = b.Open, b.AwaitingApproval, b.WaitingParts, b.Late, b.ReadyNotCollected, b.DepositsHeld,
+            technicians = b.Technicians.Select(t => new { employee = t.Technician, t.Open, t.InProgress, t.Late })
         };
     }
 }

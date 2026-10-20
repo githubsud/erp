@@ -139,7 +139,7 @@ internal sealed class TailoringService(ErpDbContext db, ITenantContext tenant, I
                 throw new BusinessRuleException("sal.tailoring_lines", "Add the garments with their prices.", "أضف القطع مع أسعارها.");
             if (r.DueDate < r.OrderDate)
                 throw new BusinessRuleException("sal.tailoring_dates", "The ready date cannot be before the order date.", "لا يمكن أن يسبق تاريخ التسليم تاريخ الطلب.");
-            var customer = await CustomerAsync(r.CustomerId, r.CustomerName, r.Phone, token);
+            var customer = await WalkInCustomers.FindOrCreateAsync(db, tenant, customers, r.CustomerId, r.CustomerName, r.Phone, "T", token);
             var items = await inventory.GetItemsAsync(r.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value), token);
             var order = new TailoringOrder
             {
@@ -293,20 +293,6 @@ internal sealed class TailoringService(ErpDbContext db, ITenantContext tenant, I
         db.Add(new TailoringPayment { OrderId = order.Id, ReceiptId = receipt.Id, PaidOn = date, Amount = amount });
         order.Paid += amount;
         await db.SaveChangesAsync(ct);
-    }
-
-    /// <summary>Existing customer, or a walk-in found by phone, or a new cash customer created with the phone as its code.</summary>
-    private async Task<Customer> CustomerAsync(Guid? customerId, string? name, string? phone, CancellationToken ct)
-    {
-        if (customerId is { } id) return await CustomerService.ActiveCustomerAsync(db, tenant, id, ct);
-        var digits = new string((phone ?? "").Where(char.IsDigit).ToArray());
-        if (digits.Length < 8 || string.IsNullOrWhiteSpace(name))
-            throw new BusinessRuleException("sal.tailoring_customer", "Choose a customer or enter the walk-in's name and phone.", "اختر عميلاً أو أدخل اسم العميل ورقم هاتفه.");
-        var local = digits.Length > 8 && digits.StartsWith("974") ? digits[3..] : digits;
-        var existing = await db.Set<Customer>().FirstOrDefaultAsync(c => c.CompanyId == tenant.RequireCompanyId() && c.Phone != null && c.Phone.EndsWith(local), ct);
-        if (existing is not null) return existing;
-        return await customers.SaveAsync(null, new CustomerRequest($"T{local}", name.Trim(), name.Trim(), "QA", null, null, null, local, null, null,
-            PaymentTermsDays: 0), ct);
     }
 
     private async Task SaveProfileAsync(Guid customerId, Garment garment, string measurements, CancellationToken ct)

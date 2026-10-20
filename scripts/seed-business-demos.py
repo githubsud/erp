@@ -637,6 +637,37 @@ def workshop():
     for day, lines, method in [(-7, [("BATT", 1)], "Card"), (-3, [("L-DIAG", 1)], "Cash"), (0, [("OIL5", 1), ("OILF", 1), ("L-OIL", 1)], "Cash")]:
         i = invoice(walk, d(day), [{"itemId": it[k], "quantity": q} for k, q in lines], warehouse=main)
         receipt(walk, d(day), acc["1120" if method == "Card" else "1110"], i, method=method)
+    step("Job cards: cars in every stage, one delivered on the fleet account, one ready to collect")
+    prices = {"OIL5": 95, "OILF": 30, "BRAKE": 160, "BATT": 380, "L-OIL": 40, "L-BRAKE": 120, "L-AC": 200, "L-DIAG": 100}
+
+    def lines(*codes):
+        return [{"kind": "Labour" if k.startswith("L-") else "Part", "itemId": it[k], "quantity": q, "unitPrice": prices[k]} for k, q in codes]
+
+    def job(body, estimate=None, statuses=(), advance=None):
+        j = post("/api/workshop/jobs", {"receivedOn": d(0), "promisedOn": d(1), **body,
+                                        **({"deposit": {"amount": advance, "accountId": acc["1110"], "method": "Cash"}} if advance else {})})
+        if estimate: j = put(f"/api/workshop/jobs/{j['id']}/lines", estimate)
+        for st in statuses:
+            j = post(f"/api/workshop/jobs/{j['id']}/status", st if isinstance(st, dict) else {"status": st})
+        return j
+
+    done = job({"customerId": fleet, "plateNo": "223344", "make": "Toyota", "model": "Camry", "year": 2022, "color": "Black", "mileage": 61200,
+                "complaint": "Scheduled service", "technicianName": "Ramesh", "receivedOn": d(-1), "promisedOn": d(-1)},
+               lines(("OIL5", 1), ("OILF", 1), ("L-OIL", 1)), ["InProgress", "Ready"])
+    post(f"/api/workshop/jobs/{done['id']}/deliver", {"date": d(0), "warehouseId": main})
+    job({"customerId": fleet, "plateNo": "556677", "make": "Hyundai", "model": "H1", "year": 2020, "color": "White", "mileage": 143800,
+         "complaint": "AC not cooling", "technicianName": "Imran"}, lines(("L-AC", 1)), ["InProgress", "Ready"])
+    job({"customerName": "Khalid Al-Sulaiti", "phone": "33991122", "plateNo": "778899", "make": "Nissan", "model": "Patrol", "year": 2018, "color": "Silver",
+         "mileage": 98500, "complaint": "Noise when braking", "technicianName": "Senthil"},
+        lines(("BRAKE", 1), ("L-BRAKE", 1)), [{"status": "AwaitingApproval", "diagnosis": "Front pads worn to the metal"}, "InProgress"], advance=100)
+    job({"customerName": "Ahmed Raza", "phone": "55667788", "plateNo": "334455", "make": "Toyota", "model": "Corolla", "year": 2021, "color": "Grey",
+         "mileage": 52300, "complaint": "Battery weak in the morning, AC smells", "technicianName": "Imran"},
+        lines(("BATT", 1), ("L-AC", 1)), [{"status": "AwaitingApproval", "diagnosis": "Battery 4 years old; AC filter dirty"}])
+    job({"customerName": "Faisal Al-Kubaisi", "phone": "66554433", "plateNo": "112233", "make": "GMC", "model": "Yukon", "year": 2017, "color": "Black",
+         "mileage": 187000, "complaint": "Gearbox shifts hard", "technicianName": "Senthil", "receivedOn": d(-3), "promisedOn": d(-1)},
+        lines(("L-DIAG", 1)), ["Diagnosing", {"status": "WaitingParts", "diagnosis": "Gearbox solenoid; part ordered from the agent"}])
+    job({"customerName": "Mohammed Iqbal", "phone": "70112233", "plateNo": "990011", "make": "Mitsubishi", "model": "Pajero", "year": 2016, "color": "White",
+         "mileage": 210400, "complaint": "Engine warning light on"})
 
 
 def contracting():
@@ -702,11 +733,31 @@ BUSINESSES = [
      "seed": furniture},
     {"code": "workshop", "type": "workshop", "en": "Fast Fix Auto Garage", "ar": "كراج فاست فكس للسيارات",
      "owner_en": "Senthil Kumar", "owner_ar": "سينثيل كومار", "phone": "55001007", "area": "Industrial Area", "cr": "200551", "plan": "SHOP",
-     "extra_modules": ["purchasing"], "seed": workshop},
+     "extra_modules": ["purchasing", "workshop"], "seed": workshop},
     {"code": "contracting", "type": "contracting", "en": "Gulf Build Contracting", "ar": "الخليج للمقاولات",
      "owner_en": "Hamad Al-Naimi", "owner_ar": "حمد النعيمي", "phone": "55001008", "area": "Al Gharrafa", "cr": "210771", "plan": "ENTERPRISE",
      "cycle": "Annual", "seed": contracting},
 ]
+
+
+# The modules each kind of business uses, as the quick-setup wizard switches them (src/Erp.Web/.../settings/setup-templates.ts).
+MODULES_IN_USE = {
+    "typing_office": ["hr", "ess", "inventory", "sales", "crm"],
+    "tailoring": ["hr", "ess", "inventory", "sales", "pos", "tailoring"],
+    "salon": ["hr", "ess", "inventory", "sales", "salon"],
+    "grocery": ["hr", "ess", "inventory", "purchasing", "sales", "pos"],
+    "restaurant": ["hr", "ess", "inventory", "purchasing", "sales", "pos"],
+    "furniture": ["hr", "ess", "inventory", "purchasing", "sales", "crm"],
+    "workshop": ["hr", "ess", "inventory", "purchasing", "sales", "workshop"],
+    "contracting": ["hr", "ess", "inventory", "purchasing", "sales", "projects", "subcontracts", "assets"],
+}
+
+
+def keep_only(business_type):
+    """Switches off the licensed modules this kind of business does not use, so its menu stays short (the AI assistant stays on)."""
+    keep = set(MODULES_IN_USE.get(business_type, [])) | {"ai"}
+    licensed = [m["code"] for m in get("/api/core/modules") if m.get("licensed") is not False]
+    put("/api/core/modules", {"disabled": [m for m in licensed if m not in keep]})
 
 
 def main():
@@ -722,6 +773,7 @@ def main():
         put("/api/approvals/settings", {"allowSelfApproval": True})   # owner-run shop: the owner approves their own orders
         try:
             b["seed"]()
+            keep_only(b["type"])
         except ApiError as e:
             sys.exit(f"\n✗ {b['code']}: {e.status}\n{e.detail}")
     print("\nDone. Sign in at http://localhost:4200 (company code, owner@<code>.qa, " + PASSWORD + ")")

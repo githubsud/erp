@@ -138,6 +138,11 @@ span.secondary, b + .secondary { margin-inline-start: 6px; }
   .mat-mdc-form-field-infix { width: auto; min-width: 0; }
   .total-row td { font-weight: 700; padding-block: 10px; }
 }
+// On phones a wide line table scrolls on its own instead of pushing the whole page sideways.
+@media (max-width: 760px) {
+  .line-editor { display: block; overflow-x: auto; max-width: 100%; }
+  .line-editor .narrow { min-width: 90px; }
+}
 .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; margin-block-end: 12px; }
 
 /* Links inside tables and fact rows follow the theme instead of the browser default. */

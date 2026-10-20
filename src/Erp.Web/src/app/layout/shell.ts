@@ -52,6 +52,7 @@ const NAV: NavGroup[] = [
     items: [
       { icon: 'content_cut', label: 'nav.salon', link: '/salon', permission: 'sal.salon:use' },
       { icon: 'checkroom', label: 'nav.tailoring', link: '/tailoring', permission: 'sal.tailoring:use' },
+      { icon: 'car_repair', label: 'nav.workshop', link: '/workshop', permission: 'sal.workshop:use' },
       { icon: 'point_of_sale', label: 'nav.pos', link: '/sales/pos', permission: 'sal.pos:sell' },
       { icon: 'insights', label: 'nav.crm', link: '/sales/crm', permission: 'sal.crm:use' },
       { icon: 'engineering', label: 'nav.projects', link: '/sales/projects', permission: 'sal.customers:read' },
@@ -63,7 +64,8 @@ const NAV: NavGroup[] = [
       { icon: 'payments', label: 'nav.receipts', link: '/sales/receipts', permission: 'sal.customers:read' },
       { icon: 'assignment_return', label: 'nav.creditNotes', link: '/sales/credit-notes', permission: 'sal.customers:read' },
       { icon: 'account_balance_wallet', label: 'nav.customerCredits', link: '/sales/credits', permission: 'sal.customers:read' },
-      { icon: 'insights', label: 'nav.salesReports', link: '/sales/reports', permission: 'sal.reports:read' }
+      { icon: 'insights', label: 'nav.salesReports', link: '/sales/reports', permission: 'sal.reports:read' },
+      { icon: 'policy', label: 'nav.leaks', link: '/sales/leaks', permission: 'sal.reports:read' }
     ]
   },
   {
@@ -82,6 +84,7 @@ const NAV: NavGroup[] = [
       { icon: 'category', label: 'nav.items', link: '/inventory/items', permission: 'inv.items:read' },
       { icon: 'warehouse', label: 'nav.stock', link: '/inventory/stock', permission: 'inv.items:read' },
       { icon: 'event_busy', label: 'nav.expiry', link: '/inventory/expiry', permission: 'inv.items:read' },
+      { icon: 'calendar_month', label: 'nav.season', link: '/inventory/season', permission: 'inv.reports:read' },
       { icon: 'qr_code_scanner', label: 'nav.serials', link: '/inventory/serials', permission: 'inv.items:read' },
       { icon: 'tune', label: 'nav.adjustments', link: '/inventory/adjustments', permission: 'inv.items:read' },
       { icon: 'swap_horiz', label: 'nav.transfers', link: '/inventory/transfers', permission: 'inv.items:read' },

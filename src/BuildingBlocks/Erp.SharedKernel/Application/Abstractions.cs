@@ -111,6 +111,9 @@ public interface IUserDirectory
 {
     /// <summary>Email addresses of active users holding <paramref name="permission"/> (owners included through the wildcard).</summary>
     Task<IReadOnlyList<string>> EmailsWithPermissionAsync(string permission, CancellationToken ct = default);
+
+    /// <summary>Display names (English) of users of the current tenant, for reports that show who did something.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> NamesAsync(IEnumerable<Guid> userIds, CancellationToken ct = default);
 }
 
 public sealed record TenantCompany(Guid TenantId, Guid CompanyId);
