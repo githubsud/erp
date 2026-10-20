@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { forkJoin, of, catchError } from 'rxjs';
+import { AiService, AiSummary } from '../../core/ai.service';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { daysBetween, toIso, todayIso } from '../../core/dates';
@@ -35,6 +36,13 @@ interface DashboardTile {
         <mat-icon>rocket_launch</mat-icon>
         <span>{{ 'setup.banner' | t }}</span>
         <a mat-flat-button routerLink="/settings/setup">{{ 'setup.start' | t }}</a>
+      </mat-card>
+    }
+    @if (aiSummary(); as s) {
+      <mat-card appearance="outlined" class="ai-summary">
+        <div class="ai-head"><mat-icon>auto_awesome</mat-icon> <b>{{ 'ai.summary.title' | t }}</b> <span class="ltr secondary">{{ s.date | d }}</span>
+          <span class="grow"></span><a mat-button routerLink="/ai">{{ 'ai.askMore' | t }}</a></div>
+        <div class="ai-text">{{ s.text }}</div>
       </mat-card>
     }
 
@@ -137,6 +145,12 @@ interface DashboardTile {
     .setup-banner { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin-bottom: 16px; flex-wrap: wrap;
       background: var(--mat-sys-secondary-container); }
     .setup-banner span { flex: 1; min-width: 200px; }
+    .ai-summary { padding: 12px 16px; margin-bottom: 16px; }
+    .ai-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ai-head mat-icon { color: var(--mat-sys-primary); }
+    .ai-text { white-space: pre-line; line-height: 1.8; margin-top: 6px; }
+    .grow { flex: 1; }
+    .secondary { color: var(--mat-sys-on-surface-variant); font-size: 13px; }
     .stat { cursor: pointer; }
     .stat.warn .value { color: #8a5300; }
     .stat.bad .value { color: #8c1d18; }
@@ -161,6 +175,7 @@ export class DashboardPage {
   protected readonly approvals = signal(0);
   /** An owner whose company has no items yet is offered the quick-setup wizard. */
   protected readonly suggestSetup = signal(false);
+  protected readonly aiSummary = signal<AiSummary | null>(null);
   private readonly tiles = signal<DashboardTile[]>([]);
   protected readonly sections = computed(() => {
     const order = ['today', 'finance', 'sales', 'purchasing', 'inventory'];
@@ -177,6 +192,8 @@ export class DashboardPage {
   constructor() {
     this.api.get<DashboardTile[]>('core/dashboard').pipe(catchError(() => of<DashboardTile[]>([]))).subscribe((t) => this.tiles.set(t));
     this.api.get<unknown[]>('approvals/inbox').pipe(catchError(() => of<unknown[]>([]))).subscribe((a) => this.approvals.set(a.length));
+    const ai = inject(AiService);
+    if (ai.enabled('ai.summary:view')) ai.latestSummary(this.i18n.lang()).pipe(catchError(() => of(null))).subscribe((x) => this.aiSummary.set(x));
     if (this.auth.can('core.company:manage'))
       this.api.get<Paged<unknown>>('inventory/items', { pageSize: 1 }).pipe(catchError(() => of(null))).subscribe((p) => this.suggestSetup.set(p?.total === 0));
     const canHr = this.auth.can('hr.employees:read');

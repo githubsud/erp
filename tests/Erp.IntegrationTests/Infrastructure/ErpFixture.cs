@@ -2,7 +2,10 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Erp.Modules.Ai.Providers;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 using Testcontainers.PostgreSql;
@@ -34,6 +37,9 @@ public sealed class ErpFixture : IAsyncLifetime
     private string? _databaseName;
     private WebApplicationFactory<Program>? _factory;
 
+    /// <summary>Replaces the AI providers; tests set its answers.</summary>
+    public FakeAiChatClient Ai { get; } = new();
+
     public WebApplicationFactory<Program> Factory => _factory ?? throw new InvalidOperationException("Fixture not started.");
     public string OwnerConnectionString { get; private set; } = "";
 
@@ -59,10 +65,12 @@ public sealed class ErpFixture : IAsyncLifetime
             builder.UseSetting("Jobs:DocumentExpiry:Enabled", "false");
             builder.UseSetting("Jobs:ReportSchedules:Enabled", "false");
             builder.UseSetting("Jobs:Billing:Enabled", "false");
+            builder.UseSetting("Jobs:AiSummary:Enabled", "false");
             builder.UseSetting("Jwt:SigningKey", "integration-test-signing-key-0123456789abcdef");
             builder.UseSetting("Security:FieldEncryptionKey", Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i + 1)).ToArray()));
             builder.UseSetting("Security:BlindIndexKey", Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i + 101)).ToArray()));
             builder.UseSetting("Platform:ApiKey", PlatformKey);
+            builder.ConfigureTestServices(services => services.AddSingleton<IAiChatClient>(Ai));
         });
         _ = _factory.Server; // starts the host and runs migrations
     }

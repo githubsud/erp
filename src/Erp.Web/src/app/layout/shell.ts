@@ -27,7 +27,8 @@ const NAV: NavGroup[] = [
   {
     items: [
       { icon: 'space_dashboard', label: 'nav.dashboard', link: '/dashboard' },
-      { icon: 'approval', label: 'nav.approvals', link: '/approvals' }
+      { icon: 'approval', label: 'nav.approvals', link: '/approvals' },
+      { icon: 'auto_awesome', label: 'nav.ai', link: '/ai', permission: 'ai.assistant:use' }
     ]
   },
   {
@@ -109,6 +110,7 @@ const NAV: NavGroup[] = [
       { icon: 'tune', label: 'nav.hrSettings', link: '/settings/payroll', permission: 'hr.payroll:read' },
       { icon: 'inventory_2', label: 'nav.tradeSettings', link: '/settings/trade', permission: 'inv.items:read' },
       { icon: 'rule', label: 'nav.approvalRules', link: '/settings/approvals', permission: 'core.approvals:manage' },
+      { icon: 'auto_awesome', label: 'nav.aiSettings', link: '/settings/ai', permission: 'ai.settings:manage' },
       { icon: 'rocket_launch', label: 'nav.setup', link: '/settings/setup', permission: 'core.company:manage' },
       { icon: 'apartment', label: 'nav.company', link: '/settings/company' },
       { icon: 'shield_lock', label: 'nav.security', link: '/settings/security' },

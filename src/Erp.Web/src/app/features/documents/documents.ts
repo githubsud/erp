@@ -1,11 +1,14 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, FormControl, Validators } from '@angular/forms';
+import { MatDialog } from '@angular/material/dialog';
+import { AiService } from '../../core/ai.service';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { blankToNull } from '../../core/dates';
 import { CompanyDocument, ExpiringDocument } from '../../core/models';
 import { NotifyService } from '../../core/notify.service';
 import { SHARED } from '../../shared/shared';
+import { AiDraftDialog } from '../ai/draft-dialog';
 
 const COMPANY_DOC_TYPES = [
   'CommercialRegistration', 'CommercialLicense', 'MunicipalityLicense', 'EstablishmentCard', 'ChamberCertificate', 'TaxCard',
@@ -55,6 +58,12 @@ const COMPANY_DOC_TYPES = [
                 <th mat-header-cell *matHeaderCellDef>{{ 'document.daysLeft' | t }}</th>
                 <td mat-cell *matCellDef="let d">
                   <span class="chip" [class.bad]="d.status === 'Expired'" [class.warn]="d.status === 'Expiring'">{{ d.daysLeft }} · {{ 'document.status.' + d.status | t }}</span>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="ai">
+                <th mat-header-cell *matHeaderCellDef></th>
+                <td mat-cell *matCellDef="let d">
+                  <button mat-icon-button (click)="aiReminder(d)" [matTooltip]="'ai.message' | t"><mat-icon>auto_awesome</mat-icon></button>
                 </td>
               </ng-container>
               <tr mat-header-row *matHeaderRowDef="expiringColumns"></tr>
@@ -141,12 +150,22 @@ const COMPANY_DOC_TYPES = [
   `
 })
 export class DocumentsPage {
+  /** A renewal reminder for the document's holder, written by the AI. */
+  protected aiReminder(d: ExpiringDocument): void {
+    AiDraftDialog.open(this.dialogs, {
+      kind: 'document_renewal',
+      facts: { name: d.ownerNameEn, document: d.docType, document_no: d.docNo ?? '', expiry_date: d.expiryDate, days_left: String(d.daysLeft) }
+    });
+  }
+
   protected readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
   private readonly notify = inject(NotifyService);
+  private readonly dialogs = inject(MatDialog);
+  private readonly aiOn = inject(AiService).enabled();
 
   protected readonly companyTypes = COMPANY_DOC_TYPES;
-  protected readonly expiringColumns = ['owner', 'type', 'no', 'expiry', 'status'];
+  protected readonly expiringColumns = ['owner', 'type', 'no', 'expiry', 'status', ...(this.aiOn ? ['ai'] : [])];
   protected readonly companyColumns = ['type', 'no', 'expiry', 'actions'];
   protected readonly within = new FormControl(90, { nonNullable: true });
   protected readonly expiring = signal<ExpiringDocument[]>([]);

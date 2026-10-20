@@ -16,7 +16,7 @@ public sealed class ModuleGateMiddleware(RequestDelegate next)
         ("/api/purchasing/subcontracts", ModuleCodes.Subcontracts), ("/api/sales/projects", ModuleCodes.Projects),
         ("/api/sales/commissions", ModuleCodes.Crm), ("/api/finance/budgets", ModuleCodes.Budgets), ("/api/finance/assets", ModuleCodes.Assets),
         ("/api/sales/pos", ModuleCodes.Pos), ("/api/sales/crm", ModuleCodes.Crm), ("/api/purchasing", ModuleCodes.Purchasing),
-        ("/api/inventory", ModuleCodes.Inventory), ("/api/tailoring", ModuleCodes.Tailoring), ("/api/salon", ModuleCodes.Salon),
+        ("/api/inventory", ModuleCodes.Inventory), ("/api/tailoring", ModuleCodes.Tailoring), ("/api/salon", ModuleCodes.Salon), ("/api/ai", ModuleCodes.Ai),
         ("/api/sales", ModuleCodes.Sales), ("/api/hr", ModuleCodes.Hr), ("/api/me", ModuleCodes.Ess)
     ];
 

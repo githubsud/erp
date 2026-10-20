@@ -112,6 +112,7 @@ export class BackOfficeShell {
     { icon: 'storefront', label: 'bo.nav.customers', link: '/backoffice/customers', exact: false },
     { icon: 'receipt_long', label: 'bo.nav.invoices', link: '/backoffice/invoices', exact: false },
     { icon: 'sell', label: 'bo.nav.plans', link: '/backoffice/plans', exact: false },
+    { icon: 'auto_awesome', label: 'bo.nav.ai', link: '/backoffice/ai', exact: false },
     { icon: 'admin_panel_settings', label: 'bo.nav.admins', link: '/backoffice/admins', exact: false }
   ];
 }

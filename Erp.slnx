@@ -7,6 +7,9 @@
     <Project Path="src/BuildingBlocks/Erp.SharedKernel/Erp.SharedKernel.csproj" />
   </Folder>
   <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Ai/">
+    <Project Path="src/Modules/Ai/Erp.Modules.Ai/Erp.Modules.Ai.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Core/">
     <Project Path="src/Modules/Core/Erp.Modules.Core/Erp.Modules.Core.csproj" />
   </Folder>

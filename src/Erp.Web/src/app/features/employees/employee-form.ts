@@ -1,6 +1,7 @@
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
+import { AiService, DocumentFields } from '../../core/ai.service';
 import { ApiService } from '../../core/api.service';
 import { blankToNull, todayIso } from '../../core/dates';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -102,7 +103,16 @@ import { NATIONALITIES, SHARED } from '../../shared/shared';
           </mat-form-field>
         </div>
 
-        <div class="section-title">{{ 'employee.sectionIdentity' | t }}</div>
+        <div class="section-title">{{ 'employee.sectionIdentity' | t }}
+          @if (canRead) {
+            <span class="read">
+              <button mat-stroked-button type="button" [disabled]="reading()" (click)="pick('qid', file)"><mat-icon>auto_awesome</mat-icon> {{ 'ai.read.qid' | t }}</button>
+              <button mat-stroked-button type="button" [disabled]="reading()" (click)="pick('passport', file)"><mat-icon>auto_awesome</mat-icon> {{ 'ai.read.passport' | t }}</button>
+              <input #file type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden (change)="read(file)" />
+            </span>
+          }
+        </div>
+        @if (reading()) { <mat-progress-bar mode="indeterminate" /><p class="hint">{{ 'ai.read.reading' | t }}</p> }
         <div class="form-grid">
           <mat-form-field>
             <mat-label>{{ 'employee.qid' | t }}</mat-label>
@@ -136,6 +146,8 @@ import { NATIONALITIES, SHARED } from '../../shared/shared';
   styles: `
     .block { padding: 8px 20px 20px; }
     .end { justify-content: flex-end; margin-top: 16px; }
+    .read { display: inline-flex; gap: 8px; margin-inline-start: 16px; flex-wrap: wrap; vertical-align: middle; }
+    .hint { color: var(--mat-sys-on-surface-variant); font-size: 13px; }
   `
 })
 export class EmployeeFormPage implements OnInit {
@@ -144,6 +156,10 @@ export class EmployeeFormPage implements OnInit {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly notify = inject(NotifyService);
+  private readonly ai = inject(AiService);
+  protected readonly canRead = this.ai.enabled('ai.documents:read');
+  protected readonly reading = signal(false);
+  private readKind: 'qid' | 'passport' = 'qid';
 
   protected readonly nationalities = NATIONALITIES;
   protected readonly schemes: SocialInsuranceScheme[] = ['None', 'Grsia', 'GccHome'];
@@ -184,6 +200,49 @@ export class EmployeeFormPage implements OnInit {
       this.form.patchValue({ ...e, dateOfBirth: e.dateOfBirth ?? '', openingGratuityLiability: e.openingGratuityLiability ?? 0 });
       this.form.controls.empNo.disable();
     });
+  }
+
+  protected pick(kind: 'qid' | 'passport', input: HTMLInputElement): void {
+    this.readKind = kind;
+    input.value = '';
+    input.click();
+  }
+
+  /** Fills the form from a QID or passport photo read by the company's private AI; the user checks it before saving. */
+  protected read(input: HTMLInputElement): void {
+    const file = input.files?.[0];
+    if (!file) return;
+    this.reading.set(true);
+    this.ai.readDocument(this.readKind, file).subscribe({
+      next: (f) => {
+        this.reading.set(false);
+        this.apply(f);
+        this.notify.success('ai.read.check');
+      },
+      error: (e) => {
+        this.reading.set(false);
+        this.notify.error(e);
+      }
+    });
+  }
+
+  private apply(f: DocumentFields): void {
+    const c = this.form.controls;
+    const set = (control: { value: unknown; setValue(v: never): void; markAsDirty(): void }, value: string | null | undefined) => {
+      if (value) {
+        control.setValue(value as never);
+        control.markAsDirty();
+      }
+    };
+    set(c.nameEn, f.nameEn);
+    set(c.nameAr, f.nameAr);
+    set(c.dateOfBirth, f.dateOfBirth);
+    if (this.readKind === 'qid') set(c.qid, f.idNumber?.replace(/\D/g, '') ?? null);
+    set(c.passportNo, f.passportNumber ?? (this.readKind === 'passport' ? f.idNumber : null));
+    if (f.gender) set(c.gender, f.gender === 'F' ? 'Female' : 'Male');
+    const country = f.nationality?.toLowerCase();
+    const n = country ? NATIONALITIES.find((x) => x.en.toLowerCase() === country || x.code.toLowerCase() === country) : undefined;
+    if (n) set(c.nationality, n.code);
   }
 
   save(): void {

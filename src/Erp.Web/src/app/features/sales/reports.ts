@@ -1,11 +1,14 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
+import { MatDialog } from '@angular/material/dialog';
+import { AiService } from '../../core/ai.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { SalesApi } from '../../core/sales.api';
-import { CustomerAgingReport, PdcReport, SalesAnalysisReport, UninvoicedRow } from '../../core/sales.models';
+import { CustomerAgingReport, CustomerAgingRow, PdcReport, SalesAnalysisReport, UninvoicedRow } from '../../core/sales.models';
 import { SHARED } from '../../shared/shared';
+import { AiDraftDialog } from '../ai/draft-dialog';
 
 @Component({
   selector: 'app-sales-reports',
@@ -41,6 +44,12 @@ import { SHARED } from '../../shared/shared';
                 <th mat-header-cell *matHeaderCellDef class="num">{{ 'cust.creditLimit' | t }}</th>
                 <td mat-cell *matCellDef="let r" class="num ltr" [class.late]="r.creditLimit !== null && r.total > r.creditLimit">
                   {{ r.creditLimit === null ? '—' : (r.creditLimit | money) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="remind">
+                <th mat-header-cell *matHeaderCellDef></th>
+                <td mat-cell *matCellDef="let r">
+                  @if (r.total > 0) { <button mat-icon-button (click)="remind(r)" [matTooltip]="'ai.remind' | t"><mat-icon>auto_awesome</mat-icon></button> }
+                </td>
               </ng-container>
               <tr mat-header-row *matHeaderRowDef="agingDisplay"></tr>
               <tr mat-row *matRowDef="let row; columns: agingDisplay"></tr>
@@ -190,6 +199,8 @@ import { SHARED } from '../../shared/shared';
 export class SalesReportsPage {
   private readonly sales = inject(SalesApi);
   private readonly notify = inject(NotifyService);
+  private readonly dialogs = inject(MatDialog);
+  private readonly aiOn = inject(AiService).enabled();
 
   protected readonly agingColumns = [
     { key: 'current', label: 'prep.current' },
@@ -199,7 +210,16 @@ export class SalesReportsPage {
     { key: 'over90', label: 'prep.over90' },
     { key: 'total', label: 'po.total' }
   ] as const;
-  protected readonly agingDisplay = ['customer', ...this.agingColumns.map((c) => c.key), 'limit'];
+  protected readonly agingDisplay = ['customer', ...this.agingColumns.map((c) => c.key), 'limit', ...(this.aiOn ? ['remind'] : [])];
+
+  /** A polite payment reminder for the customer, written by the AI and sent by the user from WhatsApp. */
+  protected remind(r: CustomerAgingRow): void {
+    const overdue = r.days1To30 + r.days31To60 + r.days61To90 + r.over90;
+    AiDraftDialog.open(this.dialogs, {
+      kind: 'payment_reminder',
+      facts: { customer: r.nameEn, customer_ar: r.nameAr, amount_owed: r.total.toFixed(2), overdue_amount: overdue.toFixed(2), as_of: this.asOf.value }
+    });
+  }
   protected readonly analysisColumns = ['name', 'qty', 'revenue', 'returns', 'net', 'cost', 'margin'];
   protected readonly asOf = new FormControl(todayIso(), { nonNullable: true });
   protected readonly from = new FormControl(`${todayIso().slice(0, 7)}-01`, { nonNullable: true });

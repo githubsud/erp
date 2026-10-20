@@ -41,6 +41,9 @@ public sealed class HrModule : IModule
         services.AddScoped<HrPdfDocuments>();
         services.AddScoped<PortalService>();
         services.AddScoped<Reports.HrReportService>();
+        services.AddScoped<IAiTool, Reports.ExpiringDocumentsAiTool>();
+        services.AddScoped<IAiTool, Reports.HeadcountAiTool>();
+        services.AddScoped<IAiTool, Reports.PayrollSummaryAiTool>();
         services.AddScoped<Rosters.RosterService>();
         services.AddScoped<SelfService.FieldStaffService>();
         services.AddScoped<Reports.GrsiaService>();

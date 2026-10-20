@@ -33,6 +33,9 @@ public sealed class SalesModule : IModule
         services.AddScoped<IScheduledReport, Reports.CustomerAgingScheduledReport>();
         services.AddScoped<IDashboardProvider, Reports.SalesDashboard>();
         services.AddScoped<IDashboardProvider, Reports.TodayDashboard>();
+        services.AddScoped<IAiTool, Reports.CustomerBalancesAiTool>();
+        services.AddScoped<IAiTool, Reports.SalesSummaryAiTool>();
+        services.AddScoped<IAiTool, Reports.TailoringAiTool>();
         services.AddScoped<CustomerOpeningService>();
         services.AddScoped<SalesPdfDocuments>();
         services.AddScoped<ITenantProvisioner, SalesProvisioner>();

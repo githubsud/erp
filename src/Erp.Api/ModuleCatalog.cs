@@ -1,4 +1,5 @@
 using Erp.Infrastructure.Web;
+using Erp.Modules.Ai;
 using Erp.Modules.Core;
 using Erp.Modules.Finance;
 using Erp.Modules.HR;
@@ -18,6 +19,7 @@ public static class ModuleCatalog
         new HrModule(),
         new InventoryModule(),
         new PurchasingModule(),
-        new SalesModule()
+        new SalesModule(),
+        new AiModule()
     ];
 }

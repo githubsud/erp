@@ -1,3 +1,4 @@
+using Erp.Infrastructure.Web;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Erp.Infrastructure.Persistence;
@@ -79,7 +80,7 @@ public sealed record ResetPasswordResponse(string Login, string TemporaryPasswor
 /// <summary>Platform administrators: sign-in (a token without a tenant, carrying the platform-admin claim) and the admin list.</summary>
 internal sealed class PlatformAuthService(ErpDbContext db, JwtOptions jwt, IClock clock, IPasswordHasher<PlatformAdmin> hasher)
 {
-    public const string Claim = "pa";
+    public const string Claim = PlatformAdminAccess.Claim;
     private const int MaxFailures = 5;
 
     public async Task<AdminLoginResponse> LoginAsync(AdminLoginRequest r, CancellationToken ct)
@@ -130,8 +131,7 @@ internal sealed class PlatformAuthService(ErpDbContext db, JwtOptions jwt, ICloc
         return admin;
     }
 
-    public static Guid AdminId(HttpContext http) =>
-        Guid.TryParse(http.User.FindFirstValue("sub"), out var id) && http.User.FindFirstValue(Claim) == "1" ? id : throw new ForbiddenException();
+    public static Guid AdminId(HttpContext http) => PlatformAdminAccess.AdminId(http);
 }
 
 /// <summary>

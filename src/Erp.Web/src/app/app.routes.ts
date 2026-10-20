@@ -16,7 +16,8 @@ export const routes: Routes = [
       { path: 'customers/:id', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeCustomerPage) },
       { path: 'invoices', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeInvoicesPage) },
       { path: 'plans', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficePlansPage) },
-      { path: 'admins', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeAdminsPage) }
+      { path: 'admins', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeAdminsPage) },
+      { path: 'ai', loadComponent: () => import('./features/backoffice/backoffice-ai').then((m) => m.BackOfficeAiPage) }
     ]
   },
   {
@@ -467,6 +468,16 @@ export const routes: Routes = [
         path: 'settings/audit',
         canActivate: [permissionGuard('core.audit:read')],
         loadComponent: () => import('./features/settings/platform').then((m) => m.AuditPage)
+      },
+      {
+        path: 'ai',
+        canActivate: [permissionGuard('ai.assistant:use')],
+        loadComponent: () => import('./features/ai/assistant').then((m) => m.AssistantPage)
+      },
+      {
+        path: 'settings/ai',
+        canActivate: [permissionGuard('ai.settings:manage')],
+        loadComponent: () => import('./features/settings/ai-settings').then((m) => m.AiSettingsPage)
       },
       {
         path: 'settings/setup',

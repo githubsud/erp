@@ -18,9 +18,10 @@ public static class ModuleCodes
     public const string Budgets = "budgets";
     public const string Tailoring = "tailoring";
     public const string Salon = "salon";
+    public const string Ai = "ai";
 
     public static readonly IReadOnlyList<string> Optional =
-        [Hr, Ess, Inventory, Purchasing, Sales, Pos, Crm, Projects, Subcontracts, Assets, Budgets, Tailoring, Salon];
+        [Hr, Ess, Inventory, Purchasing, Sales, Pos, Crm, Projects, Subcontracts, Assets, Budgets, Tailoring, Salon, Ai];
 
     /// <summary>A module only works together with these.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> Requires = new Dictionary<string, string[]>

@@ -36,6 +36,7 @@ export class ModulesService {
     if (starts('/finance/budgets')) return 'budgets';
     if (starts('/tailoring')) return 'tailoring';
     if (starts('/salon')) return 'salon';
+    if (starts('/ai') || link === '/settings/ai') return 'ai';
     if (link.startsWith('/sales')) return 'sales';
     if (link.startsWith('/purchasing')) return 'purchasing';
     if (link.startsWith('/inventory') || link === '/settings/trade') return 'inventory';

@@ -1,6 +1,8 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, FormControl, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { AiService } from '../../core/ai.service';
+import { AiDraftDialog } from '../ai/draft-dialog';
 import { filter } from 'rxjs';
 import { ApiService } from '../../core/api.service';
 import { addDaysIso, monthEndIso, monthStartIso, todayIso } from '../../core/dates';
@@ -281,6 +283,7 @@ export class BookDialog {
     </mat-dialog-content>
     <mat-dialog-actions>
       @if (a.whatsAppPhone) { <a mat-button [href]="reminder()" target="_blank" rel="noopener"><mat-icon>chat</mat-icon> WhatsApp</a> }
+      @if (aiOn) { <button mat-button (click)="aiMessage()"><mat-icon>auto_awesome</mat-icon> {{ 'ai.message' | t }}</button> }
       <span class="spacer"></span>
       @if (a.status === 'Booked' || a.status === 'Arrived') {
         @if (a.status === 'Booked') { <button mat-button (click)="set('Arrived')">{{ 'sl.arrived' | t }}</button> }
@@ -302,6 +305,17 @@ export class AppointmentDialog {
   protected time(): string {
     const m = qatarMinutes(this.a.startsAt);
     return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  }
+
+  protected readonly aiOn = inject(AiService).enabled();
+  private readonly dialogs = inject(MatDialog);
+
+  protected aiMessage(): void {
+    AiDraftDialog.open(this.dialogs, {
+      kind: this.a.status === 'Done' ? 'thank_you' : 'appointment_reminder',
+      phone: this.a.whatsAppPhone,
+      facts: { customer: this.a.customerName, date: this.a.startsAt.slice(0, 10), time: this.time(), service: this.a.serviceNameEn ?? '', staff_name: this.a.staffName }
+    });
   }
 
   protected reminder(): string {

@@ -1,6 +1,8 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, FormControl, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { AiService } from '../../core/ai.service';
+import { AiDraftDialog } from '../ai/draft-dialog';
 import { catchError, filter, of } from 'rxjs';
 import { ApiService } from '../../core/api.service';
 import { addDaysIso, todayIso } from '../../core/dates';
@@ -367,6 +369,7 @@ export class TailoringOrderDialog implements OnInit {
     </mat-dialog-content>
     <mat-dialog-actions>
       @if (o().whatsAppPhone) { <a mat-button [href]="whatsApp()" target="_blank" rel="noopener"><mat-icon>chat</mat-icon> WhatsApp</a> }
+      @if (aiOn) { <button mat-button (click)="aiMessage()"><mat-icon>auto_awesome</mat-icon> {{ 'ai.message' | t }}</button> }
       <button mat-button (click)="print()"><mat-icon>print</mat-icon> {{ 'tl.receipt' | t }}</button>
       <span class="spacer"></span>
       @if (open()) {
@@ -437,6 +440,18 @@ export class TailoringDetailDialog implements OnInit {
   protected cancel(): void {
     if (!confirm(this.i18n.t('tl.cancelConfirm'))) return;
     this.api.post<TOrder>(`tailoring/orders/${this.o().id}/cancel`, {}).subscribe({ next: this.done, error: (e) => this.notify.error(e) });
+  }
+
+  protected readonly aiOn = inject(AiService).enabled();
+  private readonly dialogs = inject(MatDialog);
+
+  protected aiMessage(): void {
+    const o = this.o();
+    AiDraftDialog.open(this.dialogs, {
+      kind: o.status === 'Ready' ? 'order_ready' : 'thank_you',
+      phone: o.whatsAppPhone,
+      facts: { customer: o.customerName, order_no: o.orderNo, balance_to_pay: o.balance.toFixed(2), due_date: o.dueDate, status: o.status }
+    });
   }
 
   protected whatsApp(): string {

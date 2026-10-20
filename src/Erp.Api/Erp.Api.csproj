@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BuildingBlocks\Erp.Infrastructure\Erp.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Ai\Erp.Modules.Ai\Erp.Modules.Ai.csproj" />
     <ProjectReference Include="..\Modules\Core\Erp.Modules.Core\Erp.Modules.Core.csproj" />
     <ProjectReference Include="..\Modules\Finance\Erp.Modules.Finance\Erp.Modules.Finance.csproj" />
     <ProjectReference Include="..\Modules\HR\Erp.Modules.HR\Erp.Modules.HR.csproj" />
