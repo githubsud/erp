@@ -53,7 +53,7 @@ interface Preset {
 const PRESETS: Preset[] = [
   { key: 'openai', kind: 'OpenAiCompatible', url: 'https://api.openai.com/v1/', model: 'gpt-4o-mini', vision: 'gpt-4o-mini' },
   { key: 'anthropic', kind: 'Anthropic', url: 'https://api.anthropic.com', model: 'claude-haiku-5-5', vision: 'claude-haiku-5-5' },
-  { key: 'gemini', kind: 'OpenAiCompatible', url: 'https://generativelanguage.googleapis.com/v1beta/openai/', model: 'gemini-flash-latest', vision: 'gemini-flash-latest' },
+  { key: 'gemini', kind: 'OpenAiCompatible', url: 'https://generativelanguage.googleapis.com/v1beta/openai/', model: 'gemini-3.5-flash', vision: 'gemini-3.5-flash' },
   { key: 'groq', kind: 'OpenAiCompatible', url: 'https://api.groq.com/openai/v1/', model: 'llama-3.3-70b-versatile', vision: '' },
   { key: 'openrouter', kind: 'OpenAiCompatible', url: 'https://openrouter.ai/api/v1/', model: 'openrouter/auto', vision: '' },
   { key: 'deepseek', kind: 'OpenAiCompatible', url: 'https://api.deepseek.com/v1/', model: 'deepseek-chat', vision: '' },
