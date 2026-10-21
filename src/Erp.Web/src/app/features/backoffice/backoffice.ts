@@ -110,6 +110,7 @@ export class BackOfficeShell {
   protected readonly items = [
     { icon: 'space_dashboard', label: 'bo.nav.dashboard', link: '/backoffice', exact: true },
     { icon: 'storefront', label: 'bo.nav.customers', link: '/backoffice/customers', exact: false },
+    { icon: 'support_agent', label: 'help.nav', link: '/backoffice/support', exact: false },
     { icon: 'receipt_long', label: 'bo.nav.invoices', link: '/backoffice/invoices', exact: false },
     { icon: 'sell', label: 'bo.nav.plans', link: '/backoffice/plans', exact: false },
     { icon: 'auto_awesome', label: 'bo.nav.ai', link: '/backoffice/ai', exact: false },
@@ -651,6 +652,8 @@ export class BackOfficeInvoicesPage implements OnInit {
           <div class="form-grid">
             <mat-form-field><mat-label>{{ 'bo.cycle.Monthly' | t }}</mat-label><input matInput type="number" dir="ltr" [formControl]="price(p, 'monthly')" /></mat-form-field>
             <mat-form-field><mat-label>{{ 'bo.cycle.Annual' | t }}</mat-label><input matInput type="number" dir="ltr" [formControl]="price(p, 'annual')" /></mat-form-field>
+            <mat-form-field><mat-label>{{ 'help.responseHours' | t }}</mat-label><input matInput type="number" min="1" max="720" dir="ltr" [formControl]="price(p, 'response')" />
+              <mat-hint>{{ 'help.responseHoursHint' | t }}</mat-hint></mat-form-field>
           </div>
           <div class="modules">
             @for (m of modules(); track m.code) {
@@ -683,9 +686,10 @@ export class BackOfficePlansPage implements OnInit {
     this.bo.get<BoPlan[]>('plans').subscribe((p) => this.plans.set(p));
   }
 
-  protected price(p: BoPlan, kind: 'monthly' | 'annual'): FormControl<number> {
+  protected price(p: BoPlan, kind: 'monthly' | 'annual' | 'response'): FormControl<number> {
     const key = `${p.id}:${kind}`;
-    if (!this.prices.has(key)) this.prices.set(key, new FormControl(kind === 'monthly' ? p.monthlyPrice : p.annualPrice, { nonNullable: true }));
+    const value = kind === 'monthly' ? p.monthlyPrice : kind === 'annual' ? p.annualPrice : p.supportResponseHours;
+    if (!this.prices.has(key)) this.prices.set(key, new FormControl(value, { nonNullable: true }));
     return this.prices.get(key)!;
   }
 
@@ -696,7 +700,8 @@ export class BackOfficePlansPage implements OnInit {
   protected save(p: BoPlan): void {
     this.bo.put(`plans/${p.id}`, {
       code: p.code, nameEn: p.nameEn, nameAr: p.nameAr, monthlyPrice: Number(this.price(p, 'monthly').value), annualPrice: Number(this.price(p, 'annual').value),
-      modules: p.modules, maxUsers: p.maxUsers, maxEmployees: p.maxEmployees, isActive: p.isActive
+      modules: p.modules, maxUsers: p.maxUsers, maxEmployees: p.maxEmployees, isActive: p.isActive,
+      supportResponseHours: Number(this.price(p, 'response').value)
     }).subscribe({ next: () => this.notify.success(), error: (e) => this.notify.error(e) });
   }
 }

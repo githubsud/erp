@@ -36,6 +36,9 @@ public sealed class CoreModule : IModule
         services.AddScoped<Platform.ReportScheduleService>();
         services.AddScoped<Platform.PlatformAuthService>();
         services.AddScoped<Platform.BackOfficeService>();
+        services.AddScoped<Platform.SupportService>();
+        services.AddScoped<Erp.Infrastructure.Outbox.IOutboxHandler, Platform.SupportToAdminsEmailHandler>();
+        services.AddScoped<Erp.Infrastructure.Outbox.IOutboxHandler, Platform.SupportToCustomerEmailHandler>();
         services.AddSingleton<IPasswordHasher<Platform.PlatformAdmin>, PasswordHasher<Platform.PlatformAdmin>>();
         services.AddSingleton<Platform.BillingJob>();
         if (configuration.GetValue("Jobs:Billing:Enabled", true))
@@ -55,5 +58,6 @@ public sealed class CoreModule : IModule
         Platform.ReportScheduleEndpoints.Map(app);
         Platform.DashboardEndpoints.Map(app);
         Platform.BackOfficeEndpoints.Map(app);
+        Platform.SupportEndpoints.Map(app);
     }
 }

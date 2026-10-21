@@ -40,6 +40,10 @@ public sealed class Plan : Entity
     public int? MaxUsers { get; set; }
     public int? MaxEmployees { get; set; }
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Hours within which a support request gets its first answer.</summary>
+    public int SupportResponseHours { get; set; } = 24;
+
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? UpdatedAt { get; set; }
 }

@@ -46,10 +46,10 @@ public sealed record ManualInvoiceRequest(string Description, decimal Amount, Da
 public sealed record PaymentRequest(decimal Amount, DateOnly PaidOn, PaymentMethod Method, string? Reference, Guid? InvoiceId, string? Notes);
 
 public sealed record PlanRequest(string Code, string NameEn, string NameAr, decimal MonthlyPrice, decimal AnnualPrice, IReadOnlyList<string> Modules,
-    int? MaxUsers, int? MaxEmployees, bool IsActive = true);
+    int? MaxUsers, int? MaxEmployees, bool IsActive = true, int SupportResponseHours = 24);
 
 public sealed record PlanDto(Guid Id, string Code, string NameEn, string NameAr, decimal MonthlyPrice, decimal AnnualPrice, IReadOnlyList<string> Modules,
-    int? MaxUsers, int? MaxEmployees, bool IsActive, int Customers);
+    int? MaxUsers, int? MaxEmployees, bool IsActive, int Customers, int SupportResponseHours);
 
 public sealed record CustomerRow(Guid Id, string Code, string NameEn, string NameAr, string TenantStatus, string? BusinessType, string? ContactName,
     string? ContactPhone, string? Area, string? PlanCode, string? SubscriptionStatus, string? BillingCycle, decimal Price, decimal MonthlyValue,
@@ -440,12 +440,14 @@ internal sealed class BackOfficeService(ErpDbContext db, IClock clock, IServiceS
             .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count, ct);
         return (await db.Set<Plan>().AsNoTracking().OrderBy(p => p.MonthlyPrice).ToListAsync(ct))
             .Select(p => new PlanDto(p.Id, p.Code, p.NameEn, p.NameAr, p.MonthlyPrice, p.AnnualPrice, ModuleCodes.Parse(p.Modules).ToList(), p.MaxUsers,
-                p.MaxEmployees, p.IsActive, counts.GetValueOrDefault(p.Id))).ToList();
+                p.MaxEmployees, p.IsActive, counts.GetValueOrDefault(p.Id), p.SupportResponseHours)).ToList();
     }
 
     public async Task<Guid> SavePlanAsync(Guid? id, PlanRequest r, CancellationToken ct)
     {
         if (r.MonthlyPrice < 0 || r.AnnualPrice < 0) throw new BusinessRuleException("platform.plan_price", "Prices cannot be negative.", "لا يمكن أن تكون الأسعار سالبة.");
+        if (r.SupportResponseHours is < 1 or > 720)
+            throw new BusinessRuleException("platform.plan_response", "Support response time must be 1 to 720 hours.", "يجب أن يكون وقت الرد على الدعم من 1 إلى 720 ساعة.");
         var modules = string.Join(',', ModuleCodes.Optional.Where(ModuleCodes.Parse(string.Join(',', r.Modules)).Contains));
         var plan = id is null
             ? (Plan)db.Add(new Plan { Code = Guard.Required(r.Code, "code").Trim().ToUpperInvariant(), NameEn = r.NameEn, NameAr = r.NameAr, Modules = modules,
@@ -458,6 +460,7 @@ internal sealed class BackOfficeService(ErpDbContext db, IClock clock, IServiceS
         plan.MaxUsers = r.MaxUsers;
         plan.MaxEmployees = r.MaxEmployees;
         plan.IsActive = r.IsActive;
+        plan.SupportResponseHours = r.SupportResponseHours;
         plan.UpdatedAt = clock.UtcNow;
         await db.SaveChangesAsync(ct);
         return plan.Id;
@@ -532,6 +535,7 @@ internal sealed class BillingJob(IServiceScopeFactory scopes, IClock clock, ILog
                 {
                     await using var scope = scopes.CreateAsyncScope();
                     await scope.ServiceProvider.GetRequiredService<BackOfficeService>().RunBillingAsync(null, stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<SupportService>().CloseSolvedAsync(stoppingToken);
                     _lastRun = clock.Today;
                 }
             }

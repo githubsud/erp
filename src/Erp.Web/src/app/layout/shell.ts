@@ -1,15 +1,18 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { Component, computed, inject } from '@angular/core';
+import { Component, DestroyRef, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { MatBadgeModule } from '@angular/material/badge';
+import { MatDialog } from '@angular/material/dialog';
 import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 import { ModulesService } from '../core/modules.service';
 import { I18nService } from '../core/i18n/i18n.service';
 import { PwaService } from '../core/pwa.service';
+import { SupportService } from '../core/support.service';
 import { SHARED } from '../shared/shared';
 
 interface NavItem {
@@ -128,7 +131,7 @@ const NAV: NavGroup[] = [
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatSidenavModule, MatToolbarModule, MatListModule, ...SHARED],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatSidenavModule, MatToolbarModule, MatListModule, MatBadgeModule, ...SHARED],
   template: `
     <mat-sidenav-container class="shell">
       <mat-sidenav #drawer [mode]="handset() ? 'over' : 'side'" [opened]="!handset()" [position]="'start'" class="drawer">
@@ -167,6 +170,14 @@ const NAV: NavGroup[] = [
             <mat-icon>translate</mat-icon>
             {{ 'app.language' | t }}
           </button>
+          <button mat-icon-button [matMenuTriggerFor]="helpMenu" [matTooltip]="'help.title' | t" [attr.aria-label]="'help.title' | t">
+            <mat-icon [matBadge]="support.unread() || null" matBadgeSize="small" matBadgeColor="warn">support_agent</mat-icon>
+          </button>
+          <mat-menu #helpMenu="matMenu">
+            <button mat-menu-item (click)="newRequest()"><mat-icon>add_comment</mat-icon><span>{{ 'help.new' | t }}</span></button>
+            <a mat-menu-item routerLink="/support"><mat-icon>forum</mat-icon><span>{{ 'help.mine' | t }}</span>
+              @if (support.unread()) { <span class="chip ok">{{ support.unread() }}</span> }</a>
+          </mat-menu>
           <button mat-icon-button [matMenuTriggerFor]="userMenu"><mat-icon>account_circle</mat-icon></button>
           <mat-menu #userMenu="matMenu">
             <div class="menu-user">{{ auth.user()?.email ?? auth.user()?.username }}</div>
@@ -230,7 +241,17 @@ export class Shell {
     })).filter((g) => g.items.length > 0);
   });
 
+  protected readonly support = inject(SupportService);
+  private readonly dialog = inject(MatDialog);
+  private readonly router = inject(Router);
+
   constructor() {
     this.modules.load();
+    this.support.watch(inject(DestroyRef));
+  }
+
+  /** The form loads on first use, keeping it out of the start-up bundle. */
+  protected newRequest(): void {
+    void import('../features/support/support').then((m) => m.openNewRequest(this.dialog, this.router));
   }
 }

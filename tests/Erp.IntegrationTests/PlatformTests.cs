@@ -9,7 +9,7 @@ public sealed class PlatformTests(ErpFixture fixture)
     private static readonly string[] TenantSchemas = ["core", "fin", "hr", "inv", "pur", "sal", "ai"];
     private static readonly string[] PlatformTables =
         ["core.tenant", "core.platform_admin", "core.plan", "core.subscription", "core.subscription_invoice", "core.subscription_payment",
-         "ai.provider", "ai.usage_day"];
+         "core.support_ticket", "core.support_message", "core.support_attachment", "core.support_saved_reply", "ai.provider", "ai.usage_day"];
 
     [Fact]
     public async Task Every_tenant_table_follows_the_schema_conventions()

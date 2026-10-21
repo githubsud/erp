@@ -116,6 +116,7 @@ export interface BoPlan {
   maxEmployees: number | null;
   isActive: boolean;
   customers: number;
+  supportResponseHours: number;
 }
 
 export interface BoSummary {
@@ -192,6 +193,15 @@ export class BackOfficeService {
 
   put<T>(path: string, body: unknown): Observable<T> {
     return this.http.put<T>(this.url(path), body);
+  }
+
+  delete<T>(path: string): Observable<T> {
+    return this.http.delete<T>(this.url(path));
+  }
+
+  /** A file the back-office may see (support attachments), as a blob for opening in a new tab. */
+  blob(path: string): Observable<Blob> {
+    return this.http.get(this.url(path), { responseType: 'blob' });
   }
 
   private restore(): BackOfficeSession | null {

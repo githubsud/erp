@@ -18,7 +18,9 @@ export const routes: Routes = [
       { path: 'invoices', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeInvoicesPage) },
       { path: 'plans', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficePlansPage) },
       { path: 'admins', loadComponent: () => import('./features/backoffice/backoffice').then((m) => m.BackOfficeAdminsPage) },
-      { path: 'ai', loadComponent: () => import('./features/backoffice/backoffice-ai').then((m) => m.BackOfficeAiPage) }
+      { path: 'ai', loadComponent: () => import('./features/backoffice/backoffice-ai').then((m) => m.BackOfficeAiPage) },
+      { path: 'support', loadComponent: () => import('./features/backoffice/backoffice-support').then((m) => m.BackOfficeSupportPage) },
+      { path: 'support/:id', loadComponent: () => import('./features/backoffice/backoffice-support').then((m) => m.BackOfficeTicketPage) }
     ]
   },
   {
@@ -39,6 +41,8 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.DashboardPage) },
+      { path: 'support', loadComponent: () => import('./features/support/support').then((m) => m.SupportListPage) },
+      { path: 'support/:id', loadComponent: () => import('./features/support/support').then((m) => m.SupportTicketPage) },
       { path: 'approvals', loadComponent: () => import('./features/approvals/approvals').then((m) => m.ApprovalsPage) },
       {
         path: 'settings/approvals',
