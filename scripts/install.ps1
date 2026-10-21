@@ -216,6 +216,8 @@ icacls $appDir /grant "NT SERVICE\${ApiService}:(OI)(CI)RX" /T /Q | Out-Null
 icacls $configDir /grant "NT SERVICE\${ApiService}:(OI)(CI)R" /Q | Out-Null
 if (-not [Diagnostics.EventLog]::SourceExists('Erp.Api')) { New-EventLog -LogName Application -Source 'Erp.Api' }
 
+# A copy started by hand (development, dotnet run) would hold the port.
+Get-Process -Name 'Erp.Api' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Service $ApiService
 Write-Host 'Waiting for the ERP to start (the first start prepares the database)...'
 Wait-Until { (Invoke-WebRequest -UseBasicParsing "http://localhost:$Port/health" -TimeoutSec 5).StatusCode -eq 200 } 240 'The ERP'
