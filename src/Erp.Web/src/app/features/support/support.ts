@@ -1,7 +1,9 @@
-import { Component, OnInit, inject, input, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { Router } from '@angular/router';
+import { searchHelp } from '../../core/help-articles';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { NotifyService } from '../../core/notify.service';
 import {
@@ -29,6 +31,14 @@ export const STATUS_CHIP: Record<string, string> = { New: 'warn', InProgress: ''
         }
       </div>
       <mat-form-field class="full"><mat-label>{{ 'help.subject' | t }}</mat-label><input matInput formControlName="subject" maxlength="200" dir="auto" /></mat-form-field>
+      @if (suggested().length) {
+        <div class="suggest">
+          <span class="secondary small">{{ 'help.maybe' | t }}</span>
+          @for (a of suggested(); track a.id) {
+            <a mat-stroked-button [routerLink]="['/help', a.id]" target="_blank"><mat-icon>{{ a.icon }}</mat-icon> {{ a | bi:'title' }}</a>
+          }
+        </div>
+      }
       <mat-form-field class="full"><mat-label>{{ 'help.body' | t }}</mat-label>
         <textarea matInput formControlName="body" rows="6" dir="auto" [placeholder]="'help.bodyPlaceholder.' + form.controls.type.value | t"></textarea></mat-form-field>
       <mat-form-field><mat-label>{{ 'help.priority' | t }}</mat-label>
@@ -57,6 +67,7 @@ export const STATUS_CHIP: Record<string, string> = { New: 'warn', InProgress: ''
     .full { width: 100%; }
     .attach { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .x { border: none; background: none; cursor: pointer; font-size: 16px; padding: 0 2px; }
+    .suggest { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -8px 0 12px; }
   `
 })
 export class NewRequestDialog {
@@ -77,6 +88,10 @@ export class NewRequestDialog {
     subject: ['', [Validators.required, Validators.maxLength(200)]],
     body: ['', Validators.required]
   });
+
+  private readonly subjectText = toSignal(this.form.controls.subject.valueChanges, { initialValue: '' });
+  /** Articles that may already answer it, from the words of the subject. */
+  protected readonly suggested = computed(() => searchHelp(this.subjectText()));
 
   protected pick(input: HTMLInputElement): void {
     const next = [...this.files(), ...Array.from(input.files ?? [])];

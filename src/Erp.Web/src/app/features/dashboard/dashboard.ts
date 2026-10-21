@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth.service';
 import { daysBetween, toIso, todayIso } from '../../core/dates';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { ExpiringDocument, GratuityRow, LeaveRequest, Paged, Employee, PayrollRun } from '../../core/models';
+import { GettingStartedCard } from '../../shared/getting-started';
 import { SHARED } from '../../shared/shared';
 
 interface DashboardTile {
@@ -24,7 +25,7 @@ interface DashboardTile {
 
 @Component({
   selector: 'app-dashboard',
-  imports: [...SHARED],
+  imports: [...SHARED, GettingStartedCard],
   template: `
     <div class="page-header">
       <h1>{{ 'dashboard.welcome' | t: { name: (auth.user() | bi:'displayName') } }}</h1>
@@ -39,13 +40,7 @@ interface DashboardTile {
         <a mat-button routerLink="/settings/modules">{{ 'nav.modules' | t }}</a>
       </mat-card>
     }
-    @if (suggestSetup()) {
-      <mat-card appearance="outlined" class="setup-banner">
-        <mat-icon>rocket_launch</mat-icon>
-        <span>{{ 'setup.banner' | t }}</span>
-        <a mat-flat-button routerLink="/settings/setup">{{ 'setup.start' | t }}</a>
-      </mat-card>
-    }
+    <app-getting-started />
     @if (aiSummary(); as s) {
       <mat-card appearance="outlined" class="ai-summary">
         <div class="ai-head"><mat-icon>auto_awesome</mat-icon> <b>{{ 'ai.summary.title' | t }}</b> <span class="ltr secondary">{{ s.date | d }}</span>
@@ -181,8 +176,6 @@ export class DashboardPage {
   protected readonly gratuityTotal = signal(0);
   protected readonly docColumns = ['owner', 'type', 'expiry', 'status'];
   protected readonly approvals = signal(0);
-  /** An owner whose company has no items yet is offered the quick-setup wizard. */
-  protected readonly suggestSetup = signal(false);
   protected readonly aiSummary = signal<AiSummary | null>(null);
   /** Set when a screen of a switched-off module was opened by its address. */
   protected readonly moduleOff = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('off'));
@@ -204,8 +197,6 @@ export class DashboardPage {
     this.api.get<unknown[]>('approvals/inbox').pipe(catchError(() => of<unknown[]>([]))).subscribe((a) => this.approvals.set(a.length));
     const ai = inject(AiService);
     if (ai.enabled('ai.summary:view')) ai.latestSummary(this.i18n.lang()).pipe(catchError(() => of(null))).subscribe((x) => this.aiSummary.set(x));
-    if (this.auth.can('core.company:manage'))
-      this.api.get<Paged<unknown>>('inventory/items', { pageSize: 1 }).pipe(catchError(() => of(null))).subscribe((p) => this.suggestSetup.set(p?.total === 0));
     const canHr = this.auth.can('hr.employees:read');
     const canPayroll = this.auth.can('hr.payroll:read');
     const none = <T>(value: T) => of(value);

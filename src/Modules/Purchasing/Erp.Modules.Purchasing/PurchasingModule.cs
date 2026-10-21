@@ -16,6 +16,7 @@ public sealed class PurchasingModule : IModule
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<SupplierService>();
+        services.AddScoped<SupplierImportService>();
         services.AddScoped<PurchaseOrderService>();
         services.AddScoped<IApprovalDocument, PurchaseOrderApproval>();
         services.AddScoped<PurchaseRequestService>();

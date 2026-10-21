@@ -22,6 +22,8 @@ export class PwaService {
 
   readonly online = signal(navigator.onLine);
   readonly canInstall = signal(false);
+  /** Running as the installed app (from the home screen), not in a browser tab. */
+  readonly standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
   /** iPhone and iPad have no install prompt: the user adds the app from the Share menu. */
   readonly iosHint = signal(false);
 
@@ -37,8 +39,7 @@ export class PwaService {
       this.installPrompt = null;
       this.canInstall.set(false);
     });
-    const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
-    this.iosHint.set(!standalone && /iPhone|iPad|iPod/.test(navigator.userAgent));
+    this.iosHint.set(!this.standalone && /iPhone|iPad|iPod/.test(navigator.userAgent));
 
     if (!this.updates.isEnabled) return;
     this.updates.versionUpdates.pipe(filter((e) => e.type === 'VERSION_READY')).subscribe(() =>

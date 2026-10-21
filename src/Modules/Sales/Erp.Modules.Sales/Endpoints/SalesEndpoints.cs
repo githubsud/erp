@@ -1,3 +1,4 @@
+using Erp.Infrastructure.Import;
 using Erp.Infrastructure.Persistence;
 using Erp.Infrastructure.Web;
 using Erp.Modules.Finance.Contracts;
@@ -128,6 +129,15 @@ internal static class SalesEndpoints
         g.MapGet("/customers/{id:guid}", async (Guid id, ErpDbContext db, ITenantContext t, CancellationToken ct) =>
             ToDto(await db.Set<Customer>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == id && c.CompanyId == t.RequireCompanyId(), ct)
                   ?? throw new NotFoundException("Customer", id))).RequirePermission(SalesPermissions.CustomersRead);
+        g.MapGet("/imports/customers/template", () => Results.File(CustomerImportService.Template(), ExcelImport.ContentType, "customers_import_template.xlsx"))
+            .RequirePermission(SalesPermissions.CustomersManage);
+        g.MapPost("/imports/customers", async (IFormFile file, CustomerImportService s, CancellationToken ct, bool dryRun = true) =>
+        {
+            if (file.Length > ExcelImport.MaxFileBytes)
+                throw new BusinessRuleException("import.too_large", "The file is larger than 10 MB.", "حجم الملف أكبر من 10 ميغابايت.");
+            await using var stream = file.OpenReadStream();
+            return await s.ImportAsync(stream, dryRun, ct);
+        }).RequirePermission(SalesPermissions.CustomersManage).DisableAntiforgery();
         g.MapPost("/customers", async (CustomerRequest r, CustomerService s, CancellationToken ct) => ToDto(await s.SaveAsync(null, r, ct)))
             .RequirePermission(SalesPermissions.CustomersManage);
         g.MapPut("/customers/{id:guid}", async (Guid id, CustomerRequest r, CustomerService s, CancellationToken ct) => ToDto(await s.SaveAsync(id, r, ct)))

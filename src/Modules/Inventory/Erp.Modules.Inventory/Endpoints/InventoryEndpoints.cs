@@ -1,3 +1,4 @@
+using Erp.Infrastructure.Import;
 using Erp.Infrastructure.Persistence;
 using Erp.Infrastructure.Web;
 using Erp.Modules.Finance.Contracts;
@@ -95,6 +96,15 @@ internal static class InventoryEndpoints
             .RequirePermission(InventoryPermissions.SettingsManage);
 
         g.MapGet("/items", ListItems).RequirePermission(InventoryPermissions.ItemsRead);
+        g.MapGet("/imports/items/template", () => Results.File(ItemImportService.Template(), ExcelImport.ContentType, "items_import_template.xlsx"))
+            .RequirePermission(InventoryPermissions.ItemsManage);
+        g.MapPost("/imports/items", async (IFormFile file, ItemImportService s, CancellationToken ct, bool dryRun = true) =>
+        {
+            if (file.Length > ExcelImport.MaxFileBytes)
+                throw new BusinessRuleException("import.too_large", "The file is larger than 10 MB.", "حجم الملف أكبر من 10 ميغابايت.");
+            await using var stream = file.OpenReadStream();
+            return await s.ImportAsync(stream, dryRun, ct);
+        }).RequirePermission(InventoryPermissions.ItemsManage).DisableAntiforgery();
         g.MapGet("/items/{id:guid}", async (Guid id, ErpDbContext db, ITenantContext t, CancellationToken ct) =>
             await ItemsQuery(db, t, q => q.Where(x => x.Id == id)).SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Item", id))
             .RequirePermission(InventoryPermissions.ItemsRead);

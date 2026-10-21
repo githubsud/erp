@@ -12,6 +12,7 @@
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="QuestPDF" />
     <PackageReference Include="MailKit" />
+    <PackageReference Include="ClosedXML" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Erp.SharedKernel\Erp.SharedKernel.csproj" />

@@ -41,6 +41,8 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.DashboardPage) },
+      { path: 'help', loadComponent: () => import('./features/help/help').then((m) => m.HelpPage) },
+      { path: 'help/:id', loadComponent: () => import('./features/help/help').then((m) => m.HelpArticlePage) },
       { path: 'support', loadComponent: () => import('./features/support/support').then((m) => m.SupportListPage) },
       { path: 'support/:id', loadComponent: () => import('./features/support/support').then((m) => m.SupportTicketPage) },
       { path: 'approvals', loadComponent: () => import('./features/approvals/approvals').then((m) => m.ApprovalsPage) },

@@ -10,6 +10,7 @@ import { AuthService } from '../../core/auth.service';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import { Item, Master } from '../../core/trade.models';
+import { IMPORTS, openImport } from '../../shared/import-dialog';
 import { SHARED } from '../../shared/shared';
 
 /** Create or edit an item. Closes with the saved item. */
@@ -158,6 +159,7 @@ export class ItemDialog {
       <h1>{{ 'item.title' | t }}</h1>
       <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('inv.items:manage')) {
+        <button mat-stroked-button (click)="importExcel()"><mat-icon>upload_file</mat-icon> {{ 'xl.button' | t }}</button>
         <button mat-flat-button (click)="create()"><mat-icon>add</mat-icon> {{ 'item.new' | t }}</button>
       }
     </div>
@@ -255,6 +257,10 @@ export class ItemsPage {
       .open(ItemDialog, { data: {} })
       .afterClosed()
       .subscribe((item?: Item) => item && void this.router.navigate(['/inventory/items', item.id]));
+  }
+
+  protected importExcel(): void {
+    openImport(this.dialog, IMPORTS.items).subscribe((done) => done && this.load());
   }
 
   private load(): void {

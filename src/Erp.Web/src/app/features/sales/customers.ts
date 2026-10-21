@@ -12,6 +12,7 @@ import { NotifyService } from '../../core/notify.service';
 import { SalesApi } from '../../core/sales.api';
 import { Customer, CustomerExposure, PriceList, SalesInvoice, Statement } from '../../core/sales.models';
 import { NATIONALITIES, SHARED } from '../../shared/shared';
+import { IMPORTS, openImport } from '../../shared/import-dialog';
 import { salesInvoiceChip } from './invoices';
 
 @Component({
@@ -157,6 +158,7 @@ export class CustomerDialog {
       <h1>{{ 'cust.title' | t }}</h1>
       <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('sal.customers:manage')) {
+        <button mat-stroked-button (click)="importExcel()"><mat-icon>upload_file</mat-icon> {{ 'xl.button' | t }}</button>
         <a mat-stroked-button routerLink="/sales/price-lists"><mat-icon>sell</mat-icon> {{ 'nav.priceLists' | t }}</a>
         <button mat-flat-button (click)="edit()"><mat-icon>add</mat-icon> {{ 'cust.new' | t }}</button>
       }
@@ -227,6 +229,10 @@ export class CustomersPage {
       .open(CustomerDialog, { data: {}, width: '720px' })
       .afterClosed()
       .subscribe((saved?: Customer) => saved && void this.router.navigate(['/sales/customers', saved.id]));
+  }
+
+  protected importExcel(): void {
+    openImport(this.dialog, IMPORTS.customers).subscribe((done) => done && this.load());
   }
 
   private load(): void {

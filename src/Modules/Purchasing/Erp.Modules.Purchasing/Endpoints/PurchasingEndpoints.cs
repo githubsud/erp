@@ -1,3 +1,4 @@
+using Erp.Infrastructure.Import;
 using Erp.Infrastructure.Persistence;
 using Erp.Infrastructure.Web;
 using Erp.Modules.Finance.Contracts;
@@ -116,6 +117,15 @@ internal static class PurchasingEndpoints
         g.MapGet("/suppliers/{id:guid}", async (Guid id, ErpDbContext db, ITenantContext t, IInventoryQueries inv, CancellationToken ct) =>
             ToDto(await db.Set<Supplier>().AsNoTracking().SingleOrDefaultAsync(s => s.Id == id && s.CompanyId == t.RequireCompanyId(), ct)
                   ?? throw new NotFoundException("Supplier", id))).RequirePermission(PurchasingPermissions.SuppliersRead);
+        g.MapGet("/imports/suppliers/template", () => Results.File(SupplierImportService.Template(), ExcelImport.ContentType, "suppliers_import_template.xlsx"))
+            .RequirePermission(PurchasingPermissions.SuppliersManage);
+        g.MapPost("/imports/suppliers", async (IFormFile file, SupplierImportService s, CancellationToken ct, bool dryRun = true) =>
+        {
+            if (file.Length > ExcelImport.MaxFileBytes)
+                throw new BusinessRuleException("import.too_large", "The file is larger than 10 MB.", "حجم الملف أكبر من 10 ميغابايت.");
+            await using var stream = file.OpenReadStream();
+            return await s.ImportAsync(stream, dryRun, ct);
+        }).RequirePermission(PurchasingPermissions.SuppliersManage).DisableAntiforgery();
         g.MapPost("/suppliers", async (SupplierRequest r, SupplierService s, CancellationToken ct) => ToDto(await s.SaveAsync(null, r, ct)))
             .RequirePermission(PurchasingPermissions.SuppliersManage);
         g.MapPut("/suppliers/{id:guid}", async (Guid id, SupplierRequest r, SupplierService s, CancellationToken ct) => ToDto(await s.SaveAsync(id, r, ct)))

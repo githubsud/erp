@@ -24,6 +24,7 @@ public sealed class HrModule : IModule
     {
         services.AddScoped<HrSettingsProvider>();
         services.AddScoped<EmployeeService>();
+        services.AddScoped<IGettingStartedProvider, People.HrGettingStarted>();
         services.AddScoped<ContractService>();
         services.AddScoped<LeaveService>();
         services.AddScoped<PayrollInputService>();

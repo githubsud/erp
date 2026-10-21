@@ -9,6 +9,7 @@ import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import { CURRENCIES, Supplier, WHT_CATEGORIES, WhtCategory } from '../../core/trade.models';
 import { NATIONALITIES, SHARED } from '../../shared/shared';
+import { IMPORTS, openImport } from '../../shared/import-dialog';
 
 @Component({
   selector: 'app-supplier-dialog',
@@ -140,6 +141,7 @@ export class SupplierDialog {
       <h1>{{ 'sup.title' | t }}</h1>
       <button mat-stroked-button (click)="exportCsv()"><mat-icon>download</mat-icon> {{ 'export.csv' | t }}</button>
       @if (auth.can('pur.suppliers:manage')) {
+        <button mat-stroked-button (click)="importExcel()"><mat-icon>upload_file</mat-icon> {{ 'xl.button' | t }}</button>
         <button mat-flat-button (click)="edit()"><mat-icon>add</mat-icon> {{ 'sup.new' | t }}</button>
       }
     </div>
@@ -209,6 +211,10 @@ export class SuppliersPage {
       .open(SupplierDialog, { data: { supplier } })
       .afterClosed()
       .subscribe((saved?: Supplier) => saved && this.load());
+  }
+
+  protected importExcel(): void {
+    openImport(this.dialog, IMPORTS.suppliers).subscribe((done) => done && this.load());
   }
 
   private load(): void {

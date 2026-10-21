@@ -37,6 +37,7 @@ public sealed class CoreModule : IModule
         services.AddScoped<Platform.PlatformAuthService>();
         services.AddScoped<Platform.BackOfficeService>();
         services.AddScoped<Platform.SupportService>();
+        services.AddScoped<IGettingStartedProvider, Platform.CoreGettingStarted>();
         services.AddScoped<Erp.Infrastructure.Outbox.IOutboxHandler, Platform.SupportToAdminsEmailHandler>();
         services.AddScoped<Erp.Infrastructure.Outbox.IOutboxHandler, Platform.SupportToCustomerEmailHandler>();
         services.AddSingleton<IPasswordHasher<Platform.PlatformAdmin>, PasswordHasher<Platform.PlatformAdmin>>();
@@ -59,5 +60,6 @@ public sealed class CoreModule : IModule
         Platform.DashboardEndpoints.Map(app);
         Platform.BackOfficeEndpoints.Map(app);
         Platform.SupportEndpoints.Map(app);
+        Platform.GettingStartedEndpoints.Map(app);
     }
 }

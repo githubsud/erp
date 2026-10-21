@@ -23,10 +23,12 @@ public sealed class InventoryModule : IModule
         services.AddScoped<Documents.KitService>();
         services.AddScoped<IScheduledReport, Endpoints.ReorderScheduledReport>();
         services.AddScoped<IDashboardProvider, Endpoints.InventoryDashboard>();
+        services.AddScoped<IGettingStartedProvider, Endpoints.InventoryGettingStarted>();
         services.AddScoped<IAiTool, Endpoints.LowStockAiTool>();
         services.AddScoped<Endpoints.SeasonalDemandService>();
         services.AddScoped<IAiTool, Endpoints.SeasonalDemandAiTool>();
         services.AddScoped<StockAdjustmentService>();
+        services.AddScoped<ItemImportService>();
         services.AddScoped<StockTransferService>();
         services.AddScoped<StockCountService>();
         services.AddScoped<ITenantProvisioner, InventoryProvisioner>();

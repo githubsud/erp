@@ -8,6 +8,7 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
+import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { ModulesService } from '../core/modules.service';
 import { I18nService } from '../core/i18n/i18n.service';
@@ -177,6 +178,10 @@ const NAV: NavGroup[] = [
             <button mat-menu-item (click)="newRequest()"><mat-icon>add_comment</mat-icon><span>{{ 'help.new' | t }}</span></button>
             <a mat-menu-item routerLink="/support"><mat-icon>forum</mat-icon><span>{{ 'help.mine' | t }}</span>
               @if (support.unread()) { <span class="chip ok">{{ support.unread() }}</span> }</a>
+            <a mat-menu-item routerLink="/help"><mat-icon>menu_book</mat-icon><span>{{ 'help.articles' | t }}</span></a>
+            @if (auth.can('core.company:manage')) {
+              <button mat-menu-item (click)="showGettingStarted()"><mat-icon>flag</mat-icon><span>{{ 'gs.title' | t }}</span></button>
+            }
           </mat-menu>
           <button mat-icon-button [matMenuTriggerFor]="userMenu"><mat-icon>account_circle</mat-icon></button>
           <mat-menu #userMenu="matMenu">
@@ -243,11 +248,17 @@ export class Shell {
 
   protected readonly support = inject(SupportService);
   private readonly dialog = inject(MatDialog);
+  private readonly api = inject(ApiService);
   private readonly router = inject(Router);
 
   constructor() {
     this.modules.load();
     this.support.watch(inject(DestroyRef));
+  }
+
+  /** Brings back the dashboard's first-day list after the owner hid it. */
+  protected showGettingStarted(): void {
+    this.api.post('core/getting-started/show').subscribe(() => void this.router.navigateByUrl('/dashboard?gs=' + Date.now()));
   }
 
   /** The form loads on first use, keeping it out of the start-up bundle. */

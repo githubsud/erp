@@ -16,6 +16,7 @@ public sealed class SalesModule : IModule
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerImportService>();
         services.AddScoped<CreditControlService>();
         services.AddScoped<QuotationService>();
         services.AddScoped<SalesOrderService>();
@@ -33,6 +34,7 @@ public sealed class SalesModule : IModule
         services.AddScoped<Workshop.WorkshopService>();
         services.AddScoped<IScheduledReport, Reports.CustomerAgingScheduledReport>();
         services.AddScoped<IDashboardProvider, Reports.SalesDashboard>();
+        services.AddScoped<IGettingStartedProvider, Pos.PosGettingStarted>();
         services.AddScoped<IDashboardProvider, Reports.TodayDashboard>();
         services.AddScoped<IAiTool, Reports.CustomerBalancesAiTool>();
         services.AddScoped<IAiTool, Reports.SalesSummaryAiTool>();
