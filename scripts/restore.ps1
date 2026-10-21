@@ -7,7 +7,7 @@
   backups\before-restore-<time>.dump (skip with -NoSafetyCopy only when the database is broken), checks the backup's
   SHA-256 checksum, stops the API, replaces the database and starts the API again (-NoStart to leave it stopped).
 
-  The API must run with the same Encryption:FieldEncryptionKey as when the backup was made, or QID, passport, IBAN and
+  The API must run with the same Security:FieldEncryptionKey and Security:BlindIndexKey as when the backup was made, or QID, passport, IBAN and
   API keys cannot be read.
 
 .EXAMPLE

@@ -13,7 +13,7 @@
   -Install registers a Windows scheduled task that runs this script every night (with -Verify, and -CopyTo when given).
 
   IMPORTANT: QID, passport, IBAN and API keys are stored encrypted. A restore is only readable with the same
-  Encryption:FieldEncryptionKey the API uses. Keep a copy of that key somewhere safe and separate from the backups.
+  Security:FieldEncryptionKey and Security:BlindIndexKey the API uses. Keep a copy of those keys somewhere safe and separate from the backups.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\backup.ps1 -Verify

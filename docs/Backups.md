@@ -38,6 +38,6 @@ Everything entered after the backup was made is lost.
 
 ## Keep the encryption key
 
-QID and passport numbers, IBANs and AI keys are stored encrypted with `Encryption:FieldEncryptionKey`. A backup restored under a different key loads, but those fields cannot be read.
+QID and passport numbers, IBANs and AI keys are stored encrypted with `Security:FieldEncryptionKey` (and `Security:BlindIndexKey`, used to search by QID). A backup restored under a different key loads, but those fields cannot be read.
 
-Keep a copy of the production key away from the backups, for example in a password manager. Never put it in the same folder or on the same disk as the backups.
+Keep a copy of the production keys away from the backups, for example in a password manager. Never put it in the same folder or on the same disk as the backups.

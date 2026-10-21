@@ -67,6 +67,26 @@ if (app.Configuration.GetValue<bool>($"{DatabaseOptions.Section}:{nameof(Databas
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+
+// One computer in a shop (reached through Tailscale) serves the built web app too, so phones see one https address.
+// Web:Root is the `ng build` output; when it is missing the app is served elsewhere (ng serve, Cloudflare Pages).
+var webRoot = Path.GetFullPath(app.Configuration["Web:Root"] ?? "../Erp.Web/dist/erp-web/browser", app.Environment.ContentRootPath);
+var serveWeb = File.Exists(Path.Combine(webRoot, "index.html"));
+if (serveWeb)
+{
+    var files = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(webRoot);
+    app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = files });
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = files,
+        ServeUnknownFileTypes = false,
+        // Hashed bundles never change; the page and the service worker's files must be checked on every load or updates never arrive.
+        OnPrepareResponse = c => c.Context.Response.Headers.CacheControl = c.File.Name is "index.html" or "ngsw.json" or "ngsw-worker.js" or "manifest.webmanifest"
+            ? "no-cache" : "public, max-age=604800"
+    });
+}
+// Explicit, after the files: otherwise routing runs first, picks the index.html fallback and static files are skipped.
+app.UseRouting();
 app.UseCors();
 app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();
@@ -82,6 +102,10 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 foreach (var module in modules)
     module.MapEndpoints(app);
+// Deep links (/sales/pos) load the app; unknown /api addresses stay 404.
+if (serveWeb)
+    app.MapFallbackToFile("{*path:regex(^(?!api/|scalar|openapi).*$)}", "index.html",
+        new StaticFileOptions { FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(webRoot), OnPrepareResponse = c => c.Context.Response.Headers.CacheControl = "no-cache" });
 
 await app.RunAsync();
 return 0;
