@@ -37,7 +37,8 @@ internal sealed class AssistantService(AiGateway gateway, IEnumerable<IAiTool> t
         if (question.Length is 0 or > 1000)
             throw new BusinessRuleException("ai.question_length", "Write a question of up to 1000 characters.", "اكتب سؤالاً لا يزيد عن 1000 حرف.");
         var endpoint = await gateway.ResolveAsync(ct);
-        var filter = new PrivacyFilter(!endpoint.IsPrivate);
+        var isPrivate = endpoint.IsPrivate;
+        var filter = new PrivacyFilter(!isPrivate);
         var available = await AvailableToolsAsync(ct);
         var byName = available.ToDictionary(t => t.Name);
         var specs = available.Select(t => new AiToolSpec(t.Name, t.Description, t.ParametersSchema)).ToList();
@@ -60,8 +61,10 @@ internal sealed class AssistantService(AiGateway gateway, IEnumerable<IAiTool> t
         for (var round = 0; round < MaxRounds; round++)
         {
             var response = await gateway.CompleteAsync(endpoint, new AiRequest(system, messages, specs.Count > 0 ? specs : null), ct);
+            // Once a fallback answered, the next rounds go straight to it instead of waiting on the used-up provider again.
+            endpoint = response.AnsweredBy ?? endpoint;
             if (response.ToolCalls.Count == 0)
-                return new AskResponse(filter.Restore(response.Text?.Trim() ?? ""), used.Distinct().ToList(), endpoint.Name, endpoint.IsPrivate);
+                return new AskResponse(filter.Restore(response.Text?.Trim() ?? ""), used.Distinct().ToList(), endpoint.Name, isPrivate);
             messages.Add(AiMessage.Assistant(response.Text, response.ToolCalls));
             foreach (var call in response.ToolCalls)
             {
@@ -71,7 +74,7 @@ internal sealed class AssistantService(AiGateway gateway, IEnumerable<IAiTool> t
         }
         // Still asking for data after several rounds: make it answer with what it has.
         var last = await gateway.CompleteAsync(endpoint, new AiRequest(system, messages), ct);
-        return new AskResponse(filter.Restore(last.Text?.Trim() ?? ""), used.Distinct().ToList(), endpoint.Name, endpoint.IsPrivate);
+        return new AskResponse(filter.Restore(last.Text?.Trim() ?? ""), used.Distinct().ToList(), (last.AnsweredBy ?? endpoint).Name, isPrivate);
     }
 
     /// <summary>Today's dashboard figures up front, so general questions are answered even by models that are weak at calling tools.</summary>

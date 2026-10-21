@@ -55,7 +55,7 @@ internal sealed partial class DraftService(AiGateway gateway, ICompanyProfilePro
         var user = $"Facts:\n{facts}" + (string.IsNullOrWhiteSpace(r.Instructions) ? "" : $"\nInstructions: {filter.Text(Limit(r.Instructions.Trim(), 500))}");
         var response = await gateway.CompleteAsync(endpoint, new AiRequest(system, [AiMessage.User(user)], MaxTokens: 400), ct);
         var text = filter.Restore(response.Text?.Trim().Trim('"') ?? "");
-        return new DraftResponse(text, WhatsAppUrl(r.Phone, text), endpoint.Name);
+        return new DraftResponse(text, WhatsAppUrl(r.Phone, text), (response.AnsweredBy ?? endpoint).Name);
     }
 
     /// <summary>wa.me link with the text filled in; an 8-digit number is taken as a Qatar number. No phone: WhatsApp asks whom to send to.</summary>

@@ -8,7 +8,7 @@ namespace Erp.Modules.Ai.Providers;
 
 /// <summary>Where a request goes. <see cref="ProviderCode"/> is the platform provider's code, or "own" for the company's own subscription.</summary>
 public sealed record AiEndpoint(string ProviderCode, string Name, AiProviderKind Kind, string BaseUrl, string Model, string? VisionModel, string? ApiKey,
-    bool IsPrivate, int? DailyLimit, IReadOnlyList<string>? FallbackModels = null);
+    bool IsPrivate, int? DailyLimit, IReadOnlyList<string>? FallbackModels = null, string? FallbackProvider = null);
 
 /// <summary><see cref="ProviderData"/>: what the provider attached to the call and wants back with it (Gemini's thought signature), as JSON.</summary>
 public sealed record AiToolCall(string Id, string Name, string Arguments, string? ProviderData = null);
@@ -27,7 +27,8 @@ public sealed record AiToolSpec(string Name, string Description, string Paramete
 public sealed record AiRequest(string System, IReadOnlyList<AiMessage> Messages, IReadOnlyList<AiToolSpec>? Tools = null, bool Vision = false,
     int MaxTokens = 1200, bool Json = false);
 
-public sealed record AiResponse(string? Text, IReadOnlyList<AiToolCall> ToolCalls, int InputTokens, int OutputTokens);
+/// <summary><see cref="AnsweredBy"/>: the provider that answered, set by the gateway (a fallback when the chosen one was used up).</summary>
+public sealed record AiResponse(string? Text, IReadOnlyList<AiToolCall> ToolCalls, int InputTokens, int OutputTokens, AiEndpoint? AnsweredBy = null);
 
 /// <summary><see cref="Busy"/>: the provider is overloaded or its free allowance per minute is used up (try again shortly).</summary>
 public sealed class AiProviderException(string message, bool busy = false) : Exception(message)

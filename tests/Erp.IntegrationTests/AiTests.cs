@@ -125,6 +125,39 @@ public sealed class AiTests(ErpFixture fixture)
     }
 
     [Fact]
+    public async Task When_a_provider_is_used_up_or_busy_its_fallback_answers_but_never_a_shared_one_after_a_private_one()
+    {
+        var t = await fixture.CreateTenantAsync();
+        await SqlAsync("""
+            INSERT INTO ai.provider (id, code, name, kind, base_url, model, is_private, is_default, is_enabled, daily_limit) VALUES
+              (gen_random_uuid(), 'fb-groq', 'Groq test', 'open_ai_compatible', 'https://example.invalid/v1/', 'g', false, false, true, 100),
+              (gen_random_uuid(), 'fb-private', 'Private test', 'open_ai_compatible', 'https://example.invalid/v1/', 'p', true, false, true, 100)
+            ON CONFLICT (code) DO NOTHING;
+            UPDATE ai.provider SET fallback_provider = 'fb-groq' WHERE code = 'fb-private';
+            """);
+        await UseSharedProviderAsync(t.Client, "fb-gemini", limit: 1);
+        await SqlAsync("UPDATE ai.provider SET fallback_provider = 'fb-groq' WHERE code = 'fb-gemini'");
+        fixture.Ai.Reset((e, _) => e.ProviderCode == "fb-gemini" ? throw new AiProviderException("overloaded", busy: true) : new AiResponse($"From {e.Name}.", [], 5, 1));
+
+        // Busy: Groq answers, and the answer says so.
+        var first = await t.Client.PostAsync<Ask>("/api/ai/ask", new { question = "How is business?" });
+        first.Answer.ShouldBe("From Groq test.");
+        first.Provider.ShouldBe("Groq test");
+
+        // Daily allowance used up: Gemini is not called at all.
+        fixture.Ai.Reset((e, _) => new AiResponse($"From {e.Name}.", [], 5, 1));
+        (await t.Client.PostAsync<Ask>("/api/ai/ask", new { question = "And now?" })).Answer.ShouldBe("From Groq test.");
+        fixture.Ai.Calls.Select(c => c.Endpoint.ProviderCode).ShouldBe(["fb-groq"]);
+
+        // A private provider saw real names, so it must not hand the request to a shared one.
+        await (await t.Client.PutJsonAsync("/api/ai/settings", new { mode = "Platform", providerCode = "fb-private" })).EnsureSuccessAsync();
+        fixture.Ai.Reset((e, _) => e.ProviderCode == "fb-private" ? throw new AiProviderException("overloaded", busy: true) : new AiResponse("leaked", [], 5, 1));
+        var blocked = await t.Client.PostJsonAsync("/api/ai/ask", new { question = "Who owes me?" });
+        (await blocked.ProblemAsync()).GetProperty("code").GetString().ShouldBe("ai.busy");
+        fixture.Ai.Calls.ShouldAllBe(c => c.Endpoint.ProviderCode == "fb-private");
+    }
+
+    [Fact]
     public async Task A_company_can_use_its_own_subscription_with_the_key_encrypted_and_never_returned()
     {
         var t = await fixture.CreateTenantAsync();

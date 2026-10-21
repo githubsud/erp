@@ -2047,7 +2047,7 @@ export const ar: Record<TranslationKey, string> = {
   'boai.editProvider': 'تعديل المزوّد',
   'boai.code': 'الرمز',
   'boai.kind': 'النوع',
-  'boai.keyHint': 'للطبقة المجانية من Google Gemini: أنشئ مفتاحاً من aistudio.google.com. اتركه فارغاً للإبقاء على المفتاح المحفوظ.',
+  'boai.keyHint': 'مفاتيح مجانية: Google Gemini من aistudio.google.com، وGroq من console.groq.com. اتركه فارغاً للإبقاء على المفتاح المحفوظ.',
   'boai.enabled': 'متاح للعملاء',
   'boai.isPrivate': 'خاص (لا يحتفظ بالبيانات ولا يتدرب عليها)',
   'boai.privateHint': 'اجعله خاصاً فقط لخادمنا أو لطبقة مدفوعة لا تحتفظ بالبيانات. في الطبقات المجانية المشتركة يخفي النظام الأسماء ولا يرسل صور الهوية.',
@@ -2188,5 +2188,7 @@ export const ar: Record<TranslationKey, string> = {
   'pwa.offline': 'لا يوجد إنترنت',
   'pwa.offlineHint': 'يستمر الصندوق في البيع ويرسل المبيعات عند عودة الإنترنت. باقي الشاشات تحتاج إلى الإنترنت.',
   'login.remember': 'ابقني مسجلاً على هذا الجهاز',
-  'login.rememberHint': 'فقط على هاتفك أو جهاز المحل، وليس على جهاز مشترك.'
+  'login.rememberHint': 'فقط على هاتفك أو جهاز المحل، وليس على جهاز مشترك.',
+  'boai.fallbackProvider': 'عند نفاد الحد أو الانشغال، استخدم',
+  'boai.fallbackProviderHint': 'مزوّد آخر يجيب عندما ينفد الحد اليومي لهذا المزوّد أو يكون مشغولاً أو متوقفاً (مثلاً Gemini ← Groq). المزوّد الخاص لا يحوّل أبداً إلى مزوّد مشترك.'
 };

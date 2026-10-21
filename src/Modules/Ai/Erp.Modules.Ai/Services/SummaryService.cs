@@ -54,7 +54,7 @@ internal sealed class SummaryService(ErpDbContext db, ITenantContext tenant, AiG
             var response = await gateway.CompleteAsync(endpoint, new AiRequest(system, [AiMessage.User(filter.Text($"Figures for {clock.Today:yyyy-MM-dd}:\n{facts}"))],
                 MaxTokens: 600), ct);
             text = filter.Restore(response.Text?.Trim() ?? "");
-            provider = endpoint.ProviderCode;
+            provider = (response.AnsweredBy ?? endpoint).ProviderCode;
             if (text.Length == 0) (text, provider) = (facts, "none");
         }
         catch (BusinessRuleException ex)

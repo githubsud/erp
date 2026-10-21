@@ -170,11 +170,11 @@ internal sealed class AiSettingsService(ErpDbContext db, ITenantContext tenant, 
 }
 
 public sealed record ProviderAdminDto(string Code, string Name, string Kind, string BaseUrl, string Model, string? VisionModel, bool HasApiKey, bool IsPrivate,
-    bool IsDefault, bool IsEnabled, int DailyLimit, string? FallbackModels);
+    bool IsDefault, bool IsEnabled, int DailyLimit, string? FallbackModels, string? FallbackProvider);
 
 /// <summary><see cref="ApiKey"/>: null keeps the stored key, empty removes it.</summary>
 public sealed record ProviderRequest(string? Code, string Name, AiProviderKind Kind, string BaseUrl, string Model, string? VisionModel, string? ApiKey,
-    bool IsPrivate, bool IsDefault, bool IsEnabled, int DailyLimit, string? FallbackModels = null);
+    bool IsPrivate, bool IsDefault, bool IsEnabled, int DailyLimit, string? FallbackModels = null, string? FallbackProvider = null);
 
 public sealed record CustomerUsage(Guid TenantId, string Provider, int Requests, long InputTokens, long OutputTokens, int RequestsToday);
 
@@ -184,7 +184,7 @@ internal sealed class AiBackOfficeService(ErpDbContext db, IAiChatClient client,
     public async Task<List<ProviderAdminDto>> ProvidersAsync(CancellationToken ct) =>
         (await db.Set<AiProvider>().AsNoTracking().OrderByDescending(p => p.IsDefault).ThenBy(p => p.Name).ToListAsync(ct))
         .Select(p => new ProviderAdminDto(p.Code, p.Name, p.Kind.ToString(), p.BaseUrl, p.Model, p.VisionModel, !string.IsNullOrEmpty(p.ApiKey), p.IsPrivate,
-            p.IsDefault, p.IsEnabled, p.DailyLimit, p.FallbackModels)).ToList();
+            p.IsDefault, p.IsEnabled, p.DailyLimit, p.FallbackModels, p.FallbackProvider)).ToList();
 
     public Task SaveAsync(string? code, ProviderRequest r, CancellationToken ct) =>
         db.InTransactionAsync(async token =>
@@ -215,6 +215,10 @@ internal sealed class AiBackOfficeService(ErpDbContext db, IAiChatClient client,
             p.VisionModel = string.IsNullOrWhiteSpace(r.VisionModel) ? null : r.VisionModel.Trim();
             var fallbacks = (r.FallbackModels ?? "").Split([',', '\n', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             p.FallbackModels = fallbacks.Length == 0 ? null : string.Join(",", fallbacks.Distinct());
+            var fallbackProvider = string.IsNullOrWhiteSpace(r.FallbackProvider) ? null : r.FallbackProvider.Trim();
+            if (fallbackProvider is not null && (fallbackProvider == p.Code || !await db.Set<AiProvider>().AnyAsync(x => x.Code == fallbackProvider, token)))
+                throw new BusinessRuleException("ai.fallback_invalid", "Choose another existing provider as the fallback.", "اختر مزوّداً آخر موجوداً كبديل.");
+            p.FallbackProvider = fallbackProvider;
             if (r.ApiKey is not null) p.ApiKey = r.ApiKey.Trim().Length == 0 ? null : r.ApiKey.Trim();
             p.IsPrivate = r.IsPrivate;
             p.IsDefault = r.IsDefault && r.IsEnabled;

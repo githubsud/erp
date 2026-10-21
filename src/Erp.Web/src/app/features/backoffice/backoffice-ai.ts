@@ -19,6 +19,7 @@ interface Provider {
   isEnabled: boolean;
   dailyLimit: number;
   fallbackModels: string | null;
+  fallbackProvider: string | null;
 }
 
 interface Usage {
@@ -48,6 +49,7 @@ interface Usage {
           </div>
           <div class="secondary ltr">{{ p.baseUrl }} · {{ p.model }} @if (p.visionModel) { · 👁 {{ p.visionModel }} }</div>
           @if (p.fallbackModels) { <div class="secondary ltr">↪ {{ p.fallbackModels }}</div> }
+          @if (p.fallbackProvider) { <div class="secondary">{{ 'boai.fallbackProvider' | t }}: {{ nameOf(p.fallbackProvider) }}</div> }
           <div class="secondary">{{ 'boai.limit' | t }}: <span class="ltr">{{ p.dailyLimit }}</span> · {{ 'ais.apiKey' | t }}: {{ (p.hasApiKey ? 'boai.keySet' : 'boai.noKey') | t }}</div>
           <div class="actions">
             <button mat-button (click)="edit(p)"><mat-icon>edit</mat-icon> {{ 'app.edit' | t }}</button>
@@ -70,6 +72,12 @@ interface Usage {
         <mat-form-field><mat-label>{{ 'ais.visionModel' | t }}</mat-label><input matInput formControlName="visionModel" dir="ltr" /></mat-form-field>
         <mat-form-field class="wide"><mat-label>{{ 'boai.fallbacks' | t }}</mat-label><input matInput formControlName="fallbackModels" dir="ltr" />
           <mat-hint>{{ 'boai.fallbacksHint' | t }}</mat-hint></mat-form-field>
+        <mat-form-field class="wide"><mat-label>{{ 'boai.fallbackProvider' | t }}</mat-label>
+          <mat-select formControlName="fallbackProvider">
+            <mat-option value="">{{ 'app.none' | t }}</mat-option>
+            @for (o of providers(); track o.code) { @if (o.code !== editing()?.code) { <mat-option [value]="o.code">{{ o.name }}</mat-option> } }
+          </mat-select>
+          <mat-hint>{{ 'boai.fallbackProviderHint' | t }}</mat-hint></mat-form-field>
         <mat-form-field class="wide"><mat-label>{{ 'ais.apiKey' | t }}</mat-label>
           <input matInput type="password" formControlName="apiKey" dir="ltr" autocomplete="new-password" [placeholder]="editing()?.hasApiKey ? ('ais.keySaved' | t) : ''" />
           <mat-hint>{{ 'boai.keyHint' | t }}</mat-hint></mat-form-field>
@@ -137,6 +145,7 @@ export class BackOfficeAiPage implements OnInit {
     model: ['', Validators.required],
     visionModel: [''],
     fallbackModels: [''],
+    fallbackProvider: [''],
     apiKey: [''],
     dailyLimit: [50],
     isEnabled: [true],
@@ -154,9 +163,13 @@ export class BackOfficeAiPage implements OnInit {
     this.bo.get<Provider[]>('ai/providers').subscribe({ next: (p) => this.providers.set(p), error: (e) => this.notify.error(e) });
   }
 
+  protected nameOf(code: string): string {
+    return this.providers().find((p) => p.code === code)?.name ?? code;
+  }
+
   protected edit(p: Provider): void {
     this.editing.set(p);
-    this.form.reset({ ...p, visionModel: p.visionModel ?? '', fallbackModels: p.fallbackModels ?? '', apiKey: '' });
+    this.form.reset({ ...p, visionModel: p.visionModel ?? '', fallbackModels: p.fallbackModels ?? '', fallbackProvider: p.fallbackProvider ?? '', apiKey: '' });
     this.form.controls.code.disable();
   }
 
@@ -168,7 +181,7 @@ export class BackOfficeAiPage implements OnInit {
 
   protected save(): void {
     const v = this.form.getRawValue();
-    const body = { ...v, visionModel: v.visionModel || null, fallbackModels: v.fallbackModels || null, apiKey: v.apiKey ? v.apiKey : null, dailyLimit: Number(v.dailyLimit) };
+    const body = { ...v, visionModel: v.visionModel || null, fallbackModels: v.fallbackModels || null, fallbackProvider: v.fallbackProvider || null, apiKey: v.apiKey ? v.apiKey : null, dailyLimit: Number(v.dailyLimit) };
     const editing = this.editing();
     const call = editing ? this.bo.put<Provider[]>(`ai/providers/${editing.code}`, body) : this.bo.post<Provider[]>('ai/providers', body);
     call.subscribe({

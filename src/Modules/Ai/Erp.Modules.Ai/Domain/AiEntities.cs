@@ -22,6 +22,9 @@ public sealed class AiProvider : Entity
     /// <summary>Comma-separated models tried in turn when the main one is out of its free allowance or overloaded.</summary>
     public string? FallbackModels { get; set; }
 
+    /// <summary>Code of the provider used when this one is out of its daily allowance, busy or down (another company's free tier).</summary>
+    public string? FallbackProvider { get; set; }
+
     [Sensitive] public string? ApiKey { get; set; }
 
     /// <summary>Private: what is sent is not kept or used for training (our own server, or a paid tier). Otherwise only figures and placeholders go out.</summary>

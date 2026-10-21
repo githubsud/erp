@@ -34,9 +34,41 @@ internal sealed class AiGateway(ErpDbContext db, ITenantContext tenant, IAiChatC
 
     public static AiEndpoint ToEndpoint(AiProvider p) =>
         new(p.Code, p.Name, p.Kind, p.BaseUrl, p.Model, p.VisionModel, p.ApiKey, p.IsPrivate, p.DailyLimit,
-            (p.FallbackModels ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            (p.FallbackModels ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), p.FallbackProvider);
 
+    /// <summary>Sends the request; when the provider's allowance is used up, it is busy or down, its fallback provider answers instead.</summary>
     public async Task<AiResponse> CompleteAsync(AiEndpoint endpoint, AiRequest request, CancellationToken ct)
+    {
+        var tried = new HashSet<string>();
+        while (true)
+        {
+            tried.Add(endpoint.ProviderCode);
+            try
+            {
+                return await CompleteOnceAsync(endpoint, request, ct) with { AnsweredBy = endpoint };
+            }
+            catch (BusinessRuleException ex) when (ex.Code is "ai.daily_limit" or "ai.busy" or "ai.provider_error")
+            {
+                var next = await FallbackAsync(endpoint, request, tried, ct);
+                if (next is null) throw;
+                logger.LogInformation("AI provider {Provider} unavailable ({Code}); using {Fallback}", endpoint.ProviderCode, ex.Code, next.ProviderCode);
+                endpoint = next;
+                // Earlier tool calls may carry the first provider's own data (Gemini's thought signature); another provider would reject it.
+                request = request with { Messages = request.Messages.Select(m => m.ToolCalls is null ? m : m with { ToolCalls = m.ToolCalls.Select(c => c with { ProviderData = null }).ToList() }).ToList() };
+            }
+        }
+    }
+
+    /// <summary>The enabled fallback of a platform provider. Never a shared provider after a private one: the request was not privacy-filtered.</summary>
+    private async Task<AiEndpoint?> FallbackAsync(AiEndpoint endpoint, AiRequest request, HashSet<string> tried, CancellationToken ct)
+    {
+        if (endpoint.FallbackProvider is not { } code || tried.Contains(code)) return null;
+        var p = await db.Set<AiProvider>().AsNoTracking().SingleOrDefaultAsync(x => x.Code == code && x.IsEnabled, ct);
+        if (p is null || (endpoint.IsPrivate && !p.IsPrivate) || (request.Vision && string.IsNullOrWhiteSpace(p.VisionModel))) return null;
+        return ToEndpoint(p);
+    }
+
+    private async Task<AiResponse> CompleteOnceAsync(AiEndpoint endpoint, AiRequest request, CancellationToken ct)
     {
         var tenantId = tenant.RequireTenantId();
         if (endpoint.DailyLimit is { } limit && await UsedTodayAsync(endpoint.ProviderCode, ct) >= limit)

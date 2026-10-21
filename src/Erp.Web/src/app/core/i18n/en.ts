@@ -2045,7 +2045,7 @@ export const en = {
   'boai.editProvider': 'Edit provider',
   'boai.code': 'Code',
   'boai.kind': 'Type',
-  'boai.keyHint': 'For Google Gemini\'s free tier: create a key at aistudio.google.com. Leave empty to keep the saved key.',
+  'boai.keyHint': 'Free keys: Google Gemini at aistudio.google.com, Groq at console.groq.com. Leave empty to keep the saved key.',
   'boai.enabled': 'Available to customers',
   'boai.isPrivate': 'Private (does not keep or train on data)',
   'boai.privateHint': 'Mark as private only our own server or a paid tier that does not keep data. For shared free tiers the system hides names and never sends ID photos.',
@@ -2186,7 +2186,9 @@ export const en = {
   'pwa.offline': 'No internet',
   'pwa.offlineHint': 'The till keeps selling and sends the sales when the internet is back. Other screens need the internet.',
   'login.remember': 'Keep me signed in on this device',
-  'login.rememberHint': 'Only on your own phone or the shop\'s till, not on a shared computer.'
+  'login.rememberHint': 'Only on your own phone or the shop\'s till, not on a shared computer.',
+  'boai.fallbackProvider': 'When used up or busy, use',
+  'boai.fallbackProviderHint': 'Another provider that answers when this one\'s daily allowance is used up, it is busy or down (for example Gemini → Groq). A private provider never hands over to a shared one.'
 } as const;
 
 export type TranslationKey = keyof typeof en;
