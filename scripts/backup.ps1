@@ -11,6 +11,10 @@
   came back, and drops it again. A backup that has never been restored is only a hope.
 
   -Install registers a Windows scheduled task that runs this script every night (with -Verify, and -CopyTo when given).
+  -AsSystem makes that task run as SYSTEM, so it runs even when nobody is signed in (a shop computer).
+
+  Where the database is: on a computer set up by install.ps1 the settings file C:\ERP\config\erp.json says (its own
+  PostgreSQL service); otherwise the erp-postgres Docker container of a development laptop. -Docker forces the container.
 
   IMPORTANT: QID, passport, IBAN and API keys are stored encrypted. A restore is only readable with the same
   Security:FieldEncryptionKey and Security:BlindIndexKey the API uses. Keep a copy of those keys somewhere safe and separate from the backups.
@@ -28,28 +32,35 @@ param(
     [switch]$Install,
     [string]$At = '23:30',
     [string]$Container = 'erp-postgres',
-    [string]$Database = 'erp'
+    [string]$Database = 'erp',
+    [string]$Config = 'C:\ERP\config\erp.json',
+    [switch]$Docker,
+    [switch]$AsSystem
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'db-tools.ps1')
+$db = Get-ErpDatabase -Config $Config -Docker:$Docker -Container $Container
 
 if ($Install) {
     $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Verify -Dir `"$Dir`" -Keep $Keep"
     if ($CopyTo) { $arguments += " -CopyTo `"$CopyTo`"" }
+    if ($Docker) { $arguments += ' -Docker' } elseif ($db.Native) { $arguments += " -Config `"$Config`"" }
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
     $trigger = New-ScheduledTaskTrigger -Daily -At $At
     # Runs at the next chance when the PC was off at that time.
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 2)
-    Register-ScheduledTask -TaskName 'ERP nightly backup' -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+    if ($AsSystem) {
+        $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+        Register-ScheduledTask -TaskName 'ERP nightly backup' -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+    } else {
+        Register-ScheduledTask -TaskName 'ERP nightly backup' -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+    }
     Write-Host "Scheduled: 'ERP nightly backup' every day at $At." -ForegroundColor Green
     return
 }
 
-function Psql([string]$db, [string]$sql) {
-    $out = docker exec $Container psql -U postgres -d $db -v ON_ERROR_STOP=1 -q -At -c "SET client_min_messages TO warning" -c $sql
-    if ($LASTEXITCODE -ne 0) { throw "psql failed on ${db}: $sql" }
-    return $out
-}
+function Psql([string]$name, [string]$sql) { Invoke-ErpPsql $db $name $sql }
 
 function Prune([string]$folder) {
     Get-ChildItem $folder -Filter 'erp-*.dump' | Sort-Object Name -Descending | Select-Object -Skip $Keep | ForEach-Object {
@@ -64,11 +75,7 @@ $file = Join-Path $Dir $name
 $log = Join-Path $Dir 'backup.log'
 
 try {
-    docker exec $Container pg_dump -U postgres -Fc -Z 6 -f /tmp/backup.dump $Database
-    if ($LASTEXITCODE -ne 0) { throw 'pg_dump failed' }
-    docker cp "${Container}:/tmp/backup.dump" $file | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'copying the backup out of the container failed' }
-    docker exec $Container rm -f /tmp/backup.dump | Out-Null
+    Invoke-ErpDump $db $Database $file
     $hash = (Get-FileHash $file -Algorithm SHA256).Hash
     Set-Content "$file.sha256" "$hash  $name" -Encoding ascii
     $size = '{0:N1} MB' -f ((Get-Item $file).Length / 1MB)
@@ -79,9 +86,8 @@ try {
         Psql 'postgres' "DROP DATABASE IF EXISTS $scratch WITH (FORCE);" | Out-Null
         Psql 'postgres' "CREATE DATABASE $scratch;" | Out-Null
         try {
-            docker cp $file "${Container}:/tmp/check.dump" | Out-Null
-            docker exec $Container pg_restore -U postgres -d $scratch --no-owner --role=postgres --exit-on-error /tmp/check.dump
-            if ($LASTEXITCODE -ne 0) { throw 'test restore failed: the backup cannot be restored' }
+            Invoke-ErpRestore $db $scratch $file 'test restore failed: the backup cannot be restored'
+
             # The live database may have grown since the dump; the restored copy must have data and never more than live.
             $query = "SELECT (SELECT count(*) FROM core.tenant) || ',' || (SELECT count(*) FROM core.app_user) || ',' || (SELECT count(*) FROM fin.journal_line);"
             $restored = (Psql $scratch $query) -split ','
@@ -92,7 +98,6 @@ try {
             }
             $checked = " - restore checked: $($restored[0]) companies, $($restored[1]) users, $($restored[2]) ledger lines"
         } finally {
-            docker exec $Container rm -f /tmp/check.dump | Out-Null
             Psql 'postgres' "DROP DATABASE IF EXISTS $scratch WITH (FORCE);" | Out-Null
         }
     }

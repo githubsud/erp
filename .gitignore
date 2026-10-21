@@ -12,3 +12,6 @@ dist/
 .angular/
 scripts/.demo/
 backups/
+
+# Packages made by scripts/package.ps1
+/dist/

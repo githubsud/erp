@@ -21,7 +21,16 @@ if (args.Contains("--healthcheck"))
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
-var builder = WebApplication.CreateBuilder(args);
+// As a Windows service (scripts/install.ps1) the working folder is System32: files are found next to the program instead.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService() ? AppContext.BaseDirectory : null
+});
+builder.Host.UseWindowsService(o => o.ServiceName = "ErpApi");
+// An installed computer keeps its passwords and keys outside the program folder, so updates never overwrite them.
+if (builder.Configuration["ConfigFile"] is { Length: > 0 } configFile)
+    builder.Configuration.AddJsonFile(configFile, optional: false, reloadOnChange: false);
 
 var modules = ModuleCatalog.All;
 builder.Services.AddErpInfrastructure(builder.Configuration, modules);

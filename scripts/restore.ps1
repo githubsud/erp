@@ -7,6 +7,9 @@
   backups\before-restore-<time>.dump (skip with -NoSafetyCopy only when the database is broken), checks the backup's
   SHA-256 checksum, stops the API, replaces the database and starts the API again (-NoStart to leave it stopped).
 
+  Works on an installed computer (its own PostgreSQL service and the ErpApi service, from C:\ERP\config\erp.json) and on a
+  development laptop (Docker container erp-postgres, -Docker to force it).
+
   The API must run with the same Security:FieldEncryptionKey and Security:BlindIndexKey as when the backup was made, or QID, passport, IBAN and
   API keys cannot be read.
 
@@ -22,11 +25,15 @@ param(
     [switch]$NoStart,
     [string]$Container = 'erp-postgres',
     [string]$Database = 'erp',
-    [string]$Api = 'http://localhost:5080'
+    [string]$Api = 'http://localhost:5080',
+    [string]$Config = 'C:\ERP\config\erp.json',
+    [switch]$Docker
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'db-tools.ps1')
+$db = Get-ErpDatabase -Config $Config -Docker:$Docker -Container $Container
 
 if (-not $File) {
     $latest = Get-ChildItem $Dir -Filter 'erp-*.dump' -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
@@ -50,33 +57,29 @@ if (-not $Force) {
     if ((Read-Host 'Type RESTORE to continue') -ne 'RESTORE') { Write-Host 'Cancelled.'; return }
 }
 
-function Psql([string]$sql) {
-    docker exec $Container psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c "SET client_min_messages TO warning" -c $sql | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "psql failed: $sql" }
-}
+function Psql([string]$sql) { Invoke-ErpPsql $db 'postgres' $sql | Out-Null }
 
 if (-not $NoSafetyCopy) {
     New-Item -ItemType Directory -Force $Dir | Out-Null
     $safety = Join-Path $Dir "before-restore-$(Get-Date -Format 'yyyyMMdd-HHmmss').dump"
-    docker exec $Container pg_dump -U postgres -Fc -f /tmp/safety.dump $Database
-    if ($LASTEXITCODE -ne 0) { throw 'Could not save the current database first (use -NoSafetyCopy if it is broken).' }
-    docker cp "${Container}:/tmp/safety.dump" $safety | Out-Null
+    try { Invoke-ErpDump $db $Database $safety }
+    catch { throw 'Could not save the current database first (use -NoSafetyCopy if it is broken).' }
     Write-Host "Current database saved as $safety"
 }
 
-Get-Process -Name 'Erp.Api' -ErrorAction SilentlyContinue | Stop-Process -Force
+$service = if ($db.ApiService) { Get-Service $db.ApiService -ErrorAction SilentlyContinue } else { $null }
+if ($service) { Stop-Service $service.Name -Force }
+else { Get-Process -Name 'Erp.Api' -ErrorAction SilentlyContinue | Stop-Process -Force }
 Start-Sleep -Seconds 2
 
 Psql "DROP DATABASE IF EXISTS $Database WITH (FORCE);"
 Psql "CREATE DATABASE $Database;"
-docker cp $File "${Container}:/tmp/restore.dump" | Out-Null
-docker exec $Container pg_restore -U postgres -d $Database --no-owner --role=postgres --exit-on-error /tmp/restore.dump
-if ($LASTEXITCODE -ne 0) { throw 'pg_restore failed. The safety copy can be restored with: restore.ps1 -File <before-restore dump>' }
-docker exec $Container rm -f /tmp/restore.dump | Out-Null
+Invoke-ErpRestore $db $Database $File 'pg_restore failed. The safety copy can be restored with: restore.ps1 -File <before-restore dump>'
 Write-Host "Database restored from $when." -ForegroundColor Green
 
 if (-not $NoStart) {
-    Start-Process -FilePath 'dotnet' -ArgumentList 'run --project src/Erp.Api --launch-profile http' -WorkingDirectory $root -WindowStyle Minimized
+    if ($service) { Start-Service $service.Name }
+    else { Start-Process -FilePath 'dotnet' -ArgumentList 'run --project src/Erp.Api --launch-profile http' -WorkingDirectory $root -WindowStyle Minimized }
     for ($i = 0; $i -lt 90; $i++) {
         try {
             if ((Invoke-WebRequest -UseBasicParsing "$Api/health" -TimeoutSec 3).StatusCode -eq 200) { Write-Host 'API started.' -ForegroundColor Green; return }

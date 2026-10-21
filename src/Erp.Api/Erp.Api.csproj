@@ -7,6 +7,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BuildingBlocks\Erp.Infrastructure\Erp.Infrastructure.csproj" />
