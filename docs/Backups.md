@@ -1,7 +1,7 @@
 # Backups and restore
 
 The whole database (all companies) is backed up by `scripts/backup.ps1` and put back by `scripts/restore.ps1`.
-They work with the database of an installed computer (`C:RPnfigerp.json`, see [Shop-Setup.md](Shop-Setup.md)) and with the `erp-postgres` Docker container of a development laptop. Each script's help (`Get-Help scripts\backup.ps1 -Full`) lists all options.
+They work with the database of an installed computer (`C:\ERP\config\erp.json`, see [Shop-Setup.md](Shop-Setup.md)) and with the `erp-postgres` Docker container of a development laptop. Each script's help (`Get-Help scripts\backup.ps1 -Full`) lists all options.
 
 ## Every night
 
