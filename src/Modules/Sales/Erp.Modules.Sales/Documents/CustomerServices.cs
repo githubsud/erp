@@ -12,7 +12,8 @@ public sealed record CustomerRequest(string Code, string? NameEn, string? NameAr
     string? Phone, string? AddressEn, string? AddressAr, int PaymentTermsDays = 30, decimal? CreditLimit = null, Guid? PriceListId = null,
     Guid? SalespersonUserId = null, bool IsActive = true, string? Currency = null);
 
-public sealed record SalesSettingsRequest(CreditControl CreditControl, int QuotationValidityDays);
+/// <summary><see cref="PosMaxDiscountPercent"/> left out keeps the current till discount limit.</summary>
+public sealed record SalesSettingsRequest(CreditControl CreditControl, int QuotationValidityDays, decimal? PosMaxDiscountPercent = null);
 
 public sealed record PriceListItemRequest(Guid ItemId, decimal UnitPrice);
 
@@ -64,9 +65,12 @@ internal sealed class CustomerService(ErpDbContext db, ITenantContext tenant, II
     {
         if (r.QuotationValidityDays is < 1 or > 365)
             throw new BusinessRuleException("sal.validity", "Quotation validity must be between 1 and 365 days.", "يجب أن تكون صلاحية عرض السعر بين 1 و365 يوماً.");
+        if (r.PosMaxDiscountPercent is < 0 or > 100)
+            throw new BusinessRuleException("sal.pos_limit", "The cashier discount limit must be between 0% and 100%.", "يجب أن يكون حد خصم الكاشير بين 0% و100%.");
         var settings = await db.Set<SalesSettings>().SingleAsync(s => s.CompanyId == tenant.RequireCompanyId(), ct);
         settings.CreditControl = r.CreditControl;
         settings.QuotationValidityDays = r.QuotationValidityDays;
+        settings.PosMaxDiscountPercent = r.PosMaxDiscountPercent ?? settings.PosMaxDiscountPercent;
         await db.SaveChangesAsync(ct);
         return settings;
     }

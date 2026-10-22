@@ -29,6 +29,7 @@ public sealed class SalesModule : IModule
         services.AddScoped<Crm.CommissionService>();
         services.AddScoped<Projects.ProjectService>();
         services.AddScoped<Pos.PosService>();
+        services.AddScoped<Pos.PosLimitService>();
         services.AddScoped<Tailoring.TailoringService>();
         services.AddScoped<Salon.SalonManager>();
         services.AddScoped<Workshop.WorkshopService>();
@@ -56,6 +57,7 @@ public sealed class SalesModule : IModule
         Crm.CrmEndpoints.Map(app);
         Projects.ProjectEndpoints.Map(app);
         Pos.PosEndpoints.Map(app);
+        Pos.PosLimitEndpoints.Map(app);
         Tailoring.TailoringEndpoints.Map(app);
         Salon.SalonEndpoints.Map(app);
         Workshop.WorkshopEndpoints.Map(app);

@@ -42,6 +42,8 @@ export interface CustomerExposure {
 export interface SalesSettings {
   creditControl: CreditControl;
   quotationValidityDays: number;
+  /** The biggest discount a cashier may give at the till without a manager's PIN. */
+  posMaxDiscountPercent: number;
 }
 
 export interface PriceListItem {

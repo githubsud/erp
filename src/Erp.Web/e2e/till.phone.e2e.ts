@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { shop } from './support/api';
+import { Api, shop } from './support/api';
 import { signIn, t, toast } from './support/app';
 
 /** Opens the till's shift (or carries on with the open one), as the cashier. */
@@ -79,4 +79,32 @@ test('without internet the sale is kept on the phone and sent when the connectio
 
   await context.setOffline(false);
   await expect(page.getByText(`${t('pos.queued')}: 1`)).toBeHidden({ timeout: 20_000 });
+});
+
+test('a discount over the cashier limit goes through once the owner types the PIN on the phone', async ({ page }) => {
+  const s = shop();
+  const rice = s.items[1];
+  await startShift(page);
+  const api = await Api.signIn(new URL(page.url()).origin, s.code, s.owner.email, s.owner.password);
+  await api.put('sales/pos/my-pin', { pin: '583920' });
+
+  await page.locator('.tile', { hasText: rice.nameAr }).click();
+  // 20% off is past the shop's 10% limit.
+  page.once('dialog', (d) => d.accept('20'));
+  await page.locator('.line').getByRole('button').last().click();
+  await page.getByRole('menuitem', { name: t('pos.discount') }).click();
+  await expect(page.locator('.total')).toContainText((rice.price * 0.8).toFixed(2));
+  await page.getByRole('button', { name: t('pos.exactCash') }).click();
+  await page.getByRole('button', { name: t('pos.pay'), exact: true }).click();
+
+  const approval = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: t('pos.approvalTitle') }) });
+  await expect(approval).toBeVisible();
+  await approval.getByLabel(t('pos.pin')).fill('111111');
+  await approval.getByRole('button', { name: t('pos.approve') }).click();
+  await expect(toast(page)).toContainText('الرمز السري غير صحيح'); // the server's Arabic message
+  await approval.getByLabel(t('pos.pin')).fill('583920');
+  await approval.getByRole('button', { name: t('pos.approve') }).click();
+  await expect(approval).toBeHidden();
+  await expect(page.locator('.last b.ltr')).toHaveText(/\S+/);
+  await expect(page.getByText(t('pos.emptyCart'))).toBeVisible();
 });

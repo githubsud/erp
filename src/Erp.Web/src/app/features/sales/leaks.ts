@@ -26,7 +26,8 @@ interface Report {
 }
 
 const ICON: Record<string, string> = {
-  cash_shortage: 'point_of_sale', refunds: 'undo', discounts: 'percent', below_cost: 'trending_down', invoice_discounts: 'receipt_long'
+  cash_shortage: 'point_of_sale', refunds: 'undo', discounts: 'percent', below_cost: 'trending_down', invoice_discounts: 'receipt_long',
+  approved_discounts: 'verified_user'
 };
 
 /** Possible money leaks: till shortages, refunds and discounts by cashier, sales below cost. Signals to check, not proof. */

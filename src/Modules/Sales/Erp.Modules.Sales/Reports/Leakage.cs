@@ -81,6 +81,20 @@ internal sealed class LeakageService(ErpDbContext db, ITenantContext tenant, IUs
             }
         }
 
+        // Discounts past the cashier limit, by the manager who approved them with a PIN.
+        var approved = await (from s in db.Set<PosSale>().AsNoTracking()
+                              join a in db.Set<PosApproval>() on s.ApprovalId equals a.Id
+                              where shiftIds.Contains(s.ShiftId)
+                              select new { a.ApproverUserId, a.MaxDiscount }).ToListAsync(ct);
+        var approverNames = await users.NamesAsync(approved.Select(a => a.ApproverUserId), ct);
+        foreach (var g in approved.GroupBy(a => a.ApproverUserId))
+        {
+            var amount = g.Sum(a => a.MaxDiscount);
+            findings.Add(new("approved_discounts", "warn", approverNames.GetValueOrDefault(g.Key, "?"), amount, g.Count(), null,
+                $"{g.Count()} till sale(s) over the cashier discount limit were approved with this manager's PIN, up to {amount:N2} QAR off.",
+                $"{g.Count()} عملية بيع تجاوزت حد خصم الكاشير اعتُمدت برمز هذا المدير، بخصم حتى {amount:N2} ريال."));
+        }
+
         // Sold for less than it cost (till and invoices).
         var saleIds = sales.Where(s => s.RefundOfId == null).Select(s => s.Id).ToList();
         var tillLoss = await db.Set<PosSaleLine>().AsNoTracking().Where(l => saleIds.Contains(l.PosSaleId) && l.Cost > l.Amount && l.Quantity > 0)

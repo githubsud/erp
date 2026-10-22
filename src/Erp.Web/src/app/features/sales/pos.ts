@@ -2,12 +2,12 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormBuilder, FormControl, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { filter, forkJoin, switchMap } from 'rxjs';
+import { EMPTY, filter, forkJoin, map, Observable, of, switchMap } from 'rxjs';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Account } from '../../core/models';
-import { NotifyService } from '../../core/notify.service';
+import { NotifyService, problemOf } from '../../core/notify.service';
 import { ReceiptService } from '../../core/receipt.service';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
@@ -56,6 +56,8 @@ interface CartLine {
   item: CatalogItem;
   quantity: number;
   discountPercent: number;
+  /** A price other than the item list's (a lower one counts against the cashier discount limit). */
+  price?: number;
 }
 
 interface SaleLine {
@@ -117,13 +119,21 @@ interface QueuedSale {
   customerName: string | null;
   customerPhone: string | null;
   total: number;
+  approvalId?: string | null;
   error?: string;
+  errorCode?: string;
+}
+
+interface Policy {
+  maxDiscountPercent: number;
+  canOverride: boolean;
 }
 
 const CATALOG_KEY = 'erp.pos.catalog';
 const QUEUE_KEY = 'erp.pos.queue';
 const REGISTERS_KEY = 'erp.pos.registers';
 const SHIFT_KEY = 'erp.pos.shift';
+const POLICY_KEY = 'erp.pos.policy';
 
 function readStore<T>(key: string, fallback: T): T {
   try {
@@ -143,7 +153,20 @@ function writeStore(key: string, value: unknown): void {
 }
 
 const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
-const lineAmount = (l: CartLine) => round2(l.quantity * l.item.salesPrice * (1 - l.discountPercent / 100));
+const priceOf = (l: CartLine) => l.price ?? l.item.salesPrice;
+const lineAmount = (l: CartLine) => round2(l.quantity * priceOf(l) * (1 - l.discountPercent / 100));
+
+/** Same rule as the server: how much comes off the item list's prices, and whether a line goes past the cashier limit. */
+function measure(lines: { listPrice: number; quantity: number; amount: number }[], maxPercent: number): { cut: number; over: boolean } {
+  let cut = 0;
+  let over = false;
+  for (const l of lines) {
+    const full = round2(l.quantity * l.listPrice);
+    if (l.amount < round2((full * (100 - maxPercent)) / 100)) over = true;
+    cut += Math.max(0, full - l.amount);
+  }
+  return { cut: round2(cut), over };
+}
 const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status === 0 || e.status >= 502);
 
 @Component({
@@ -158,6 +181,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
         <button mat-button (click)="sync()"><mat-icon>sync</mat-icon> {{ 'pos.syncNow' | t }}</button>
       }
       <button mat-icon-button (click)="printerSettings()" [matTooltip]="'printer.title' | t"><mat-icon>print</mat-icon></button>
+      @if (policy().canOverride) { <button mat-icon-button (click)="myPin()" [matTooltip]="'pos.myPin' | t"><mat-icon>pin</mat-icon></button> }
       @if (canManage) { <button mat-stroked-button (click)="editRegister(null)"><mat-icon>add</mat-icon> {{ 'pos.newRegister' | t }}</button> }
     </div>
 
@@ -212,7 +236,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
               <div class="line">
                 <div class="what">
                   <div>{{ l.item | bi }}</div>
-                  <div class="secondary ltr">{{ l.item.salesPrice | money }} × {{ l.quantity }} @if (l.discountPercent) { − {{ l.discountPercent }}% }</div>
+                  <div class="secondary ltr">{{ price(l) | money }} × {{ l.quantity }} @if (l.discountPercent) { − {{ l.discountPercent }}% }</div>
                 </div>
                 <div class="qty">
                   <button mat-icon-button (click)="change(idx, -1)"><mat-icon>remove</mat-icon></button>
@@ -221,6 +245,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
                   <button mat-icon-button [matMenuTriggerFor]="lineMenu"><mat-icon>more_vert</mat-icon></button>
                   <mat-menu #lineMenu="matMenu">
                     <button mat-menu-item (click)="discount(idx)">{{ 'pos.discount' | t }}</button>
+                    <button mat-menu-item (click)="changePrice(idx)">{{ 'pos.changePrice' | t }}</button>
                     <button mat-menu-item (click)="remove(idx)">{{ 'app.delete' | t }}</button>
                   </mat-menu>
                 </div>
@@ -260,6 +285,9 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
     }
     @for (q of failed(); track q.clientId) {
       <p class="failed">{{ 'pos.syncFailed' | t }} <span class="ltr">{{ q.total | money }}</span>: {{ q.error }}
+        @if (q.errorCode?.startsWith('sal.pos_approval') || q.errorCode === 'sal.pos_needs_approval') {
+          <button mat-button (click)="askManager(q)">{{ 'pos.askManager' | t }}</button>
+        }
         <button mat-button (click)="discard(q)">{{ 'pos.discard' | t }}</button></p>
     }
   `,
@@ -304,6 +332,8 @@ export class PosPage implements OnInit, OnDestroy {
   private readonly i18n = inject(I18nService);
   private readonly receipt = inject(ReceiptService);
   protected readonly canManage = inject(AuthService).can('sal.pos:manage');
+  /** Kept on the device so the limit also holds offline. */
+  protected readonly policy = signal<Policy>(readStore<Policy>(POLICY_KEY, { maxDiscountPercent: 10, canOverride: false }));
   protected readonly registers = signal<Register[]>(readStore<Register[]>(REGISTERS_KEY, []));
   protected readonly catalog = signal<CatalogItem[]>(readStore<CatalogItem[]>(CATALOG_KEY, []));
   protected readonly shift = signal<Shift | null>(null);
@@ -354,6 +384,13 @@ export class PosPage implements OnInit, OnDestroy {
       // Offline: the tills kept from last time.
       error: (e) => (isOffline(e) ? undefined : this.notify.error(e))
     });
+    this.api.get<Policy>('sales/pos/policy').subscribe({
+      next: (p) => {
+        this.policy.set(p);
+        writeStore(POLICY_KEY, p);
+      },
+      error: (e) => (isOffline(e) ? undefined : this.notify.error(e))
+    });
     this.api.get<CatalogItem[]>('sales/pos/catalog').subscribe({
       next: (c) => {
         this.catalog.set(c);
@@ -365,6 +402,7 @@ export class PosPage implements OnInit, OnDestroy {
   }
 
   protected amount = lineAmount;
+  protected price = priceOf;
 
   protected open(r: Register): void {
     this.dialog
@@ -442,6 +480,57 @@ export class PosPage implements OnInit, OnDestroy {
     this.cart.update((list) => list.map((l, i) => (i === idx ? { ...l, discountPercent: pct } : l)));
   }
 
+  protected changePrice(idx: number): void {
+    const value = prompt(this.i18n.t('pos.pricePrompt'), String(priceOf(this.cart()[idx])));
+    const price = Number(value);
+    if (value == null || value.trim() === '' || isNaN(price) || price < 0) return;
+    this.cart.update((list) => list.map((l, i) => (i === idx ? { ...l, price: price === l.item.salesPrice ? undefined : round2(price) } : l)));
+  }
+
+  /**
+   * A sale past the cashier limit needs a manager's PIN (online only: the server checks it). Emits the approval id, null when
+   * none is needed, and nothing when the cashier cancels or there is no connection.
+   */
+  private approval(shiftId: string, lines: { listPrice: number; quantity: number; amount: number }[]): Observable<string | null> {
+    const policy = this.policy();
+    const { cut, over } = measure(lines, policy.maxDiscountPercent);
+    if (!over || policy.canOverride) return of(null);
+    if (!navigator.onLine) {
+      this.notify.info(this.i18n.t('pos.approvalOffline', { max: policy.maxDiscountPercent }));
+      return EMPTY;
+    }
+    return this.dialog
+      .open(ApprovalDialog, { data: { shiftId, discount: cut, max: policy.maxDiscountPercent }, width: '400px' })
+      .afterClosed()
+      .pipe(filter((id): id is string => !!id));
+  }
+
+  private cartLines() {
+    return this.cart().map((l) => ({ listPrice: l.item.salesPrice, quantity: l.quantity, amount: lineAmount(l) }));
+  }
+
+  /** A queued sale the server refused for want of approval: the manager approves it now and it is sent again. */
+  protected askManager(q: QueuedSale): void {
+    const lines = q.lines.flatMap((l) => {
+      const item = this.catalog().find((i) => i.id === l.itemId);
+      return item ? [{ listPrice: item.salesPrice, quantity: l.quantity, amount: round2(l.quantity * l.unitPrice * (1 - l.discountPercent / 100)) }] : [];
+    });
+    const { cut } = measure(lines, this.policy().maxDiscountPercent);
+    this.dialog
+      .open(ApprovalDialog, { data: { shiftId: q.shiftId, discount: cut, max: this.policy().maxDiscountPercent }, width: '400px' })
+      .afterClosed()
+      .pipe(filter((id): id is string => !!id))
+      .subscribe((approvalId) => {
+        this.queue.update((list) => list.map((x) => (x.clientId === q.clientId ? { ...x, approvalId, error: undefined, errorCode: undefined } : x)));
+        writeStore(QUEUE_KEY, this.queue());
+        this.sync();
+      });
+  }
+
+  protected myPin(): void {
+    this.dialog.open(PinDialog, { width: '360px' }).afterClosed().pipe(filter((saved) => !!saved)).subscribe(() => this.notify.success('pos.pinSaved'));
+  }
+
   protected exact(kind: 'cash' | 'card'): void {
     this.cash.setValue(kind === 'cash' ? this.total() : 0);
     this.card.setValue(kind === 'card' ? this.total() : 0);
@@ -455,12 +544,16 @@ export class PosPage implements OnInit, OnDestroy {
   protected onAccount(): void {
     const shift = this.shift();
     if (!shift) return;
-    this.dialog.open(CustomerPickDialog, { width: '420px' }).afterClosed().pipe(filter((c): c is { id: string; nameEn: string } => !!c)).subscribe((customer) => {
+    this.approval(shift.id, this.cartLines()).pipe(
+      switchMap((approvalId) => this.dialog.open(CustomerPickDialog, { width: '420px' }).afterClosed().pipe(
+        filter((c): c is { id: string; nameEn: string } => !!c),
+        map((customer) => ({ customer, approvalId }))))
+    ).subscribe(({ customer, approvalId }) => {
       this.busy.set(true);
       this.api.post<Sale>('sales/pos/sales', {
         clientId: crypto.randomUUID(), shiftId: shift.id, soldAt: new Date().toISOString(), cash: 0, card: 0, customerId: customer.id,
-        customerName: customer.nameEn, customerPhone: null,
-        lines: this.cart().map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: l.item.salesPrice, discountPercent: l.discountPercent }))
+        customerName: customer.nameEn, customerPhone: null, approvalId,
+        lines: this.cart().map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: priceOf(l), discountPercent: l.discountPercent }))
       }).subscribe({
         next: (s) => {
           this.busy.set(false);
@@ -478,11 +571,16 @@ export class PosPage implements OnInit, OnDestroy {
   protected pay(): void {
     const shift = this.shift();
     if (!shift) return;
+    this.approval(shift.id, this.cartLines()).subscribe((approvalId) => this.send(shift, approvalId));
+  }
+
+  private send(shift: Shift, approvalId: string | null): void {
     const sale: QueuedSale = {
       clientId: crypto.randomUUID(),
       shiftId: shift.id,
       soldAt: new Date().toISOString(), // an instant (when the till rang it up), not a calendar date
-      lines: this.cart().map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: l.item.salesPrice, discountPercent: l.discountPercent })),
+      lines: this.cart().map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: priceOf(l), discountPercent: l.discountPercent })),
+      approvalId,
       cash: this.paid().cash,
       card: this.paid().card,
       customerName: null,
@@ -512,9 +610,9 @@ export class PosPage implements OnInit, OnDestroy {
   private provisional(q: QueuedSale): Sale {
     const lines = this.cart().map((l, i) => ({
       id: String(i), lineNo: i + 1, itemId: l.item.id, sku: l.item.sku, nameEn: l.item.nameEn, nameAr: l.item.nameAr, quantity: l.quantity,
-      unitPrice: l.item.salesPrice, discountPercent: l.discountPercent, amount: lineAmount(l), refundable: 0
+      unitPrice: priceOf(l), discountPercent: l.discountPercent, amount: lineAmount(l), refundable: 0
     }));
-    const gross = round2(this.cart().reduce((sum, l) => sum + l.quantity * l.item.salesPrice, 0));
+    const gross = round2(this.cart().reduce((sum, l) => sum + l.quantity * priceOf(l), 0));
     return {
       id: q.clientId, receiptNo: '', soldAt: q.soldAt, customerName: null, total: q.total, discountTotal: round2(gross - q.total),
       cashAmount: q.cash, cardAmount: q.card, changeGiven: Math.max(0, round2(q.cash + q.card - q.total)), isRefund: false, lines, offline: true
@@ -556,7 +654,7 @@ export class PosPage implements OnInit, OnDestroy {
       error: (e) => {
         this.syncing = false;
         if (isOffline(e)) return;
-        this.queue.update((q) => q.map((x) => (x.clientId === next.clientId ? { ...x, error: this.notify.message(e) } : x)));
+        this.queue.update((q) => q.map((x) => (x.clientId === next.clientId ? { ...x, error: this.notify.message(e), errorCode: problemOf(e)?.code } : x)));
         writeStore(QUEUE_KEY, this.queue());
         this.sync();
       }
@@ -985,5 +1083,106 @@ class CustomerPickDialog {
     if (q.length < 2) return;
     this.api.get<{ id: string; code: string; nameEn: string; nameAr: string; phone: string | null; isActive: boolean }[]>('sales/customers', { search: q })
       .subscribe((r) => this.results.set(r.filter((c) => c.isActive).slice(0, 15)));
+  }
+}
+
+/** A manager types their PIN on the cashier's device to let a discount past the cashier limit through. Closes with the approval id. */
+@Component({
+  selector: 'app-pos-approval',
+  imports: [...SHARED],
+  template: `
+    <h2 mat-dialog-title>{{ 'pos.approvalTitle' | t }}</h2>
+    <mat-dialog-content>
+      <p>{{ 'pos.approvalHint' | t: { amount: data.discount.toFixed(2), max: data.max } }}</p>
+      @if (loaded() && !approvers().length) {
+        <p class="warn">{{ 'pos.noApprovers' | t }}</p>
+      } @else {
+        <mat-form-field appearance="outline" class="full"><mat-label>{{ 'pos.approver' | t }}</mat-label>
+          <mat-select [formControl]="approver">
+            @for (a of approvers(); track a.userId) { <mat-option [value]="a.userId">{{ a.name }}</mat-option> }
+          </mat-select></mat-form-field>
+        <mat-form-field appearance="outline" class="full"><mat-label>{{ 'pos.pin' | t }}</mat-label>
+          <input matInput type="password" inputmode="numeric" class="ltr" autocomplete="off" maxlength="6" [formControl]="pin" (keydown.enter)="approve()" />
+        </mat-form-field>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>{{ 'app.cancel' | t }}</button>
+      <button mat-flat-button [disabled]="!approver.value || pin.value.length < 4 || busy()" (click)="approve()">{{ 'pos.approve' | t }}</button>
+    </mat-dialog-actions>
+  `,
+  styles: `.full { width: 100%; } .warn { color: var(--mat-sys-error); }`
+})
+class ApprovalDialog implements OnInit {
+  private readonly api = inject(ApiService);
+  private readonly notify = inject(NotifyService);
+  protected readonly ref = inject(MatDialogRef<ApprovalDialog>);
+  protected readonly data = inject<{ shiftId: string; discount: number; max: number }>(MAT_DIALOG_DATA);
+  protected readonly approvers = signal<{ userId: string; name: string }[]>([]);
+  protected readonly loaded = signal(false);
+  protected readonly busy = signal(false);
+  protected readonly approver = new FormControl('', { nonNullable: true });
+  protected readonly pin = new FormControl('', { nonNullable: true });
+
+  ngOnInit(): void {
+    this.api.get<{ userId: string; name: string }[]>('sales/pos/approvers').subscribe({
+      next: (list) => {
+        this.approvers.set(list);
+        this.loaded.set(true);
+        if (list.length === 1) this.approver.setValue(list[0].userId);
+      },
+      error: (e) => this.notify.error(e)
+    });
+  }
+
+  protected approve(): void {
+    if (!this.approver.value || this.pin.value.length < 4 || this.busy()) return;
+    this.busy.set(true);
+    this.api.post<{ id: string; approverName: string }>('sales/pos/approvals', {
+      shiftId: this.data.shiftId, approverUserId: this.approver.value, pin: this.pin.value, discount: this.data.discount
+    }).subscribe({
+      next: (a) => this.ref.close(a.id),
+      error: (e) => {
+        this.busy.set(false);
+        this.pin.setValue('');
+        this.notify.error(e);
+      }
+    });
+  }
+}
+
+/** A manager sets the PIN they type on cashiers' devices to approve discounts. */
+@Component({
+  selector: 'app-pos-pin',
+  imports: [...SHARED],
+  template: `
+    <h2 mat-dialog-title>{{ 'pos.myPin' | t }}</h2>
+    <mat-dialog-content>
+      <p class="secondary">{{ 'pos.myPinHint' | t }}</p>
+      <mat-form-field appearance="outline" class="full"><mat-label>{{ 'pos.pin' | t }}</mat-label>
+        <input matInput type="password" inputmode="numeric" class="ltr" autocomplete="new-password" maxlength="6" [formControl]="pin" /></mat-form-field>
+      <mat-form-field appearance="outline" class="full"><mat-label>{{ 'pos.pinAgain' | t }}</mat-label>
+        <input matInput type="password" inputmode="numeric" class="ltr" autocomplete="new-password" maxlength="6" [formControl]="again" /></mat-form-field>
+      @if (again.value && again.value !== pin.value) { <p class="warn">{{ 'pos.pinMismatch' | t }}</p> }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>{{ 'app.cancel' | t }}</button>
+      <button mat-flat-button [disabled]="pin.value.length < 4 || again.value !== pin.value" (click)="save()">{{ 'app.save' | t }}</button>
+    </mat-dialog-actions>
+  `,
+  styles: `.full { width: 100%; } .secondary { color: var(--mat-sys-on-surface-variant); } .warn { color: var(--mat-sys-error); }`
+})
+class PinDialog {
+  private readonly api = inject(ApiService);
+  private readonly notify = inject(NotifyService);
+  protected readonly ref = inject(MatDialogRef<PinDialog>);
+  protected readonly pin = new FormControl('', { nonNullable: true });
+  protected readonly again = new FormControl('', { nonNullable: true });
+
+  protected save(): void {
+    this.api.put('sales/pos/my-pin', { pin: this.pin.value }).subscribe({
+      next: () => this.ref.close(true),
+      error: (e) => this.notify.error(e)
+    });
   }
 }

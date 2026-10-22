@@ -10,6 +10,9 @@ public sealed class SalesSettings : TenantEntity
     public Guid CompanyId { get; init; }
     public CreditControl CreditControl { get; set; } = CreditControl.Block;
     public int QuotationValidityDays { get; set; } = 30;
+
+    /// <summary>The biggest discount a cashier may give on a till line without a manager (price cuts count as discounts).</summary>
+    public decimal PosMaxDiscountPercent { get; set; } = 10m;
 }
 
 public sealed class PriceList : TenantEntity

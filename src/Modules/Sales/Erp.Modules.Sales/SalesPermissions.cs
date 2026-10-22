@@ -19,6 +19,7 @@ public static class SalesPermissions
     public const string ProjectsManage = "sal.projects:manage";
     public const string PosSell = "sal.pos:sell";
     public const string PosManage = "sal.pos:manage";
+    public const string PosOverride = "sal.pos:override";
     public const string TailoringUse = "sal.tailoring:use";
     public const string SalonUse = "sal.salon:use";
     public const string WorkshopUse = "sal.workshop:use";
@@ -47,6 +48,8 @@ internal sealed class SalesPermissionProvider : IPermissionProvider
         new(SalesPermissions.TailoringUse, "Take and deliver tailoring orders", "استلام وتسليم طلبات الخياطة", Salesperson, GeneralManager, Accountant),
         new(SalesPermissions.WorkshopUse, "Receive cars and deliver workshop jobs", "استلام السيارات وتسليم أعمال الورشة", Salesperson, GeneralManager, Accountant),
         new(SalesPermissions.SalonUse, "Book appointments and check out salon visits", "حجز المواعيد وتحصيل زيارات الصالون", Salesperson, GeneralManager, Accountant),
-        new(SalesPermissions.PosManage, "Set up point-of-sale registers", "إعداد نقاط البيع", GeneralManager, Accountant)
+        new(SalesPermissions.PosManage, "Set up point-of-sale registers", "إعداد نقاط البيع", GeneralManager, Accountant),
+        new(SalesPermissions.PosOverride, "Change prices and give any discount at the till, and approve cashiers' discounts with a PIN",
+            "تغيير الأسعار ومنح أي خصم في نقطة البيع، واعتماد خصومات الكاشير برمز سري", GeneralManager)
     ];
 }

@@ -54,6 +54,11 @@ type MasterKind = 'warehouses' | 'groups' | 'uoms';
               <mat-label>{{ 'tset.quoteValidity' | t }}</mat-label>
               <input matInput type="number" min="1" max="365" formControlName="quotationValidityDays" dir="ltr" />
             </mat-form-field>
+            <mat-form-field>
+              <mat-label>{{ 'tset.posMaxDiscount' | t }}</mat-label>
+              <input matInput type="number" min="0" max="100" formControlName="posMaxDiscountPercent" dir="ltr" />
+              <mat-hint>{{ 'tset.posMaxDiscountHint' | t }}</mat-hint>
+            </mat-form-field>
             @if (canManageSales) {
               <div class="actions"><button mat-flat-button [disabled]="salesForm.invalid">{{ 'app.save' | t }}</button></div>
             }
@@ -119,7 +124,8 @@ export class TradeSettingsPage {
   protected readonly creditPolicies: CreditControl[] = ['Block', 'Warn', 'None'];
   protected readonly salesForm = this.fb.group({
     creditControl: ['Block' as CreditControl, Validators.required],
-    quotationValidityDays: [30, [Validators.required, Validators.min(1), Validators.max(365)]]
+    quotationValidityDays: [30, [Validators.required, Validators.min(1), Validators.max(365)]],
+    posMaxDiscountPercent: [10, [Validators.required, Validators.min(0), Validators.max(100)]]
   });
   protected readonly sections: { kind: MasterKind; title: string }[] = [
     { kind: 'warehouses', title: 'tset.warehouses' },
@@ -159,7 +165,9 @@ export class TradeSettingsPage {
   protected saveSales(): void {
     const v = this.salesForm.getRawValue();
     this.sales
-      .saveSettings({ creditControl: v.creditControl, quotationValidityDays: Number(v.quotationValidityDays) })
+      .saveSettings({
+        creditControl: v.creditControl, quotationValidityDays: Number(v.quotationValidityDays), posMaxDiscountPercent: Number(v.posMaxDiscountPercent)
+      })
       .subscribe({ next: () => this.notify.success(), error: (e) => this.notify.error(e) });
   }
 

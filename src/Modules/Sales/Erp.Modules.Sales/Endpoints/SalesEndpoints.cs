@@ -18,7 +18,7 @@ public sealed record CustomerDto(Guid Id, string Code, string NameEn, string Nam
     string? Phone, string? AddressEn, string? AddressAr, int PaymentTermsDays, decimal? CreditLimit, Guid? PriceListId, Guid? SalespersonUserId, bool IsActive,
     string Currency = "QAR");
 
-public sealed record SalesSettingsDto(string CreditControl, int QuotationValidityDays);
+public sealed record SalesSettingsDto(string CreditControl, int QuotationValidityDays, decimal PosMaxDiscountPercent);
 
 public sealed record PriceListItemDto(Guid ItemId, string Sku, string NameEn, string NameAr, decimal UnitPrice);
 
@@ -106,12 +106,12 @@ internal static class SalesEndpoints
         g.MapGet("/settings", async (ErpDbContext db, ITenantContext t, CancellationToken ct) =>
         {
             var s = await db.Set<SalesSettings>().AsNoTracking().SingleAsync(x => x.CompanyId == t.RequireCompanyId(), ct);
-            return new SalesSettingsDto(s.CreditControl.ToString(), s.QuotationValidityDays);
+            return new SalesSettingsDto(s.CreditControl.ToString(), s.QuotationValidityDays, s.PosMaxDiscountPercent);
         }).RequirePermission(SalesPermissions.CustomersRead);
         g.MapPut("/settings", async (SalesSettingsRequest r, CustomerService s, CancellationToken ct) =>
         {
             var x = await s.SaveSettingsAsync(r, ct);
-            return new SalesSettingsDto(x.CreditControl.ToString(), x.QuotationValidityDays);
+            return new SalesSettingsDto(x.CreditControl.ToString(), x.QuotationValidityDays, x.PosMaxDiscountPercent);
         }).RequirePermission(SalesPermissions.SettingsManage);
 
         // Customers and prices

@@ -7,7 +7,11 @@ namespace Erp.Modules.Sales.Persistence;
 
 internal sealed class SalesSettingsConfiguration : IEntityTypeConfiguration<SalesSettings>
 {
-    public void Configure(EntityTypeBuilder<SalesSettings> b) => b.ToTable("settings", "sal");
+    public void Configure(EntityTypeBuilder<SalesSettings> b)
+    {
+        b.ToTable("settings", "sal");
+        b.Property(x => x.PosMaxDiscountPercent).AsQuantity();
+    }
 }
 
 internal sealed class PriceListConfiguration : IEntityTypeConfiguration<PriceList>
