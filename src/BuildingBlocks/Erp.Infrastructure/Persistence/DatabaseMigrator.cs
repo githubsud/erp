@@ -66,6 +66,12 @@ public sealed partial class DatabaseMigrator(DatabaseOptions options, IEnumerabl
             await using (var reader = await cmd.ExecuteReaderAsync(ct))
                 while (await reader.ReadAsync(ct)) applied[reader.GetInt32(0)] = reader.GetString(1);
 
+            // A backup from a newer version restored under an older program: its tables do not match this code.
+            var unknown = applied.Keys.Except(versioned.Select(s => s.Version)).Order().ToList();
+            if (unknown.Count > 0)
+                throw new InvalidOperationException(
+                    $"The database was made by a newer version of the ERP (migration V{unknown[^1]:D4} is unknown here). Install the newer version.");
+
             foreach (var script in versioned)
             {
                 if (applied.TryGetValue(script.Version, out var checksum))

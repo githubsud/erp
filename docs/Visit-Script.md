@@ -21,9 +21,9 @@ numbers, surprise expiries), not with "ERP". Show their own kind of business, on
    | Contractor | `contracting` | Projects, subcontracts, payroll |
 
    Sign in with the company code, `owner@<code>.qa` and `Demo-Password-2026`.
-3. **Fresh dates (optional).** The demo's "today" figures come from the day the data was made. `scripts\demo-reset.ps1`
-   rebuilds the demo with today's dates in the development copy (http://localhost:5081). The installed ERP keeps the
-   demo data imported on 21/10/2026; ask for a refresh step if its dates feel old.
+3. **Fresh dates.** The demo's "today" figures come from the day the data was made. In PowerShell opened as
+   Administrator, in the source folder: `powershell -ExecutionPolicy Bypass -File scripts\demo-refresh.ps1 -Fresh`
+   (about 10 minutes). It rebuilds the demo with today's dates and loads it into the installed ERP; the AI keys are kept.
 4. **Paper.** 10 printed leaflets (`docs/Sales-Leaflet.html`, print A4 from the browser) with your name and WhatsApp
    filled in.
 

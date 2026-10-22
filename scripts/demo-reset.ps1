@@ -38,16 +38,14 @@ function Save-Dump($path) {
 
 function Stop-Api {
     # Only copies started from the source folder: the installed service runs from its own folder and keeps running.
-    $service = (Get-CimInstance Win32_Service -Filter "Name='ErpApi'" -ErrorAction SilentlyContinue).PathName
-    $serviceDir = if ($service) { Split-Path ($service -replace '^"([^"]+)".*$', '$1' -replace '^(\S+)\s.*$', '$1') -Parent } else { $null }
-    Get-Process -Name 'Erp.Api' -ErrorAction SilentlyContinue |
-        Where-Object { -not $serviceDir -or -not $_.Path -or -not $_.Path.StartsWith($serviceDir, [StringComparison]::OrdinalIgnoreCase) } |
-        Stop-Process -Force
+    $service = (Get-CimInstance Win32_Service -Filter "Name='ErpApi'" -ErrorAction SilentlyContinue).ProcessId
+    Get-Process -Name 'Erp.Api' -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $service } | Stop-Process -Force
     Start-Sleep -Seconds 2
 }
 
 function Start-Api {
     $env:ASPNETCORE_ENVIRONMENT = 'Development'
+    $env:Security__SignInAttemptsPerMinute = '1000'   # the seed scripts sign in once per business and step
     Start-Process -FilePath 'dotnet' -ArgumentList "run --project src/Erp.Api --no-launch-profile --urls $Api" -WorkingDirectory $root -WindowStyle Minimized
     for ($i = 0; $i -lt 120; $i++) {
         try {

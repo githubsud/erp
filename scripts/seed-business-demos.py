@@ -241,10 +241,11 @@ def expense(acc, date, account_code, amount, memo_en, memo_ar, pay="1110"):
 
 
 def capital(amount):
-    """The owner's money in the bank before the first day of trading, so the demo never shows a negative cash balance."""
+    """The owner's money before the first day of trading (5,000 of it as cash in the shop), so no cash or bank balance goes negative."""
     acc = accounts()
     post("/api/finance/journal-vouchers", {"date": d(-75), "memoEn": "Owner's capital", "memoAr": "رأس مال المالك", "lines": [
-        {"accountId": acc["1120"], "debit": amount, "credit": 0}, {"accountId": acc["3110"], "debit": 0, "credit": amount}]})
+        {"accountId": acc["1120"], "debit": amount - 5000, "credit": 0}, {"accountId": acc["1110"], "debit": 5000, "credit": 0},
+        {"accountId": acc["3110"], "debit": 0, "credit": amount}]})
 
 
 def till(acc, main, code="T1", en="Till 1", ar="الصندوق 1"):
