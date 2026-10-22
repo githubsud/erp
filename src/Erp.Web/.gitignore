@@ -42,3 +42,8 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Browser tests (Playwright)
+/e2e/.shop.json
+/test-results
+/playwright-report

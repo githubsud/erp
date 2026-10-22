@@ -6,7 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "e2e": "playwright test"
   },
   "private": true,
   "packageManager": "npm@10.9.8",
@@ -30,6 +31,7 @@
     "@angular/build": "^22.2.2",
     "@angular/cli": "^22.2.2",
     "@angular/compiler-cli": "^22.2.0",
+    "@playwright/test": "1.64.0",
     "@types/qrcode": "^1.5.5",
     "jsdom": "^30.0.0",
     "prettier": "^3.8.1",

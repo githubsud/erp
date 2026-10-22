@@ -59,6 +59,53 @@ jobs:
           name: web-dist
           path: src/Erp.Web/dist/erp-web/browser
 
+  # The real app in a real browser (Arabic, phone and desktop): sign-in, the till offline and online, Excel import, payroll to WPS.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      CI: true
+      DOTNET_NOLOGO: true
+      Database__OwnerConnectionString: Host=localhost;Port=5432;Database=erp;Username=postgres;Password=postgres
+      Database__AppConnectionString: Host=localhost;Port=5432;Database=erp;Username=erp_app;Password=erp_app_dev_password
+      Database__WorkerConnectionString: Host=localhost;Port=5432;Database=erp;Username=erp_worker;Password=erp_worker_dev_password
+    defaults:
+      run:
+        working-directory: src/Erp.Web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/Erp.Web/package-lock.json
+      - run: npm ci
+      - run: npx ng build
+      - run: dotnet build ../Erp.Api
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            src/Erp.Web/playwright-report
+            src/Erp.Web/test-results
+
   docker:
     runs-on: ubuntu-latest
     steps:

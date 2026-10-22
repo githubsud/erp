@@ -62,7 +62,9 @@ docker compose up -d                      # PostgreSQL 17 on localhost:5433
 dotnet run --project src/Erp.Api          # http://localhost:5080/scalar (migrates on start in Development)
 cd src/Erp.Web && npx ng serve            # http://localhost:4200, proxies /api
 dotnet test                               # integration tests use ERP_TEST_POSTGRES or localhost:5433, else Testcontainers
+cd src/Erp.Web && npx ng build && npm run e2e   # browser tests (Arabic, phone + desktop) on a fresh test shop; E2E_CHANNEL=chrome uses installed Chrome
 ```
+Browser tests live in `src/Erp.Web/e2e/*.e2e.ts` and read labels from `ar.ts` via `t('key')`; add one when a screen's main job changes.
 
 ## Regulatory caution
 Qatar rules marked ⚠️ VERIFY in the blueprint (WPS SIF layout, Decision 50/2026 deadlines, overtime rates, WHT/excise, e-invoicing)
