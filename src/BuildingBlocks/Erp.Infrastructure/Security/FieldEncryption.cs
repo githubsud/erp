@@ -58,6 +58,8 @@ public static class FieldProtector
         return Encoding.UTF8.GetString(plain);
     }
 
+    public static bool IsEncrypted(string stored) => stored.StartsWith(Prefix, StringComparison.Ordinal);
+
     /// <summary>Deterministic keyed hash of a normalised value, for equality search and uniqueness.</summary>
     public static string BlindIndex(string value)
     {
@@ -73,6 +75,14 @@ public static class FieldProtector
         return key;
     }
 }
+
+/// <summary>
+/// For a column that held plain text before it was encrypted: values written earlier are read as they are, and encrypted the next time
+/// the row is saved (or by a backfill).
+/// </summary>
+public sealed class GraduallyEncryptedStringConverter() : ValueConverter<string?, string?>(
+    v => v == null ? null : FieldProtector.Encrypt(v),
+    v => v == null ? null : FieldProtector.IsEncrypted(v) ? FieldProtector.Decrypt(v) : v);
 
 /// <summary>Encrypts optional string columns; EF never passes nulls to converters, so nulls stay NULL.</summary>
 public sealed class EncryptedStringConverter() : ValueConverter<string?, string?>(

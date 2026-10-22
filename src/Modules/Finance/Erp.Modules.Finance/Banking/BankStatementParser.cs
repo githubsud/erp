@@ -146,7 +146,7 @@ public static class BankStatementParser
 
     private static List<string?[]> ReadXlsx(Stream file)
     {
-        using var workbook = new XLWorkbook(file);
+        using var workbook = Erp.Infrastructure.Import.ExcelImport.Open(file);
         var sheet = workbook.Worksheet(1);
         var lastCol = sheet.LastColumnUsed()?.ColumnNumber() ?? 0;
         var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 0;

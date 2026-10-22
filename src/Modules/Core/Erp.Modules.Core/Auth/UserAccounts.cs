@@ -28,6 +28,11 @@ internal sealed class UserAccounts(ErpDbContext db, ITenantContext tenant, IPass
                 throw new ConflictException("auth.username_taken", $"The username {login} is already used.", $"اسم المستخدم {login} مستخدم مسبقاً.");
             user = taken;
         }
+        // Resetting hands a new password to whoever asked: never for an account that has since been given more than this portal role.
+        var role = await db.Set<Role>().SingleOrDefaultAsync(r => r.Code == roleCode, ct) ?? throw new NotFoundException("Role", roleCode);
+        if (user is not null && await db.Set<UserRole>().AnyAsync(r => r.UserId == user.Id && r.RoleId != role.Id, ct))
+            throw new ConflictException("auth.portal_is_staff", "This sign-in has other access in the system too. The owner resets it from the users screen.",
+                "حساب الدخول هذا له صلاحيات أخرى في النظام. يعيد المالك تعيينه من شاشة المستخدمين.");
         if (user is null)
         {
             var mail = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
@@ -46,7 +51,6 @@ internal sealed class UserAccounts(ErpDbContext db, ITenantContext tenant, IPass
         user.FailedLoginCount = 0;
         user.LockoutUntil = null;
 
-        var role = await db.Set<Role>().SingleOrDefaultAsync(r => r.Code == roleCode, ct) ?? throw new NotFoundException("Role", roleCode);
         if (!await db.Set<UserRole>().AnyAsync(r => r.UserId == user.Id && r.RoleId == role.Id, ct))
             db.Add(new UserRole { UserId = user.Id, RoleId = role.Id });
         await db.SaveChangesAsync(ct);

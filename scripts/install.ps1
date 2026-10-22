@@ -102,6 +102,9 @@ $version = if (Test-Path (Join-Path $Package 'VERSION.txt')) { (Get-Content (Joi
 Write-Host "Installing ERP $version into $InstallDir"
 New-Item -ItemType Directory -Force $InstallDir, $configDir, (Join-Path $InstallDir 'backups') | Out-Null
 
+# The key in src/Erp.Api/appsettings.Development.json: anyone with the source code has it.
+$DevFieldKey = 'ZGV2LW9ubHktZmllbGQta2V5LTMyLWJ5dGVzLWxvbmc='
+
 # --- Settings (kept on updates) -----------------------------------------------------------------------------------------
 $settings = if (Test-Path $configFile) { Get-Content $configFile -Raw | ConvertFrom-Json } else { $null }
 $fresh = $null -eq $settings
@@ -114,6 +117,10 @@ if ($fresh) {
         $old = Get-Content $ImportKeysFrom -Raw | ConvertFrom-Json
         $fieldKey = $old.Security.FieldEncryptionKey; $indexKey = $old.Security.BlindIndexKey
         if (-not $fieldKey -or -not $indexKey) { throw "No Security keys in $ImportKeysFrom" }
+        if ($fieldKey -eq $DevFieldKey) {
+            Write-Warning ("These are the public development keys (they are in the source code): QID, passport and IBAN numbers are not " +
+                "protected with them. Fine for demo data; for a real shop install without -ImportKeysFrom so new keys are made.")
+        }
     }
     $conn = { param($user, $pw) "Host=localhost;Port=$DbPort;Database=erp;Username=$user;Password=$pw" }
     $settings = [ordered]@{

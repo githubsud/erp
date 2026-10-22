@@ -164,7 +164,8 @@ public sealed class EmployeeDocument : TenantEntity
 {
     public Guid EmployeeId { get; init; }
     public EmployeeDocumentType DocType { get; set; }
-    public string? DocNo { get; set; }
+    /// <summary>QID or passport number for those documents: encrypted, and masked for people without hr.sensitive:view.</summary>
+    [Sensitive] public string? DocNo { get; set; }
     public DateOnly? IssueDate { get; set; }
     public DateOnly? ExpiryDate { get; set; }
     public string? Notes { get; set; }

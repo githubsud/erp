@@ -35,6 +35,7 @@ public sealed class CoreModule : IModule
         services.AddScoped<ITenantProvisioner, ApprovalProvisioner>();
         services.AddScoped<Platform.ReportScheduleService>();
         services.AddScoped<Platform.PlatformAuthService>();
+        services.AddScoped<Erp.Infrastructure.Web.IPlatformAdminStatus, Platform.PlatformAdminStatus>();
         services.AddScoped<Platform.BackOfficeService>();
         services.AddScoped<Platform.SupportService>();
         services.AddScoped<IGettingStartedProvider, Platform.CoreGettingStarted>();

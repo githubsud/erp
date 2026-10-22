@@ -3,6 +3,7 @@ using Erp.Api;
 using Erp.Infrastructure;
 using Erp.Infrastructure.Persistence;
 using Erp.Infrastructure.Tenancy;
+using Erp.Infrastructure.Web;
 using Erp.Modules.Core.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -74,6 +75,10 @@ if (args.Contains("--migrate-only"))
 if (app.Configuration.GetValue<bool>($"{DatabaseOptions.Section}:{nameof(DatabaseOptions.MigrateOnStartup)}"))
     await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
 
+// The development keys are in the source code: anything encrypted with them (QID, passport, IBAN) is not really protected.
+if (!app.Environment.IsDevelopment() && app.Configuration["Security:FieldEncryptionKey"] == "ZGV2LW9ubHktZmllbGQta2V5LTMyLWJ5dGVzLWxvbmc=")
+    app.Logger.LogWarning("Security:FieldEncryptionKey is the public development key. Use it for demo data only; a real shop needs its own keys.");
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -81,6 +86,7 @@ app.UseStatusCodePages();
 // Web:Root is the `ng build` output; when it is missing the app is served elsewhere (ng serve, Cloudflare Pages).
 var webRoot = Path.GetFullPath(app.Configuration["Web:Root"] ?? "../Erp.Web/dist/erp-web/browser", app.Environment.ContentRootPath);
 var serveWeb = File.Exists(Path.Combine(webRoot, "index.html"));
+app.UseSecurityHeaders(serveWeb ? Path.Combine(webRoot, "index.html") : null);
 if (serveWeb)
 {
     var files = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(webRoot);
@@ -96,6 +102,7 @@ if (serveWeb)
 }
 // Explicit, after the files: otherwise routing runs first, picks the index.html fallback and static files are skipped.
 app.UseRouting();
+app.UseRateLimiter();
 app.UseCors();
 app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();

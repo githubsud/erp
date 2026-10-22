@@ -46,9 +46,9 @@ internal static class CoreEndpoints
 
         var auth = app.MapGroup("/api/auth").WithTags("Auth");
         auth.MapPost("/login", (LoginRequest request, AuthService service, CancellationToken ct) => service.LoginAsync(request, ct))
-            .AllowAnonymous();
+            .AllowAnonymous().RequireRateLimiting(SignInRateLimit.Policy);
         auth.MapPost("/mfa/verify", (MfaVerifyRequest request, AuthService service, CancellationToken ct) => service.VerifyMfaAsync(request, ct))
-            .AllowAnonymous();
+            .AllowAnonymous().RequireRateLimiting(SignInRateLimit.Policy);
         auth.MapPost("/refresh", (RefreshRequest request, AuthService service, CancellationToken ct) => service.RefreshAsync(request, ct))
             .AllowAnonymous();
         auth.MapPost("/logout", async (RefreshRequest request, AuthService service, CancellationToken ct) =>
@@ -162,7 +162,7 @@ internal static class CoreEndpoints
     }
 
     private static async Task<UserDto> CreateUser(CreateUserRequest request, ErpDbContext db, ITenantContext tenant,
-        IPasswordHasher<AppUser> hasher, CancellationToken ct)
+        IPasswordHasher<AppUser> hasher, IPermissionService permissions, CancellationToken ct)
     {
         if ((request.Password ?? "").Length < TenantProvisioningService.MinPasswordLength)
             throw new BusinessRuleException("auth.weak_password", $"Password must be at least {TenantProvisioningService.MinPasswordLength} characters.",
@@ -179,6 +179,7 @@ internal static class CoreEndpoints
         user.PasswordHash = hasher.HashPassword(user, request.Password!);
         db.Add(user);
         var roleIds = await ResolveRolesAsync(db, request.Roles, ct);
+        await EnsureCanGrantAsync(roleIds.SelectMany(r => r.Permissions.Select(p => p.Permission)), permissions, tenant, ct);
         db.AddRange(roleIds.Select(r => new UserRole { UserId = user.Id, RoleId = r.Id }));
         await db.SaveChangesAsync(ct);
         return new UserDto(user.Id, user.Email!, user.DisplayNameEn, user.DisplayNameAr, user.PreferredLanguage, true, null,
@@ -186,10 +187,12 @@ internal static class CoreEndpoints
     }
 
     private static async Task<IResult> SetUserRoles(Guid id, SetUserRolesRequest request, ErpDbContext db, ITenantContext tenant,
-        IMemoryCache cache, CancellationToken ct)
+        IPermissionService permissions, IMemoryCache cache, CancellationToken ct)
     {
         if (!await db.Set<AppUser>().AnyAsync(u => u.Id == id, ct)) throw new NotFoundException("User", id);
         var roles = await ResolveRolesAsync(db, request.Roles, ct);
+        await EnsureCanGrantAsync([.. await PermissionsOfAsync(db, id, ct), .. roles.SelectMany(r => r.Permissions.Select(p => p.Permission))],
+            permissions, tenant, ct);
         var existing = await db.Set<UserRole>().Where(ur => ur.UserId == id).ToListAsync(ct);
         db.RemoveRange(existing.Where(e => roles.All(r => r.Id != e.RoleId)));
         db.AddRange(roles.Where(r => existing.All(e => e.RoleId != r.Id)).Select(r => new UserRole { UserId = id, RoleId = r.Id }));
@@ -198,20 +201,45 @@ internal static class CoreEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> DeactivateUser(Guid id, ErpDbContext db, ITenantContext tenant, CancellationToken ct)
+    /// <summary>Signs the user out everywhere at once: their sessions are revoked and their permissions stop at the next request.</summary>
+    private static async Task<IResult> DeactivateUser(Guid id, ErpDbContext db, ITenantContext tenant, IPermissionService permissions,
+        IMemoryCache cache, IClock clock, CancellationToken ct)
     {
         if (id == tenant.UserId)
             throw new BusinessRuleException("user.cannot_deactivate_self", "You cannot deactivate your own account.", "لا يمكنك تعطيل حسابك.");
         var user = await db.Set<AppUser>().SingleOrDefaultAsync(u => u.Id == id, ct) ?? throw new NotFoundException("User", id);
+        await EnsureCanGrantAsync(await PermissionsOfAsync(db, id, ct), permissions, tenant, ct);
         user.IsActive = false;
+        foreach (var token in await db.Set<RefreshToken>().Where(r => r.UserId == id && r.RevokedAt == null).ToListAsync(ct))
+            token.RevokedAt = clock.UtcNow;
         await db.SaveChangesAsync(ct);
+        PermissionService.Invalidate(cache, tenant.RequireTenantId(), id);
         return Results.NoContent();
     }
+
+    /// <summary>
+    /// Full access (the owner role) is only handed out, taken away or switched off by an owner: a manager who can add staff cannot make
+    /// anyone an owner, nor demote or deactivate the owner.
+    /// </summary>
+    private static async Task EnsureCanGrantAsync(IEnumerable<string> wanted, IPermissionService permissions, ITenantContext tenant, CancellationToken ct)
+    {
+        if (!wanted.Contains(DefaultRoles.Wildcard)) return;
+        var mine = await permissions.GetPermissionsAsync(tenant.UserId ?? throw new ForbiddenException(), ct);
+        if (!mine.Contains(DefaultRoles.Wildcard))
+            throw new BusinessRuleException("user.beyond_own_access", "Only an owner can give, change or switch off owner access.",
+                "لا يمنح صلاحيات المالك أو يغيّرها أو يوقفها إلا المالك.");
+    }
+
+    private static async Task<List<string>> PermissionsOfAsync(ErpDbContext db, Guid userId, CancellationToken ct) =>
+        await (from ur in db.Set<UserRole>()
+               join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
+               where ur.UserId == userId
+               select rp.Permission).Distinct().ToListAsync(ct);
 
     private static async Task<List<Role>> ResolveRolesAsync(ErpDbContext db, IReadOnlyList<string>? codes, CancellationToken ct)
     {
         var wanted = (codes ?? []).Select(c => c.Trim().ToLowerInvariant()).Distinct().ToList();
-        var roles = await db.Set<Role>().Where(r => wanted.Contains(r.Code)).ToListAsync(ct);
+        var roles = await db.Set<Role>().Include(r => r.Permissions).Where(r => wanted.Contains(r.Code)).ToListAsync(ct);
         var missing = wanted.Except(roles.Select(r => r.Code)).ToList();
         if (missing.Count > 0)
             throw new BusinessRuleException("role.unknown", $"Unknown role(s): {string.Join(", ", missing)}", "دور غير معروف.");

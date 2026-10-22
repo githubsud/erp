@@ -44,7 +44,7 @@ public static class CsvFile
         _ => Escape(value.ToString() ?? "")
     };
 
-    private static string Escape(string value)
+    public static string Escape(string value)
     {
         // Guard against formula injection when the file is opened in a spreadsheet.
         if (value.Length > 0 && "=+-@".Contains(value[0]) && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))

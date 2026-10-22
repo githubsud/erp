@@ -93,7 +93,8 @@ export class AuthService {
   }
 
   changePassword(currentPassword: string, newPassword: string): Observable<void> {
-    return this.http.post<void>(this.url('password'), { currentPassword, newPassword }).pipe(
+    // This device stays signed in; the server signs out every other session.
+    return this.http.post<void>(this.url('password'), { currentPassword, newPassword, refreshToken: this.session()?.refreshToken }).pipe(
       tap(() => {
         const s = this.session();
         if (s) this.store({ ...s, mustChangePassword: false }, false);

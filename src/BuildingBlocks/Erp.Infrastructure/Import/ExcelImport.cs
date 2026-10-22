@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using ClosedXML.Excel;
 using Erp.Infrastructure.Persistence;
 using Erp.SharedKernel.Domain;
@@ -65,11 +66,39 @@ public static class ExcelImport
     private const int FirstDataRow = 3;
     public const string ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+    /// <summary>Unpacked, an .xlsx this big is far beyond any real price list or staff list.</summary>
+    public const long MaxUnpackedBytes = 200L * 1024 * 1024;
+
+    /// <summary>
+    /// Opens an uploaded .xlsx (a zip file) after checking how big it is once unpacked: a small file built to unpack to gigabytes would
+    /// otherwise use up the computer's memory and stop the ERP for everyone.
+    /// </summary>
+    public static XLWorkbook Open(Stream file)
+    {
+        var copy = new MemoryStream();
+        file.CopyTo(copy);
+        copy.Position = 0;
+        try
+        {
+            using (var zip = new ZipArchive(copy, ZipArchiveMode.Read, leaveOpen: true))
+                if (zip.Entries.Count > 10_000 || zip.Entries.Sum(e => e.Length) > MaxUnpackedBytes)
+                    throw new BusinessRuleException("import.too_large", "This file is too large to import. Split it into smaller files.",
+                        "هذا الملف أكبر من أن يُستورد. قسّمه إلى ملفات أصغر.");
+        }
+        catch (InvalidDataException)
+        {
+            throw new BusinessRuleException("import.unreadable", "The file could not be read. Use the Excel template (.xlsx).",
+                "تعذر قراءة الملف. استخدم قالب إكسل (.xlsx).");
+        }
+        copy.Position = 0;
+        return new XLWorkbook(copy);
+    }
+
     public static List<ImportRow> Read(Stream file, ImportColumn[] columns)
     {
         try
         {
-            using var workbook = new XLWorkbook(file);
+            using var workbook = Open(file);
             var sheet = workbook.Worksheet(1);
             var map = new Dictionary<int, string>();
             foreach (var cell in sheet.Row(1).CellsUsed())

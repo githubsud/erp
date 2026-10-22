@@ -130,8 +130,7 @@ internal sealed class FinanceReports(ErpDbContext db, ITenantContext tenant)
         return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(sb.ToString())];
     }
 
-    private static string Csv(string? value) =>
-        value is null ? "" : value.IndexOfAny([',', '"', '\n', '\r']) >= 0 ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
+    private static string Csv(string? value) => value is null ? "" : CsvFile.Escape(value);
 
     private static TrialBalanceRow Row(Account a, decimal opening, decimal debit, decimal credit) =>
         new(a.Id, a.Code, a.NameEn, a.NameAr, a.AccountType.ToString(), opening, debit, credit, opening + debit - credit);

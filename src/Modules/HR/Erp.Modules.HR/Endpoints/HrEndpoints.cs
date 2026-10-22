@@ -139,16 +139,20 @@ internal static class HrEndpoints
             return Results.NoContent();
         }).RequirePermission(HrPermissions.EmployeesManage);
         g.MapGet("/employees/{id:guid}/documents", ListEmployeeDocuments).RequirePermission(HrPermissions.EmployeesRead);
-        g.MapPost("/employees/{id:guid}/documents", async (Guid id, EmployeeDocumentRequest r, DocumentService s, CancellationToken ct) =>
-            ToDto(await s.AddEmployeeDocumentAsync(id, r, ct))).RequirePermission(HrPermissions.DocumentsManage);
-        g.MapPut("/employee-documents/{id:guid}", async (Guid id, EmployeeDocumentRequest r, DocumentService s, CancellationToken ct) =>
-            ToDto(await s.UpdateEmployeeDocumentAsync(id, r, ct))).RequirePermission(HrPermissions.DocumentsManage);
+        g.MapPost("/employees/{id:guid}/documents", async (Guid id, EmployeeDocumentRequest r, DocumentService s, IPermissionService p, CancellationToken ct) =>
+            ToDto(await s.AddEmployeeDocumentAsync(id, r, ct), await p.HasAsync(HrPermissions.SensitiveView, ct))).RequirePermission(HrPermissions.DocumentsManage);
+        g.MapPut("/employee-documents/{id:guid}", async (Guid id, EmployeeDocumentRequest r, DocumentService s, IPermissionService p, CancellationToken ct) =>
+            ToDto(await s.UpdateEmployeeDocumentAsync(id, r, ct), await p.HasAsync(HrPermissions.SensitiveView, ct))).RequirePermission(HrPermissions.DocumentsManage);
         g.MapGet("/company-documents", ListCompanyDocuments).RequirePermission(HrPermissions.EmployeesRead);
         g.MapPost("/company-documents", async (CompanyDocumentRequest r, DocumentService s, CancellationToken ct) =>
             ToDto(await s.SaveCompanyDocumentAsync(null, r, ct))).RequirePermission(HrPermissions.DocumentsManage);
         g.MapPut("/company-documents/{id:guid}", async (Guid id, CompanyDocumentRequest r, DocumentService s, CancellationToken ct) =>
             ToDto(await s.SaveCompanyDocumentAsync(id, r, ct))).RequirePermission(HrPermissions.DocumentsManage);
-        g.MapGet("/documents/expiring", (DocumentService s, CancellationToken ct, int withinDays = 90) => s.ExpiringAsync(withinDays, ct))
+        g.MapGet("/documents/expiring", async (DocumentService s, IPermissionService p, CancellationToken ct, int withinDays = 90) =>
+            {
+                var rows = await s.ExpiringAsync(withinDays, ct);
+                return await p.HasAsync(HrPermissions.SensitiveView, ct) ? rows : rows.Select(DocumentService.Masked).ToList();
+            })
             .RequirePermission(HrPermissions.EmployeesRead);
 
         g.MapGet("/leave-types", ListLeaveTypes).RequirePermission(HrPermissions.EmployeesRead);
@@ -370,10 +374,15 @@ internal static class HrEndpoints
 
     // Documents ---------------------------------------------------------------------------------------
 
-    private static async Task<List<DocumentDto>> ListEmployeeDocuments(Guid id, ErpDbContext db, CancellationToken ct) =>
-        (await db.Set<EmployeeDocument>().AsNoTracking().Where(d => d.EmployeeId == id).OrderBy(d => d.ExpiryDate).ToListAsync(ct)).Select(ToDto).ToList();
+    private static async Task<List<DocumentDto>> ListEmployeeDocuments(Guid id, ErpDbContext db, IPermissionService p, CancellationToken ct)
+    {
+        var show = await p.HasAsync(HrPermissions.SensitiveView, ct);
+        return (await db.Set<EmployeeDocument>().AsNoTracking().Where(d => d.EmployeeId == id).OrderBy(d => d.ExpiryDate).ToListAsync(ct))
+            .Select(d => ToDto(d, show)).ToList();
+    }
 
-    private static DocumentDto ToDto(EmployeeDocument d) => new(d.Id, d.DocType.ToString(), d.DocNo, d.IssueDate, d.ExpiryDate, d.Notes);
+    private static DocumentDto ToDto(EmployeeDocument d, bool showSensitive) =>
+        new(d.Id, d.DocType.ToString(), showSensitive ? d.DocNo : DocumentService.Mask(d.DocNo), d.IssueDate, d.ExpiryDate, d.Notes);
 
     private static async Task<List<CompanyDocumentDto>> ListCompanyDocuments(ErpDbContext db, ITenantContext t, CancellationToken ct) =>
         (await db.Set<CompanyDocument>().AsNoTracking().Where(d => d.CompanyId == t.RequireCompanyId()).OrderBy(d => d.ExpiryDate).ToListAsync(ct))

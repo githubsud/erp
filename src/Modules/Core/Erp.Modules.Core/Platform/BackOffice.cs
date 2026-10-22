@@ -78,6 +78,17 @@ public sealed record CountByType(string BusinessType, int Count);
 public sealed record ResetPasswordResponse(string Login, string TemporaryPassword);
 
 /// <summary>Platform administrators: sign-in (a token without a tenant, carrying the platform-admin claim) and the admin list.</summary>
+/// <summary>Checked on every back-office call, cached for half a minute.</summary>
+internal sealed class PlatformAdminStatus(ErpDbContext db, IMemoryCache cache) : IPlatformAdminStatus
+{
+    public async Task<bool> IsActiveAsync(Guid adminId, CancellationToken ct) =>
+        await cache.GetOrCreateAsync($"platform-admin:{adminId}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+            return await db.Set<PlatformAdmin>().AsNoTracking().AnyAsync(a => a.Id == adminId && a.IsActive, ct);
+        });
+}
+
 internal sealed class PlatformAuthService(ErpDbContext db, JwtOptions jwt, IClock clock, IPasswordHasher<PlatformAdmin> hasher)
 {
     public const string Claim = PlatformAdminAccess.Claim;
@@ -88,7 +99,12 @@ internal sealed class PlatformAuthService(ErpDbContext db, JwtOptions jwt, ICloc
         var email = (r.Email ?? "").Trim().ToLowerInvariant();
         var admin = await db.Set<PlatformAdmin>().SingleOrDefaultAsync(a => a.Email == email, ct);
         var invalid = new BusinessRuleException("auth.invalid_credentials", "Email or password is incorrect.", "البريد الإلكتروني أو كلمة المرور غير صحيحة.");
-        if (admin is null || !admin.IsActive) throw invalid;
+        if (admin is null || !admin.IsActive)
+        {
+            // Same work as a real check, so the answer time does not tell which emails are administrators.
+            hasher.HashPassword(new PlatformAdmin { Email = email, DisplayName = "" }, r.Password ?? "");
+            throw invalid;
+        }
         if (admin.LockoutUntil > clock.UtcNow)
             throw new BusinessRuleException("auth.locked_out", "Too many failed attempts. Try again later.", "محاولات فاشلة كثيرة. حاول مرة أخرى لاحقاً.");
         if (hasher.VerifyHashedPassword(admin, admin.PasswordHash, r.Password ?? "") == PasswordVerificationResult.Failed)
@@ -558,13 +574,9 @@ internal static class BackOfficeEndpoints
             return new AdminDto(a.Id, a.Email, a.DisplayName, a.IsActive, a.LastLoginAt);
         }).WithTags("Platform").AddEndpointFilter(CoreEndpoints.RequirePlatformKeyFilter);
         app.MapPost("/api/backoffice/auth/login", (AdminLoginRequest r, PlatformAuthService s, CancellationToken ct) => s.LoginAsync(r, ct))
-            .WithTags("Back-office").AllowAnonymous();
+            .WithTags("Back-office").AllowAnonymous().RequireRateLimiting(SignInRateLimit.Policy);
 
-        var g = app.MapGroup("/api/backoffice").WithTags("Back-office").RequireAuthorization().AddEndpointFilter(async (context, next) =>
-        {
-            PlatformAuthService.AdminId(context.HttpContext);
-            return await next(context);
-        });
+        var g = app.MapGroup("/api/backoffice").WithTags("Back-office").RequirePlatformAdmin();
         g.MapGet("/summary", (BackOfficeService s, CancellationToken ct) => s.SummaryAsync(ct));
         g.MapGet("/customers", (BackOfficeService s, CancellationToken ct, string? search = null, string? status = null) => s.CustomersAsync(search, status, ct));
         g.MapGet("/customers/{id:guid}", (Guid id, BackOfficeService s, CancellationToken ct) => s.DetailAsync(id, ct));

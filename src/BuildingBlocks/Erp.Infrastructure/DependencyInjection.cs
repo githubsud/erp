@@ -66,6 +66,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
         services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+        services.AddSignInRateLimit(configuration);
         services.AddExceptionHandler<ErpExceptionHandler>();
         services.AddProblemDetails();
 

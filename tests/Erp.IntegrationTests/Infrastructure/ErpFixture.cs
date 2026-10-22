@@ -71,6 +71,8 @@ public sealed class ErpFixture : IAsyncLifetime
             builder.UseSetting("Security:FieldEncryptionKey", Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i + 1)).ToArray()));
             builder.UseSetting("Security:BlindIndexKey", Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i + 101)).ToArray()));
             builder.UseSetting("Platform:ApiKey", PlatformKey);
+            // Every test signs in from the same address; one test checks the limit with its own host.
+            builder.UseSetting("Security:SignInAttemptsPerMinute", "100000");
             builder.ConfigureTestServices(services => services.AddSingleton<IAiChatClient>(Ai));
         });
         _ = _factory.Server; // starts the host and runs migrations

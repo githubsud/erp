@@ -646,11 +646,7 @@ internal static class SupportEndpoints
         g.MapPost("/tickets/{id:guid}/solve", (Guid id, SupportService s, CancellationToken ct) => s.CustomerSolveAsync(id, ct));
         g.MapGet("/attachments/{id:guid}", async (Guid id, SupportService s, CancellationToken ct) => FileResult(await s.MyAttachmentAsync(id, ct)));
 
-        var bo = app.MapGroup("/api/backoffice/support").WithTags("Back-office").RequireAuthorization().AddEndpointFilter(async (context, next) =>
-        {
-            PlatformAuthService.AdminId(context.HttpContext);
-            return await next(context);
-        });
+        var bo = app.MapGroup("/api/backoffice/support").WithTags("Back-office").RequirePlatformAdmin();
         bo.MapGet("/tickets", (SupportService s, CancellationToken ct, string? status = null, string? type = null, Guid? tenantId = null, string? search = null) =>
             s.AdminTicketsAsync(status, type, tenantId, search, ct));
         bo.MapGet("/counts", (SupportService s, CancellationToken ct) => s.CountsAsync(ct));

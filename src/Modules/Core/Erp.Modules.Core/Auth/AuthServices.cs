@@ -41,7 +41,8 @@ public sealed class JwtOptions
 /// <summary><see cref="Email"/> may also be a username (employees sign in with their employee number).</summary>
 public sealed record LoginRequest(string TenantCode, string Email, string Password);
 
-public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+/// <summary><see cref="RefreshToken"/>: this device's session, which stays signed in; every other session of the user is signed out.</summary>
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword, string? RefreshToken = null);
 
 public sealed record MfaVerifyRequest(string MfaToken, string Code);
 
@@ -249,6 +250,9 @@ public sealed class AuthService(
             throw new BusinessRuleException("auth.same_password", "Choose a password different from the current one.", "اختر كلمة مرور مختلفة عن الحالية.");
         user.PasswordHash = hasher.HashPassword(user, next);
         user.MustChangePassword = false;
+        var keep = request.RefreshToken is { Length: > 0 } current ? Hash(current) : null;
+        foreach (var token in await db.Set<RefreshToken>().Where(r => r.UserId == user.Id && r.RevokedAt == null && r.TokenHash != keep).ToListAsync(ct))
+            token.RevokedAt = clock.UtcNow;
         await db.SaveChangesAsync(ct);
     }
 
@@ -346,7 +350,10 @@ public sealed class AuthService(
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
 
-/// <summary>Loads a user's permissions from their roles. Cached briefly; role edits take effect within a minute.</summary>
+/// <summary>
+/// Loads a user's permissions from their roles; a deactivated user has none, so their access token stops working at once.
+/// Cached briefly; role edits take effect within a minute (at once for the edits made through the user screens, which clear the cache).
+/// </summary>
 public sealed class PermissionService(ErpDbContext db, ITenantContext tenant, IMemoryCache cache) : IPermissionService
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(60);
@@ -359,7 +366,8 @@ public sealed class PermissionService(ErpDbContext db, ITenantContext tenant, IM
         var granted = await (
                 from ur in db.Set<UserRole>()
                 join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
-                where ur.UserId == userId
+                join u in db.Set<AppUser>() on ur.UserId equals u.Id
+                where ur.UserId == userId && u.IsActive
                 select rp.Permission)
             .Distinct()
             .ToListAsync(ct);

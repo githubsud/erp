@@ -161,7 +161,7 @@ internal sealed class EmployeeImportService(ErpDbContext db, EmployeeService emp
 
     private static List<Dictionary<string, string?>> Read(Stream file)
     {
-        using var workbook = new XLWorkbook(file);
+        using var workbook = Erp.Infrastructure.Import.ExcelImport.Open(file);
         var sheet = workbook.Worksheets.FirstOrDefault(w => w.Name == "Employees") ?? workbook.Worksheet(1);
         var header = sheet.Row(1);
         var map = new Dictionary<int, string>();

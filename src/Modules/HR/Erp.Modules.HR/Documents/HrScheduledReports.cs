@@ -12,7 +12,8 @@ internal sealed class ExpiringDocumentsScheduledReport(DocumentService documents
 
     public async Task<ReportFile> RenderAsync(CancellationToken ct)
     {
-        var rows = (await documents.ExpiringAsync(60, ct)).OrderBy(d => d.ExpiryDate).ToList();
+        // Sent by email to any address the owner chose: personal numbers are masked.
+        var rows = (await documents.ExpiringAsync(60, ct)).Select(DocumentService.Masked).OrderBy(d => d.ExpiryDate).ToList();
         var content = CsvFile.Build(["Owner", "المالك", "Document", "Number", "Expiry", "Days left", "Status"],
             rows.Select(x => (IReadOnlyList<object?>)[x.OwnerNameEn, x.OwnerNameAr, x.DocType, x.DocNo, x.ExpiryDate, x.DaysLeft, x.Status.ToString()]));
         var expired = rows.Count(r => r.DaysLeft < 0);

@@ -30,6 +30,15 @@ public sealed record ExpiringDocument(
 
 internal sealed class DocumentService(ErpDbContext db, ITenantContext tenant, IClock clock)
 {
+    public const char MaskChar = '•';
+
+    /// <summary>Keeps the last four characters, like the employee screen does for QID and IBAN.</summary>
+    public static string? Mask(string? value) =>
+        value is null ? null : value.Length <= 4 ? new string(MaskChar, value.Length) : new string(MaskChar, value.Length - 4) + value[^4..];
+
+    /// <summary>Employee document numbers masked (company licences are not personal and stay as they are).</summary>
+    public static ExpiringDocument Masked(ExpiringDocument d) => d.Scope == "employee" ? d with { DocNo = Mask(d.DocNo) } : d;
+
     /// <summary>Days before expiry at which reminders are sent.</summary>
     public static readonly int[] ReminderMilestones = [90, 60, 30, 14, 7, 0];
 
@@ -107,7 +116,8 @@ internal sealed class DocumentService(ErpDbContext db, ITenantContext tenant, IC
     private static void Apply(EmployeeDocument doc, EmployeeDocumentRequest r)
     {
         doc.DocType = r.DocType;
-        doc.DocNo = r.DocNo?.Trim();
+        // Someone who sees the number masked (••••1234) and saves the form leaves it as it was.
+        if (r.DocNo is null || !r.DocNo.Contains(MaskChar)) doc.DocNo = r.DocNo?.Trim();
         doc.IssueDate = r.IssueDate;
         doc.ExpiryDate = r.ExpiryDate;
         doc.Notes = r.Notes;
@@ -145,6 +155,14 @@ internal sealed class DocumentExpiryJob(IServiceScopeFactory scopes, IClock cloc
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        try
+        {
+            await EncryptOldNumbersAsync(stoppingToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Encrypting old document numbers failed.");
+        }
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(30));
         do
         {
@@ -162,6 +180,31 @@ internal sealed class DocumentExpiryJob(IServiceScopeFactory scopes, IClock cloc
                 logger.LogError(ex, "Document expiry job failed.");
             }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    /// <summary>Document numbers saved before the column was encrypted (V0211) are encrypted once; afterwards this finds nothing.</summary>
+    public async Task<int> EncryptOldNumbersAsync(CancellationToken ct)
+    {
+        IReadOnlyList<TenantCompany> companies;
+        await using (var scope = scopes.CreateAsyncScope())
+            companies = await scope.ServiceProvider.GetRequiredService<ITenantDirectory>().GetActiveCompaniesAsync(ct);
+
+        var total = 0;
+        foreach (var tenantId in companies.Select(c => c.TenantId).Distinct())
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(tenantId, null, null);
+            var db = scope.ServiceProvider.GetRequiredService<ErpDbContext>();
+            var ids = await db.Database.SqlQuery<Guid>($"""
+                SELECT id AS "Value" FROM hr.employee_document WHERE tenant_id = {tenantId} AND doc_no_encrypted IS NOT NULL AND doc_no_encrypted NOT LIKE 'v1:%'
+                """).ToListAsync(ct);
+            if (ids.Count == 0) continue;
+            foreach (var doc in await db.Set<EmployeeDocument>().Where(d => ids.Contains(d.Id)).ToListAsync(ct))
+                db.Entry(doc).Property(d => d.DocNo).IsModified = true;
+            total += await db.SaveChangesAsync(ct);
+        }
+        if (total > 0) logger.LogInformation("Encrypted {Count} employee document number(s).", total);
+        return total;
     }
 
     public async Task<int> RunOnceAsync(CancellationToken ct)
@@ -182,8 +225,9 @@ internal sealed class DocumentExpiryJob(IServiceScopeFactory scopes, IClock cloc
             var due = (await service.ExpiringAsync(DocumentService.ReminderMilestones.Max(), ct))
                 .Where(d => DocumentService.ReminderMilestones.Contains(d.DaysLeft) || (d.DaysLeft < 0 && -d.DaysLeft % 7 == 0))
                 .ToList();
+            // Emails leave the system: the number is masked.
             foreach (var d in due)
-                outbox.Enqueue("hr.document_expiry_reminder", d);
+                outbox.Enqueue("hr.document_expiry_reminder", DocumentService.Masked(d));
             await db.SaveChangesAsync(ct);
             total += due.Count;
         }

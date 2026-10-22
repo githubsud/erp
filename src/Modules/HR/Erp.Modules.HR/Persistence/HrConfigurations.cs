@@ -47,7 +47,11 @@ internal sealed class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
 internal sealed class EmployeeDocumentConfiguration : IEntityTypeConfiguration<EmployeeDocument>
 {
-    public void Configure(EntityTypeBuilder<EmployeeDocument> b) => b.ToTable("employee_document", "hr");
+    public void Configure(EntityTypeBuilder<EmployeeDocument> b)
+    {
+        b.ToTable("employee_document", "hr");
+        b.Property(x => x.DocNo).HasColumnName("doc_no_encrypted").HasConversion(new GraduallyEncryptedStringConverter());
+    }
 }
 
 internal sealed class CompanyDocumentConfiguration : IEntityTypeConfiguration<CompanyDocument>
