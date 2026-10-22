@@ -27,13 +27,14 @@ async function scan(page: Page, sku: string): Promise<void> {
 }
 
 test('a sale on the phone: scan, pay cash, refund one item, close the shift with a Z report', async ({ page }) => {
-  const [milk, rice] = shop().items;
+  // Tea and rice: the import test changes the milk price.
+  const [, rice, tea] = shop().items;
   await startShift(page);
 
-  await scan(page, milk.sku);
-  await scan(page, milk.sku);
+  await scan(page, tea.sku);
+  await scan(page, tea.sku);
   await page.locator('.tile', { hasText: rice.nameAr }).click();
-  const total = milk.price * 2 + rice.price;
+  const total = tea.price * 2 + rice.price;
   await expect(page.locator('.total')).toContainText(total.toFixed(2));
 
   await page.getByRole('button', { name: t('pos.exactCash') }).click();
@@ -43,23 +44,23 @@ test('a sale on the phone: scan, pay cash, refund one item, close the shift with
   const receiptNo = (await receipt.textContent())!.trim();
   await expect(page.getByText(t('pos.emptyCart'))).toBeVisible();
 
-  // The customer brings one milk back.
+  // The customer brings one tea back.
   await page.getByRole('button', { name: t('pos.refund') }).click();
   const refund = page.getByRole('dialog');
   await refund.getByLabel(t('pos.receipt')).fill(receiptNo);
   await refund.getByRole('button', { name: t('app.search') }).click();
-  await refund.locator('tr', { hasText: milk.nameAr }).locator('input.qty').fill('1');
+  await refund.locator('tr', { hasText: tea.nameAr }).locator('input.qty').fill('1');
   await refund.getByRole('button', { name: t('pos.refund') }).click();
   await expect(refund).toBeHidden();
 
   // End of the day: count the drawer and close.
   await page.getByRole('button', { name: t('pos.closeShift') }).click();
   const close = page.getByRole('dialog');
-  await close.getByLabel(t('pos.counted')).fill(String(200 + total - milk.price));
+  await close.getByLabel(t('pos.counted')).fill(String(200 + total - tea.price));
   await close.getByRole('button', { name: t('pos.closeShift') }).click();
   const z = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: t('pos.zReport') }) });
   await expect(z).toBeVisible();
-  await expect(z).toContainText((total - milk.price).toFixed(2));
+  await expect(z).toContainText((total - tea.price).toFixed(2));
 });
 
 test('without internet the sale is kept on the phone and sent when the connection is back', async ({ page, context }) => {

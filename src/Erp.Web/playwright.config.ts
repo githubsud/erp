@@ -37,6 +37,11 @@ export default defineConfig({
     url: baseURL + '/health',
     reuseExistingServer: !process.env['CI'],
     timeout: 300_000,
-    env: { ASPNETCORE_ENVIRONMENT: 'Development', Web__Root: process.cwd() + '/dist/erp-web/browser' }
+    env: {
+      ASPNETCORE_ENVIRONMENT: 'Development',
+      Web__Root: process.cwd() + '/dist/erp-web/browser',
+      // Every test signs in from the same address, faster than a person could.
+      Security__SignInAttemptsPerMinute: '1000'
+    }
   }
 });
