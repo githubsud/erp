@@ -52,10 +52,11 @@ internal sealed class SummaryService(ErpDbContext db, ITenantContext tenant, AiG
                 Use the numbers exactly as given, in QAR. Do not invent anything that is not in the figures. Plain text, a dash at the start of each line, no tables.
                 """;
             var response = await gateway.CompleteAsync(endpoint, new AiRequest(system, [AiMessage.User(filter.Text($"Figures for {clock.Today:yyyy-MM-dd}:\n{facts}"))],
-                MaxTokens: 600), ct);
+                MaxTokens: 2000), ct);
             text = filter.Restore(response.Text?.Trim() ?? "");
             provider = (response.AnsweredBy ?? endpoint).ProviderCode;
-            if (text.Length == 0) (text, provider) = (facts, "none");
+            // A summary cut off half-way (a number missing its end) would mislead: the plain figures are shown instead.
+            if (text.Length == 0 || response.Truncated) (text, provider) = (facts, "none");
         }
         catch (BusinessRuleException ex)
         {

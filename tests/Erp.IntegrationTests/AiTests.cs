@@ -245,6 +245,12 @@ public sealed class AiTests(ErpFixture fixture)
         var fallback = await c.PostAsync<Summary>("/api/ai/summary", new { language = "en" });
         fallback.Provider.ShouldBe("none");
         fallback.Text.ShouldContain("Receivables: 700.00 QAR");
+
+        // An answer cut off at the length limit ("…balance of -10,") is never shown: the figures are.
+        fixture.Ai.Reset((_, _) => new AiResponse("- Receivables are 7", [], 300, 2000, Truncated: true));
+        var cut = await c.PostAsync<Summary>("/api/ai/summary", new { language = "en" });
+        (cut.Provider, cut.Text.Contains("Receivables: 700.00 QAR")).ShouldBe(("none", true));
+        fixture.Ai.Calls.Last().Request.MaxTokens.ShouldBeGreaterThanOrEqualTo(2000);
     }
 
     [Fact]

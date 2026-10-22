@@ -36,6 +36,8 @@ test('a sale on the phone: scan, pay cash, refund one item, close the shift with
   await page.locator('.tile', { hasText: rice.nameAr }).click();
   const total = tea.price * 2 + rice.price;
   await expect(page.locator('.total')).toContainText(total.toFixed(2));
+  // Everything fits the phone's width: nothing to scroll sideways to reach the total or the pay button.
+  expect(await page.evaluate(() => { const m = document.querySelector('mat-sidenav-content')!; return m.scrollWidth - m.clientWidth; })).toBeLessThanOrEqual(1);
 
   await page.getByRole('button', { name: t('pos.exactCash') }).click();
   await page.getByRole('button', { name: t('pos.pay'), exact: true }).click();

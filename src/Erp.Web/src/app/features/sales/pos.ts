@@ -269,7 +269,8 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
     .registers { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
     .shift-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block-end: 12px; }
     .till { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 16px; }
-    @media (max-width: 900px) { .till { grid-template-columns: 1fr; } }
+    /* minmax(0, …): on a phone the column must not grow to its widest content and push the till off the screen. */
+    @media (max-width: 900px) { .till { grid-template-columns: minmax(0, 1fr); } }
     .search { width: 100%; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; max-height: 60vh; overflow: auto; }
     .tile { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; min-height: 84px; padding: 10px; text-align: start;
@@ -287,8 +288,8 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
     .total, .change { display: flex; justify-content: space-between; font-size: 1.4rem; font-weight: 600; margin-block: 12px; }
     .change { font-size: 1.1rem; }
     .change.short { color: var(--mat-sys-error); }
-    .pay { display: flex; gap: 8px; }
-    .pay mat-form-field { flex: 1; }
+    .pay { display: flex; flex-wrap: wrap; gap: 0 8px; }
+    .pay mat-form-field { flex: 1 1 120px; min-width: 0; }
     .quick { display: flex; flex-wrap: wrap; gap: 4px; }
     .pay-btn { width: 100%; height: 56px; font-size: 1.2rem; }
     .account-btn { width: 100%; margin-top: 8px; }

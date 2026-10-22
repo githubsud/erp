@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Puts the demo back to a clean state before a customer visit.
 
@@ -15,7 +15,8 @@
   powershell -ExecutionPolicy Bypass -File scripts\demo-reset.ps1
   powershell -ExecutionPolicy Bypass -File scripts\demo-reset.ps1 -Quick
 #>
-param([switch]$Quick, [string]$Api = 'http://localhost:5080', [string]$Container = 'erp-postgres')
+# The development copy (Docker database, port 5081). An installed ERP (the ErpApi Windows service on 5080) is never touched.
+param([switch]$Quick, [string]$Api = 'http://localhost:5081', [string]$Container = 'erp-postgres')
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -36,12 +37,18 @@ function Save-Dump($path) {
 }
 
 function Stop-Api {
-    Get-Process -Name 'Erp.Api' -ErrorAction SilentlyContinue | Stop-Process -Force
+    # Only copies started from the source folder: the installed service runs from its own folder and keeps running.
+    $service = (Get-CimInstance Win32_Service -Filter "Name='ErpApi'" -ErrorAction SilentlyContinue).PathName
+    $serviceDir = if ($service) { Split-Path ($service -replace '^"([^"]+)".*$', '$1' -replace '^(\S+)\s.*$', '$1') -Parent } else { $null }
+    Get-Process -Name 'Erp.Api' -ErrorAction SilentlyContinue |
+        Where-Object { -not $serviceDir -or -not $_.Path -or -not $_.Path.StartsWith($serviceDir, [StringComparison]::OrdinalIgnoreCase) } |
+        Stop-Process -Force
     Start-Sleep -Seconds 2
 }
 
 function Start-Api {
-    Start-Process -FilePath 'dotnet' -ArgumentList 'run --project src/Erp.Api --launch-profile http' -WorkingDirectory $root -WindowStyle Minimized
+    $env:ASPNETCORE_ENVIRONMENT = 'Development'
+    Start-Process -FilePath 'dotnet' -ArgumentList "run --project src/Erp.Api --no-launch-profile --urls $Api" -WorkingDirectory $root -WindowStyle Minimized
     for ($i = 0; $i -lt 120; $i++) {
         try {
             if ((Invoke-WebRequest -UseBasicParsing "$Api/health" -TimeoutSec 3).StatusCode -eq 200) { return }
@@ -90,5 +97,5 @@ Step 'Saving a snapshot for quick resets'
 Save-Dump (Join-Path $store "demo-$stamp.dump")
 Get-ChildItem $store -Filter '*.dump' | Sort-Object LastWriteTime -Descending | Select-Object -Skip 6 | Remove-Item
 
-Write-Host "`nDone. Sign in at http://localhost:4200 (company code = business code, owner@<code>.qa, Demo-Password-2026)." -ForegroundColor Green
-Write-Host 'Back-office: http://localhost:4200/backoffice (admin@erp.qa). The AI providers (Gemini key) must be entered again after a full reset.' -ForegroundColor Yellow
+Write-Host "`nDone. Sign in at $Api (after 'ng build') or http://localhost:4200 with ng serve: company code = business code, owner@<code>.qa, Demo-Password-2026." -ForegroundColor Green
+Write-Host "Back-office: $Api/backoffice (admin@erp.qa). The AI providers (Gemini and Groq keys) must be entered again after a full reset." -ForegroundColor Yellow

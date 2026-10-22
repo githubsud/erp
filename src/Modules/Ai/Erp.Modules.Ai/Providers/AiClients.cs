@@ -24,11 +24,19 @@ public sealed record AiMessage(string Role, string? Text, IReadOnlyList<AiToolCa
 
 public sealed record AiToolSpec(string Name, string Description, string ParametersSchema);
 
+/// <summary>
+/// <see cref="MaxTokens"/> must leave room for the model's own thinking: newer models (Gemini 3.5, gpt-oss) count it against the same limit,
+/// and a small limit cuts the answer off half-way through.
+/// </summary>
 public sealed record AiRequest(string System, IReadOnlyList<AiMessage> Messages, IReadOnlyList<AiToolSpec>? Tools = null, bool Vision = false,
-    int MaxTokens = 1200, bool Json = false);
+    int MaxTokens = 4000, bool Json = false);
 
-/// <summary><see cref="AnsweredBy"/>: the provider that answered, set by the gateway (a fallback when the chosen one was used up).</summary>
-public sealed record AiResponse(string? Text, IReadOnlyList<AiToolCall> ToolCalls, int InputTokens, int OutputTokens, AiEndpoint? AnsweredBy = null);
+/// <summary>
+/// <see cref="AnsweredBy"/>: the provider that answered, set by the gateway (a fallback when the chosen one was used up).
+/// <see cref="Truncated"/>: the answer stopped at the token limit, so its text is incomplete.
+/// </summary>
+public sealed record AiResponse(string? Text, IReadOnlyList<AiToolCall> ToolCalls, int InputTokens, int OutputTokens, AiEndpoint? AnsweredBy = null,
+    bool Truncated = false);
 
 /// <summary><see cref="Busy"/>: the provider is overloaded or its free allowance per minute is used up (try again shortly).</summary>
 public sealed class AiProviderException(string message, bool busy = false) : Exception(message)
@@ -189,6 +197,7 @@ internal sealed class HttpAiChatClient(IHttpClientFactory http) : IAiChatClient
         public static AiResponse Parse(JsonNode json)
         {
             var message = json["choices"]?[0]?["message"] ?? throw new AiProviderException("The AI answer had no message.");
+            var truncated = json["choices"]?[0]?["finish_reason"]?.GetValue<string>() == "length";
             var calls = (message["tool_calls"] as JsonArray ?? []).Select((c, i) =>
             {
                 var args = c?["function"]?["arguments"];
@@ -196,7 +205,8 @@ internal sealed class HttpAiChatClient(IHttpClientFactory http) : IAiChatClient
                     args is JsonValue v && v.TryGetValue<string>(out var s) ? s : args?.ToJsonString() ?? "{}", c?["extra_content"]?.ToJsonString());
             }).ToList();
             var content = message["content"] is JsonValue cv && cv.TryGetValue<string>(out var text) ? text : null;
-            return new AiResponse(content, calls, json["usage"]?["prompt_tokens"]?.GetValue<int>() ?? 0, json["usage"]?["completion_tokens"]?.GetValue<int>() ?? 0);
+            return new AiResponse(content, calls, json["usage"]?["prompt_tokens"]?.GetValue<int>() ?? 0, json["usage"]?["completion_tokens"]?.GetValue<int>() ?? 0,
+                Truncated: truncated);
         }
     }
 
@@ -255,7 +265,7 @@ internal sealed class HttpAiChatClient(IHttpClientFactory http) : IAiChatClient
                     calls.Add(new AiToolCall(block!["id"]!.GetValue<string>(), block["name"]!.GetValue<string>(), block["input"]?.ToJsonString() ?? "{}"));
             }
             return new AiResponse(text.Length > 0 ? text.ToString() : null, calls, json["usage"]?["input_tokens"]?.GetValue<int>() ?? 0,
-                json["usage"]?["output_tokens"]?.GetValue<int>() ?? 0);
+                json["usage"]?["output_tokens"]?.GetValue<int>() ?? 0, Truncated: json["stop_reason"]?.GetValue<string>() == "max_tokens");
         }
 
         private static JsonNode ParseArgs(string args)

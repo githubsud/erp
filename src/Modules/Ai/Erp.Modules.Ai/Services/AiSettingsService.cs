@@ -86,7 +86,7 @@ internal sealed class AiSettingsService(ErpDbContext db, ITenantContext tenant, 
         var watch = Stopwatch.StartNew();
         try
         {
-            var response = await gateway.CompleteAsync(endpoint, new AiRequest("Reply with the single word OK.", [AiMessage.User("Test")], MaxTokens: 200), ct);
+            var response = await gateway.CompleteAsync(endpoint, new AiRequest("Reply with the single word OK.", [AiMessage.User("Test")], MaxTokens: 1000), ct);
             return string.IsNullOrWhiteSpace(response.Text)
                 ? new AiTestResult(false, null, watch.ElapsedMilliseconds, "The model answered with nothing; try another model name.")
                 : new AiTestResult(true, response.Text.Trim(), watch.ElapsedMilliseconds, null);
@@ -235,7 +235,7 @@ internal sealed class AiBackOfficeService(ErpDbContext db, IAiChatClient client,
         var watch = Stopwatch.StartNew();
         try
         {
-            var response = await client.CompleteAsync(AiGateway.ToEndpoint(p), new AiRequest("Reply with the single word OK.", [AiMessage.User("Test")], MaxTokens: 200), ct);
+            var response = await client.CompleteAsync(AiGateway.ToEndpoint(p), new AiRequest("Reply with the single word OK.", [AiMessage.User("Test")], MaxTokens: 1000), ct);
             return string.IsNullOrWhiteSpace(response.Text)
                 ? new AiTestResult(false, null, watch.ElapsedMilliseconds, "The model answered with nothing; try another model name.")
                 : new AiTestResult(true, response.Text.Trim(), watch.ElapsedMilliseconds, null);

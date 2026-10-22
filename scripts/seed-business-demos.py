@@ -240,6 +240,13 @@ def expense(acc, date, account_code, amount, memo_en, memo_ar, pay="1110"):
         {"accountId": acc[account_code], "debit": amount, "credit": 0}, {"accountId": acc[pay], "debit": 0, "credit": amount}]})
 
 
+def capital(amount):
+    """The owner's money in the bank before the first day of trading, so the demo never shows a negative cash balance."""
+    acc = accounts()
+    post("/api/finance/journal-vouchers", {"date": d(-75), "memoEn": "Owner's capital", "memoAr": "رأس مال المالك", "lines": [
+        {"accountId": acc["1120"], "debit": amount, "credit": 0}, {"accountId": acc["3110"], "debit": 0, "credit": amount}]})
+
+
 def till(acc, main, code="T1", en="Till 1", ar="الصندوق 1"):
     return post("/api/sales/pos/registers", {"code": code, "nameEn": en, "nameAr": ar, "warehouseId": main, "cashAccountId": acc["1110"],
                                             "cardAccountId": acc["1115"]})
@@ -734,7 +741,7 @@ BUSINESSES = [
     {"code": "workshop", "type": "workshop", "en": "Fast Fix Auto Garage", "ar": "كراج فاست فكس للسيارات",
      "owner_en": "Senthil Kumar", "owner_ar": "سينثيل كومار", "phone": "55001007", "area": "Industrial Area", "cr": "200551", "plan": "SHOP",
      "extra_modules": ["purchasing", "workshop"], "seed": workshop},
-    {"code": "contracting", "type": "contracting", "en": "Gulf Build Contracting", "ar": "الخليج للمقاولات",
+    {"code": "contracting", "capital": 150000, "type": "contracting", "en": "Gulf Build Contracting", "ar": "الخليج للمقاولات",
      "owner_en": "Hamad Al-Naimi", "owner_ar": "حمد النعيمي", "phone": "55001008", "area": "Al Gharrafa", "cr": "210771", "plan": "ENTERPRISE",
      "cycle": "Annual", "seed": contracting},
 ]
@@ -772,6 +779,7 @@ def main():
         login(b["code"])
         put("/api/approvals/settings", {"allowSelfApproval": True})   # owner-run shop: the owner approves their own orders
         try:
+            capital(b.get("capital", 80000))
             b["seed"]()
             keep_only(b["type"])
         except ApiError as e:

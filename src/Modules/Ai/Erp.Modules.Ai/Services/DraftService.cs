@@ -53,7 +53,8 @@ internal sealed partial class DraftService(AiGateway gateway, ICompanyProfilePro
             Use only the facts given; amounts are in QAR. Sign off with the business name. {filter.PlaceholderRule}
             """;
         var user = $"Facts:\n{facts}" + (string.IsNullOrWhiteSpace(r.Instructions) ? "" : $"\nInstructions: {filter.Text(Limit(r.Instructions.Trim(), 500))}");
-        var response = await gateway.CompleteAsync(endpoint, new AiRequest(system, [AiMessage.User(user)], MaxTokens: 400), ct);
+        var response = await gateway.CompleteAsync(endpoint, new AiRequest(system, [AiMessage.User(user)], MaxTokens: 1500), ct);
+        if (response.Truncated) throw AiAnswers.CutShort();
         var text = filter.Restore(response.Text?.Trim().Trim('"') ?? "");
         return new DraftResponse(text, WhatsAppUrl(r.Phone, text), (response.AnsweredBy ?? endpoint).Name);
     }
@@ -101,7 +102,8 @@ internal sealed partial class DocumentReader(AiGateway gateway)
             Dates as yyyy-MM-dd, gender "M" or "F", nationality as the country name in English. Use null for anything you cannot read clearly. Never guess.
             """;
         var response = await gateway.CompleteAsync(endpoint, new AiRequest(system, [AiMessage.User("Read this document.", new AiImage(mediaType, image))],
-            Vision: true, MaxTokens: 500, Json: true), ct);
+            Vision: true, MaxTokens: 2000, Json: true), ct);
+        if (response.Truncated) throw AiAnswers.CutShort();
         return Parse(response.Text ?? "");
     }
 
@@ -129,4 +131,11 @@ internal sealed partial class DocumentReader(AiGateway gateway)
 
     [GeneratedRegex(@"\{[\s\S]*\}")]
     private static partial Regex JsonObject();
+}
+
+internal static class AiAnswers
+{
+    /// <summary>The model stopped at its length limit: half a message or half a JSON object is worse than asking again.</summary>
+    public static BusinessRuleException CutShort() => new("ai.cut_short", "The AI answer was cut short. Please try again.",
+        "انقطعت إجابة الذكاء الاصطناعي قبل اكتمالها. يرجى المحاولة مرة أخرى.");
 }

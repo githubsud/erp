@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>نظام المنشآت القطرية · Qatar SME ERP</title>
+  <meta name="description" content="رواتب في وقتها عبر نظام حماية الأجور، ونقطة بيع، ومخزون، وتنبيهات المستندات، وملخص يومي على جوالك — نظام عربي للمحلات والشركات الصغيرة في قطر.">
+  <meta name="theme-color" content="#006a6a">
+  <link rel="icon" type="image/png" href="img/icon.png">
+  <style>
+    @font-face { font-family: Plex; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2) format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF; }
+    @font-face { font-family: Plex; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2) format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF; }
+    @font-face { font-family: Plex; font-weight: 700; font-display: swap; src: url(fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2) format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF; }
+    @font-face { font-family: Plex; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-sans-arabic-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+20AC; }
+    @font-face { font-family: Plex; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-sans-arabic-latin-600-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+20AC; }
+    @font-face { font-family: Plex; font-weight: 700; font-display: swap; src: url(fonts/ibm-plex-sans-arabic-latin-700-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+20AC; }
+
+    :root {
+      --primary: #006a6a; --primary-dark: #004f4f; --primary-soft: #e0f2f1; --accent: #b8860b;
+      --text: #191c1c; --muted: #4f5b5b; --line: #d5dfde; --bg: #f7faf9; --card: #ffffff; --warm: #fff8e6;
+      --radius: 16px; --shadow: 0 6px 24px rgba(0, 60, 60, .10);
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: Plex, "Segoe UI", Tahoma, sans-serif; color: var(--text); background: var(--bg); line-height: 1.7; font-size: 17px; }
+    img { max-width: 100%; display: block; }
+    a { color: var(--primary); }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+    .ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+
+    /* Both languages are in the page; the inactive one is hidden. */
+    html[lang="ar"] body [lang="en"], html[lang="en"] body [lang="ar"] { display: none !important; }
+
+    header.top { position: sticky; top: 0; z-index: 10; background: rgba(247, 250, 249, .94); backdrop-filter: blur(8px); border-block-end: 1px solid var(--line); }
+    header.top .wrap { display: flex; align-items: center; gap: 12px; min-height: 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--primary-dark); text-decoration: none; }
+    .brand img { width: 36px; height: 36px; border-radius: 10px; }
+    .grow { flex: 1; }
+    nav.links { display: flex; gap: 20px; }
+    nav.links a { color: var(--text); text-decoration: none; font-weight: 600; font-size: 15px; }
+    @media (max-width: 860px) { nav.links { display: none; } }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; padding: 12px 22px; font: inherit; font-weight: 600;
+      text-decoration: none; cursor: pointer; border: 2px solid transparent; transition: transform .1s; }
+    .btn:active { transform: scale(.98); }
+    .btn.primary { background: var(--primary); color: #fff; }
+    .btn.primary:hover { background: var(--primary-dark); }
+    .btn.outline { border-color: var(--primary); color: var(--primary); background: transparent; }
+    .btn.small { padding: 7px 14px; font-size: 15px; }
+    .btn.wa { background: #1fa855; color: #fff; }
+    .btn svg { width: 20px; height: 20px; flex: none; }
+
+    .hero { padding: 48px 0 24px; }
+    .hero .wrap { display: grid; grid-template-columns: 1.1fr .9fr; gap: 36px; align-items: center; }
+    @media (max-width: 860px) { .hero .wrap { grid-template-columns: 1fr; } }
+    .eyebrow { display: inline-block; background: var(--primary-soft); color: var(--primary-dark); border-radius: 999px; padding: 4px 14px; font-weight: 600; font-size: 14px; }
+    h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.3; margin: 16px 0 12px; }
+    h2 { font-size: clamp(26px, 3.6vw, 36px); line-height: 1.35; margin: 0 0 10px; }
+    h3 { font-size: 20px; margin: 0 0 6px; }
+    .lead { font-size: 19px; color: var(--muted); margin: 0 0 24px; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+    .hero-shots { position: relative; min-height: 420px; }
+    .hero-shots .desk { border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); width: 92%; }
+    .hero-shots .phone { position: absolute; inset-inline-start: 0; bottom: -10px; width: 38%; border: 8px solid #1d2424; border-radius: 28px; box-shadow: var(--shadow); background: #fff; }
+    @media (max-width: 860px) { .hero-shots { min-height: 0; padding-bottom: 40px; } }
+
+    .trustbar { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 26px; color: var(--muted); font-size: 15px; }
+    .trustbar > span::before { content: "✓ "; color: var(--primary); font-weight: 700; }
+
+    section { padding: 56px 0; }
+    section.alt { background: var(--card); border-block: 1px solid var(--line); }
+    .section-head { max-width: 720px; margin-bottom: 28px; }
+    .section-head p { color: var(--muted); margin: 0; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+    section.alt .card { background: var(--bg); }
+    .card .icon { width: 44px; height: 44px; border-radius: 12px; background: var(--primary-soft); display: grid; place-items: center; font-size: 22px; margin-bottom: 12px; }
+    .card p { margin: 0; color: var(--muted); font-size: 16px; }
+
+    .feature { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; margin-bottom: 56px; }
+    .feature:last-child { margin-bottom: 0; }
+    .feature.flip .shot { order: -1; }
+    @media (max-width: 860px) { .feature { grid-template-columns: 1fr; } .feature.flip .shot { order: 0; } }
+    .feature ul { padding-inline-start: 20px; margin: 12px 0 0; color: var(--muted); }
+    .feature li { margin-bottom: 6px; }
+    .shot img { border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .shot.phone-shot img { max-width: 300px; margin-inline: auto; border: 8px solid #1d2424; border-radius: 28px; }
+    .tag { display: inline-block; font-size: 13px; font-weight: 600; color: var(--accent); background: var(--warm); border-radius: 999px; padding: 2px 12px; margin-bottom: 8px; }
+
+    .segments { display: flex; flex-wrap: wrap; gap: 10px; }
+    .segments span { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; font-weight: 600; font-size: 15px; }
+
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; align-items: stretch; }
+    .plan { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; }
+    .plan.best { border: 2px solid var(--primary); box-shadow: var(--shadow); position: relative; }
+    .plan.best .badge { position: absolute; top: -13px; inset-inline-start: 20px; background: var(--primary); color: #fff; border-radius: 999px; padding: 2px 12px; font-size: 13px; font-weight: 600; }
+    .price { font-size: 40px; font-weight: 700; color: var(--primary-dark); line-height: 1.2; margin: 8px 0 2px; }
+    .price small { font-size: 16px; font-weight: 400; color: var(--muted); }
+    .plan .note { color: var(--muted); font-size: 14px; min-height: 24px; }
+    .plan ul { padding-inline-start: 20px; color: var(--muted); font-size: 15px; flex: 1; margin: 14px 0 18px; }
+    .offer { margin-top: 22px; background: var(--warm); border: 1px dashed var(--accent); border-radius: var(--radius); padding: 18px 22px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .offer b { color: #7a5a00; }
+    .offer .grow { min-width: 220px; }
+
+    details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin-bottom: 10px; }
+    section.alt details { background: var(--bg); }
+    summary { cursor: pointer; font-weight: 600; }
+    details p { margin: 10px 0 0; color: var(--muted); }
+
+    .contact { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: #fff; border-radius: 24px; padding: 40px 28px; text-align: center; }
+    .contact h2 { color: #fff; }
+    .contact p { color: #d6efee; margin: 0 0 22px; }
+    .contact .cta { justify-content: center; }
+    .contact .btn.outline { border-color: #fff; color: #fff; }
+    footer { padding: 28px 0 40px; color: var(--muted); font-size: 14px; text-align: center; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="img/icon.png" alt=""><span lang="ar">نظام المنشآت القطرية</span><span lang="en">Qatar SME ERP</span></a>
+      <span class="grow"></span>
+      <nav class="links">
+        <a href="#features"><span lang="ar">المزايا</span><span lang="en">Features</span></a>
+        <a href="#business"><span lang="ar">لنشاطك</span><span lang="en">Your business</span></a>
+        <a href="#plans"><span lang="ar">الباقات</span><span lang="en">Plans</span></a>
+        <a href="#faq"><span lang="ar">أسئلة</span><span lang="en">FAQ</span></a>
+      </nav>
+      <button class="btn outline small" type="button" id="lang-toggle"><span lang="ar">English</span><span lang="en">العربية</span></button>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <span class="eyebrow"><span lang="ar">للمحلات والشركات الصغيرة في قطر</span><span lang="en">For shops and small companies in Qatar</span></span>
+          <h1>
+            <span lang="ar">رواتب في وقتها عبر نظام حماية الأجور… وأرقام محلك كل مساء على جوالك</span>
+            <span lang="en">Pay salaries on time through WPS, and see your shop's numbers every evening on your phone</span>
+          </h1>
+          <p class="lead">
+            <span lang="ar">نظام عربي بسيط يجمع الرواتب، ونقطة البيع، والمخزون، والحسابات، وتنبيهات الرخص والإقامات، ومساعداً ذكياً يجيبك عن عملك.</span>
+            <span lang="en">One simple, Arabic-first system for payroll, the till, stock, accounts, licence and residency alerts, and an assistant that answers questions about your business.</span>
+          </p>
+          <div class="cta">
+            <a class="btn wa" data-whatsapp href="#contact">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-2 1-2.3.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .6l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.4 1.8 2.2 1.2 1.1 2.3 1.4 2.6 1.6.3.1.5.1.7-.1l.9-1.1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.6.3.1.2.1.7-.1 1.3Z"/></svg>
+              <span lang="ar">اطلب تجربة مجانية</span><span lang="en">Ask for a free demo</span>
+            </a>
+            <a class="btn outline" href="#plans"><span lang="ar">الباقات والأسعار</span><span lang="en">Plans and prices</span></a>
+          </div>
+          <div class="trustbar">
+            <span><span lang="ar">بالعربية أولاً</span><span lang="en">Arabic first</span></span>
+            <span><span lang="ar">يعمل دون إنترنت في نقطة البيع</span><span lang="en">The till works without internet</span></span>
+            <span><span lang="ar">جاهز خلال 10 دقائق</span><span lang="en">Ready in 10 minutes</span></span>
+            <span><span lang="ar">بياناتك لك: تصدير إلى Excel في أي وقت</span><span lang="en">Your data is yours: export to Excel any time</span></span>
+          </div>
+        </div>
+        <div class="hero-shots">
+          <img class="desk" src="img/dashboard.jpg" alt="لوحة المعلومات: مبيعات اليوم، النقد، الأرباح وملخص اليوم" loading="eager">
+          <img class="phone" src="img/dashboard-phone.jpg" alt="ملخص اليوم على الجوال">
+        </div>
+      </div>
+    </section>
+
+    <section class="alt" id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <h2><span lang="ar">ما يتعب أصحاب المحلات… محلول</span><span lang="en">What wears shop owners down, solved</span></h2>
+          <p><span lang="ar">صُمم بعد الحديث مع محلات العزيزية: عبايات، صالونات، بقالات، مطاعم، ورش ومكاتب تخليص.</span>
+             <span lang="en">Designed around Al Aziziya's shops: abayas, salons, groceries, restaurants, workshops and PRO offices.</span></p>
+        </div>
+        <div class="cards">
+          <div class="card"><div class="icon">💸</div>
+            <h3><span lang="ar">بدون غرامات حماية الأجور</span><span lang="en">No WPS fines</span></h3>
+            <p><span lang="ar">الرواتب والإضافي ومكافأة نهاية الخدمة تُحسب تلقائياً، وملف SIF للبنك بضغطة، مع تذكير قبل الموعد النهائي.</span>
+               <span lang="en">Salaries, overtime and end-of-service gratuity worked out for you, the bank's SIF file in one click, and a reminder before the deadline.</span></p></div>
+          <div class="card"><div class="icon">🪪</div>
+            <h3><span lang="ar">لا مفاجآت في الرخص والإقامات</span><span lang="en">No surprise expiries</span></h3>
+            <p><span lang="ar">تنبيه قبل انتهاء البطاقات الشخصية والجوازات وأذونات العمل والسجل التجاري والرخص، مع خطوات التجديد.</span>
+               <span lang="en">Alerts before QIDs, passports, work permits, the CR and licences expire, with the renewal steps.</span></p></div>
+          <div class="card"><div class="icon">🧾</div>
+            <h3><span lang="ar">نقطة بيع على الجوال</span><span lang="en">A till on your phone</span></h3>
+            <p><span lang="ar">بيع نقداً أو بالبطاقة أو بالآجل (الدفتر) بحد ائتمان. ينقطع الإنترنت؟ يستمر البيع ويُرسل تلقائياً عند عودته.</span>
+               <span lang="en">Sell for cash, card or on account with a credit limit. Internet down? Keep selling; sales are sent automatically when it is back.</span></p></div>
+          <div class="card"><div class="icon">🌙</div>
+            <h3><span lang="ar">ملخص يومي على جوالك</span><span lang="en">A daily summary on your phone</span></h3>
+            <p><span lang="ar">كل مساء: مبيعات اليوم، النقد في الصندوق، فروقات الوردية، الديون المتأخرة، والأصناف التي تحتاج طلب.</span>
+               <span lang="en">Every evening: today's sales, cash in the till, shift differences, overdue money and items to reorder.</span></p></div>
+          <div class="card"><div class="icon">✨</div>
+            <h3><span lang="ar">اسأل عن عملك بالعربي</span><span lang="en">Ask about your business</span></h3>
+            <p><span lang="ar">«من أكثر عميل مديون؟» «كم ربحي هذا الشهر؟» يجيب المساعد الذكي من أرقامك، ويكتب رسائل واتساب للعملاء.</span>
+               <span lang="en">"Who owes me the most?" "What did I make this month?" The assistant answers from your own figures and drafts WhatsApp messages.</span></p></div>
+          <div class="card"><div class="icon">📥</div>
+            <h3><span lang="ar">ابدأ من ملف Excel</span><span lang="en">Start from your Excel file</span></h3>
+            <p><span lang="ar">أدخل أصنافك وأسعارك ومخزونك وعملاءك وموردينك من ملف Excel. يُفحص الملف أولاً ولا يُحفظ شيء حتى يكون كله صحيحاً.</span>
+               <span lang="en">Bring in products, prices, stock, customers and suppliers from Excel. The file is checked first, and nothing is saved until all of it is right.</span></p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="business">
+      <div class="wrap">
+        <div class="feature">
+          <div>
+            <span class="tag"><span lang="ar">الرواتب وحماية الأجور</span><span lang="en">Payroll and WPS</span></span>
+            <h2><span lang="ar">مسيرة الرواتب في دقائق</span><span lang="en">Payroll done in minutes</span></h2>
+            <ul>
+              <li><span lang="ar">احتساب الرواتب والبدلات والإضافي والاستقطاعات حسب العقد</span><span lang="en">Salaries, allowances, overtime and deductions from each contract</span></li>
+              <li><span lang="ar">ملف SIF جاهز للبنك، وتاريخ آخر موعد واضح أمامك</span><span lang="en">The bank's SIF file ready, with the deadline in front of you</span></li>
+              <li><span lang="ar">مكافأة نهاية الخدمة والإجازات والمخالصة النهائية</span><span lang="en">End-of-service gratuity, leave and final settlements</span></li>
+              <li><span lang="ar">تطبيق للموظف: قسيمة الراتب، الإجازات، والمستندات</span><span lang="en">An app for staff: payslips, leave and documents</span></li>
+            </ul>
+          </div>
+          <div class="shot"><img src="img/payroll.jpg" alt="مسيرة رواتب شهر أكتوبر مع موعد حماية الأجور" loading="lazy"></div>
+        </div>
+
+        <div class="feature flip">
+          <div>
+            <span class="tag"><span lang="ar">بقالات وميني ماركت</span><span lang="en">Groceries and mini-marts</span></span>
+            <h2><span lang="ar">الكاشير على أي جوال</span><span lang="en">The till on any phone</span></h2>
+            <ul>
+              <li><span lang="ar">امسح الباركود أو اضغط على الصنف، وادفع نقداً أو بالبطاقة</span><span lang="en">Scan or tap, then take cash or card</span></li>
+              <li><span lang="ar">استرجاع برقم الإيصال، وتقرير إغلاق الوردية</span><span lang="en">Refunds by receipt number, and an end-of-shift report</span></li>
+              <li><span lang="ar">طباعة الإيصال على طابعة حرارية 58 أو 80 مم</span><span lang="en">Receipts on a 58 or 80 mm thermal printer</span></li>
+              <li><span lang="ar">تنبيه عند البيع بأقل من التكلفة أو وجود عجز في الصندوق</span><span lang="en">Alerts for sales below cost or a short drawer</span></li>
+            </ul>
+          </div>
+          <div class="shot phone-shot"><img src="img/pos-phone.jpg" alt="نقطة البيع على الجوال" loading="lazy"></div>
+        </div>
+
+        <div class="feature">
+          <div>
+            <span class="tag"><span lang="ar">عبايات وخياطة</span><span lang="en">Abayas and tailoring</span></span>
+            <h2><span lang="ar">كل طلب بمقاساته وعربونه وموعده</span><span lang="en">Every order with its measurements, deposit and date</span></h2>
+            <ul>
+              <li><span lang="ar">المقاسات محفوظة لكل عميلة</span><span lang="en">Measurements kept for every customer</span></li>
+              <li><span lang="ar">العربون والمتبقي واضحان عند التسليم</span><span lang="en">Deposit and balance clear at collection</span></li>
+              <li><span lang="ar">الطلبات المتأخرة وحِمل كل خياط قبل المواسم</span><span lang="en">Late orders and each tailor's workload before the season</span></li>
+            </ul>
+          </div>
+          <div class="shot"><img src="img/tailoring.jpg" alt="طلبات الخياطة والعبايات" loading="lazy"></div>
+        </div>
+
+        <div class="feature flip">
+          <div>
+            <span class="tag"><span lang="ar">صالونات</span><span lang="en">Salons</span></span>
+            <h2><span lang="ar">مواعيد اليوم وعمولة كل موظفة</span><span lang="en">Today's bookings and each stylist's commission</span></h2>
+            <ul>
+              <li><span lang="ar">جدول المواعيد لكل موظفة بلون مختلف</span><span lang="en">A booking grid with a colour per stylist</span></li>
+              <li><span lang="ar">دفع الزائرة بدون موعد بضغطة</span><span lang="en">Walk-ins checked out in one tap</span></li>
+              <li><span lang="ar">عمولة كل موظفة محسوبة لأي فترة تختارها</span><span lang="en">Each stylist's commission worked out for any period</span></li>
+            </ul>
+          </div>
+          <div class="shot"><img src="img/salon.jpg" alt="مواعيد الصالون" loading="lazy"></div>
+        </div>
+
+        <div class="feature">
+          <div>
+            <span class="tag"><span lang="ar">مكاتب الطباعة وتخليص المعاملات</span><span lang="en">Typing and PRO offices</span></span>
+            <h2><span lang="ar">المستندات قبل أن تنتهي</span><span lang="en">Documents before they expire</span></h2>
+            <ul>
+              <li><span lang="ar">البطاقات الشخصية للموظفين والسجل والرخص وعقد الإيجار في قائمة واحدة</span><span lang="en">Staff QIDs, the CR, licences and the lease in one list</span></li>
+              <li><span lang="ar">تذكير بالبريد قبل 90 و60 و30 يوماً</span><span lang="en">Email reminders 90, 60 and 30 days before</span></li>
+              <li><span lang="ar">الأرقام الشخصية مشفّرة ولا تظهر إلا لمن يحق له</span><span lang="en">Personal numbers encrypted and shown only to those allowed</span></li>
+            </ul>
+          </div>
+          <div class="shot"><img src="img/documents.jpg" alt="المستندات المنتهية وقريبة الانتهاء" loading="lazy"></div>
+        </div>
+
+        <div class="section-head" style="margin-top: 8px">
+          <h3><span lang="ar">جاهز أيضاً لـ</span><span lang="en">Also ready for</span></h3>
+        </div>
+        <div class="segments">
+          <span><span lang="ar">مطاعم وكافيهات</span><span lang="en">Restaurants and cafés</span></span>
+          <span><span lang="ar">ورش سيارات</span><span lang="en">Car workshops</span></span>
+          <span><span lang="ar">أثاث</span><span lang="en">Furniture</span></span>
+          <span><span lang="ar">مقاولات</span><span lang="en">Contracting</span></span>
+          <span><span lang="ar">ملابس</span><span lang="en">Clothing</span></span>
+          <span><span lang="ar">أي شركة لديها موظفون</span><span lang="en">Any company with staff</span></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt" id="plans">
+      <div class="wrap">
+        <div class="section-head">
+          <h2><span lang="ar">الباقات</span><span lang="en">Plans</span></h2>
+          <p><span lang="ar">بالريال القطري شهرياً. بدون عقد طويل، وبياناتك تُصدَّر إلى Excel متى شئت.</span>
+             <span lang="en">In Qatari riyals per month. No long contract, and your data exports to Excel whenever you like.</span></p>
+        </div>
+        <div class="plans">
+          <div class="plan">
+            <h3><span lang="ar">الرواتب</span><span lang="en">Payroll</span></h3>
+            <div class="price"><span class="ltr">99</span> <small><span lang="ar">ريال / شهر</span><span lang="en">QAR / month</span></small></div>
+            <div class="note"><span lang="ar">حتى 10 موظفين، ثم 8 ريال لكل موظف</span><span lang="en">Up to 10 staff, then QAR 8 per employee</span></div>
+            <ul>
+              <li><span lang="ar">الرواتب وملف حماية الأجور</span><span lang="en">Payroll and the WPS file</span></li>
+              <li><span lang="ar">المكافأة والإجازات والمخالصات</span><span lang="en">Gratuity, leave and settlements</span></li>
+              <li><span lang="ar">تنبيهات المستندات</span><span lang="en">Document alerts</span></li>
+              <li><span lang="ar">تطبيق الموظف</span><span lang="en">The staff app</span></li>
+            </ul>
+            <a class="btn outline" data-whatsapp="الرواتب" href="#contact"><span lang="ar">اطلب تجربة</span><span lang="en">Ask for a demo</span></a>
+          </div>
+          <div class="plan best">
+            <span class="badge"><span lang="ar">الأنسب للمحلات</span><span lang="en">Best for shops</span></span>
+            <h3><span lang="ar">المحل</span><span lang="en">Shop</span></h3>
+            <div class="price"><span class="ltr">199</span> <small><span lang="ar">ريال / شهر</span><span lang="en">QAR / month</span></small></div>
+            <div class="note"><span lang="ar">أو 1,990 ريال سنوياً</span><span lang="en">or QAR 1,990 a year</span></div>
+            <ul>
+              <li><span lang="ar">كل ما في باقة الرواتب</span><span lang="en">Everything in Payroll</span></li>
+              <li><span lang="ar">نقطة بيع (صندوق واحد) والمخزون</span><span lang="en">A till and stock</span></li>
+              <li><span lang="ar">وحدة نشاطك: خياطة، صالون، بقالة…</span><span lang="en">Your business module: tailoring, salon, grocery…</span></li>
+              <li><span lang="ar">الملخص اليومي على الجوال</span><span lang="en">The daily summary on your phone</span></li>
+            </ul>
+            <a class="btn primary" data-whatsapp="المحل" href="#contact"><span lang="ar">اطلب تجربة</span><span lang="en">Ask for a demo</span></a>
+          </div>
+          <div class="plan">
+            <h3><span lang="ar">الأعمال</span><span lang="en">Business</span></h3>
+            <div class="price"><span class="ltr">399</span> <small><span lang="ar">ريال / شهر</span><span lang="en">QAR / month</span></small></div>
+            <div class="note"><span lang="ar">لفرعين أو ثلاثة</span><span lang="en">For two or three branches</span></div>
+            <ul>
+              <li><span lang="ar">كل ما في باقة المحل</span><span lang="en">Everything in Shop</span></li>
+              <li><span lang="ar">المشتريات والمبيعات والفواتير</span><span lang="en">Purchasing, sales and invoices</span></li>
+              <li><span lang="ar">القوائم المالية</span><span lang="en">Financial statements</span></li>
+              <li><span lang="ar">حتى 3 صناديق بيع</span><span lang="en">Up to 3 tills</span></li>
+            </ul>
+            <a class="btn outline" data-whatsapp="الأعمال" href="#contact"><span lang="ar">اطلب تجربة</span><span lang="en">Ask for a demo</span></a>
+          </div>
+        </div>
+        <p style="color: var(--muted); margin: 14px 0 0; font-size: 15px">
+          <span lang="ar">✨ المساعد الذكي إضافة اختيارية بـ 49 إلى 99 ريال شهرياً حسب الاستخدام.</span>
+          <span lang="en">✨ The AI assistant is an optional add-on, QAR 49 to 99 a month depending on use.</span>
+        </p>
+        <div class="offer">
+          <span style="font-size: 30px">🎁</span>
+          <div class="grow">
+            <span lang="ar"><b>عرض الإطلاق في العزيزية:</b> أول 10 محلات تحصل على <b>3 أشهر مجاناً</b>، وإعداد وإدخال بيانات مجاني، والمساعد الذكي مشمول خلال فترة الإطلاق.</span>
+            <span lang="en"><b>Al Aziziya launch offer:</b> the first 10 shops get <b>3 months free</b>, free setup and data entry, and the AI assistant included during the launch.</span>
+          </div>
+          <a class="btn wa small" data-whatsapp="عرض الإطلاق" href="#contact"><span lang="ar">احجز مكانك</span><span lang="en">Claim a place</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap" style="max-width: 820px">
+        <div class="section-head"><h2><span lang="ar">أسئلة شائعة</span><span lang="en">Common questions</span></h2></div>
+        <details>
+          <summary><span lang="ar">هل أحتاج جهاز كمبيوتر أو خبرة؟</span><span lang="en">Do I need a computer or experience?</span></summary>
+          <p><span lang="ar">لا. يعمل على الجوال والجهاز اللوحي والكمبيوتر، وبالعربية. نجهزه معك خلال 10 دقائق، وقائمة «البداية» تدلك على كل خطوة.</span>
+             <span lang="en">No. It works on phones, tablets and computers, in Arabic. We set it up with you in 10 minutes, and a first-day checklist shows each step.</span></p>
+        </details>
+        <details>
+          <summary><span lang="ar">ماذا لو انقطع الإنترنت في المحل؟</span><span lang="en">What if the shop's internet goes down?</span></summary>
+          <p><span lang="ar">يستمر البيع في نقطة البيع، وتُحفظ المبيعات على الجهاز وتُرسل تلقائياً عند عودة الاتصال.</span>
+             <span lang="en">The till keeps selling; sales are kept on the device and sent automatically when the connection returns.</span></p>
+        </details>
+        <details>
+          <summary><span lang="ar">هل ملف حماية الأجور يقبله البنك؟</span><span lang="en">Will my bank accept the WPS file?</span></summary>
+          <p><span lang="ar">يُنشئ النظام ملف SIF بالصيغة المعتمدة في قطر. نتأكد معك من تنسيق بنكك قبل أول شهر.</span>
+             <span lang="en">The system produces the SIF file in Qatar's format. We confirm your bank's layout with you before the first month.</span></p>
+        </details>
+        <details>
+          <summary><span lang="ar">هل بياناتي آمنة؟ وهل أستطيع أخذها معي؟</span><span lang="en">Is my data safe, and can I take it with me?</span></summary>
+          <p><span lang="ar">الأرقام الشخصية والآيبان مشفّرة، ولكل موظف صلاحياته، ونسخة احتياطية كل ليلة. وتستطيع تصدير كل بياناتك إلى Excel في أي وقت.</span>
+             <span lang="en">QID, passport and IBAN numbers are encrypted, each user only sees what their role allows, and there is a backup every night. You can export all your data to Excel at any time.</span></p>
+        </details>
+        <details>
+          <summary><span lang="ar">لدي قائمة أسعار في Excel، هل أدخلها يدوياً؟</span><span lang="en">I have a price list in Excel. Do I type it in again?</span></summary>
+          <p><span lang="ar">لا. نزّل القالب، الصق أصنافك وأسعارك ومخزونك، وارفعه. يفحص النظام كل صف ويخبرك بالأخطاء قبل الحفظ.</span>
+             <span lang="en">No. Download the template, paste your products, prices and stock, and upload it. Every row is checked and any mistakes are listed before anything is saved.</span></p>
+        </details>
+        <details>
+          <summary><span lang="ar">كيف أحصل على الدعم؟</span><span lang="en">How do I get help?</span></summary>
+          <p><span lang="ar">من داخل النظام: مقالات مساعدة بالعربية، وزر «طلب جديد» لإرسال مشكلة أو اقتراح، وواتساب للحالات العاجلة.</span>
+             <span lang="en">From inside the system: help articles in Arabic, a "New request" button for problems or suggestions, and WhatsApp for urgent cases.</span></p>
+        </details>
+      </div>
+    </section>
+
+    <section id="contact" style="padding-top: 8px">
+      <div class="wrap">
+        <div class="contact">
+          <h2><span lang="ar">جرّبه على محلك</span><span lang="en">Try it on your own shop</span></h2>
+          <p><span lang="ar">نزورك ونجهز النظام بأصنافك وموظفيك في زيارة واحدة. التجربة مجانية.</span>
+             <span lang="en">We visit and set it up with your products and staff in one visit. The demo is free.</span></p>
+          <div class="cta">
+            <a class="btn wa" data-whatsapp href="#contact"><span lang="ar">واتساب</span><span lang="en">WhatsApp</span> <span class="ltr" data-phone></span></a>
+            <a class="btn outline" data-email href="#contact"><span lang="ar">البريد الإلكتروني</span><span lang="en">Email</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span lang="ar">نظام المنشآت القطرية · الدوحة، قطر</span><span lang="en">Qatar SME ERP · Doha, Qatar</span>
+  </footer>
+
+  <script>
+    // ── Your contact details: fill these in before the page is shared. ──────────────────────────────
+    const CONTACT = {
+      whatsapp: '',   // international format without + or spaces, e.g. '97455512345'
+      email: ''       // e.g. 'hello@example.qa'
+    };
+    // ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    const root = document.documentElement;
+    function setLang(lang) {
+      root.lang = lang;
+      root.dir = lang === 'ar' ? 'rtl' : 'ltr';
+      document.title = lang === 'ar' ? 'نظام المنشآت القطرية · Qatar SME ERP' : 'Qatar SME ERP · نظام المنشآت القطرية';
+      try { localStorage.setItem('site.lang', lang); } catch { /* private mode: the choice is not remembered */ }
+    }
+    let saved = null;
+    try { saved = localStorage.getItem('site.lang'); } catch { /* ignore */ }
+    if (saved === 'en' || (!saved && new URLSearchParams(location.search).get('lang') === 'en')) setLang('en');
+    document.getElementById('lang-toggle').addEventListener('click', () => setLang(root.lang === 'ar' ? 'en' : 'ar'));
+
+    // WhatsApp buttons open a chat with a ready message (and the plan, when the button belongs to one).
+    document.querySelectorAll('[data-whatsapp]').forEach((a) => {
+      if (!CONTACT.whatsapp) return;
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const plan = a.getAttribute('data-whatsapp');
+        const text = root.lang === 'ar'
+          ? 'السلام عليكم، أرغب في تجربة نظام المنشآت القطرية' + (plan ? ' (باقة ' + plan + ')' : '') + '.'
+          : 'Hello, I would like a demo of Qatar SME ERP' + (plan ? ' (' + plan + ' plan)' : '') + '.';
+        window.open('https://wa.me/' + CONTACT.whatsapp + '?text=' + encodeURIComponent(text), '_blank', 'noopener');
+      });
+    });
+    document.querySelectorAll('[data-phone]').forEach((el) => {
+      el.textContent = CONTACT.whatsapp ? '+' + CONTACT.whatsapp.replace(/^(\d{3})(\d{4})(\d+)$/, '$1 $2 $3') : '';
+    });
+    document.querySelectorAll('[data-email]').forEach((a) => {
+      if (CONTACT.email) a.href = 'mailto:' + CONTACT.email; else a.hidden = true;
+    });
+  </script>
+</body>
+</html>
