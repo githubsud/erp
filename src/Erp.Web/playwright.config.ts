@@ -17,7 +17,8 @@ export default defineConfig({
   retries: process.env['CI'] ? 1 : 0,
   timeout: 120_000,
   expect: { timeout: 10_000 },
-  reporter: process.env['CI'] ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // On GitHub each failure also becomes an annotation on the run, readable without downloading the report.
+  reporter: process.env['CI'] ? [['github'], ['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
     locale: 'ar-QA',
