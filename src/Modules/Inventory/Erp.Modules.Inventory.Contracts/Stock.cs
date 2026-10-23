@@ -61,8 +61,12 @@ public interface IStockService
     Task<IReadOnlyList<StockLineResult>> ReverseAsync(string sourceType, Guid sourceId, DateOnly date, CancellationToken ct = default);
 }
 
-/// <summary>An active, priced item as a till sees it (barcode lookups and an offline copy).</summary>
-public sealed record CatalogItem(Guid Id, string Sku, string? Barcode, string NameEn, string NameAr, string UomCode, ItemType Type, decimal SalesPrice);
+/// <summary>
+/// An active, priced item as a till sees it (barcode lookups and an offline copy). Stock items carry the company-wide quantity on hand
+/// and their reorder level, so the till can show what is running out.
+/// </summary>
+public sealed record CatalogItem(Guid Id, string Sku, string? Barcode, string NameEn, string NameAr, string UomCode, ItemType Type, decimal SalesPrice,
+    decimal? OnHand = null, decimal? ReorderLevel = null);
 
 /// <summary>An active stock item at or below its reorder level (company-wide quantity).</summary>
 public sealed record ReorderCandidate(Guid ItemId, string Sku, string NameEn, string NameAr, string UomCode, decimal OnHand, decimal ReorderLevel,

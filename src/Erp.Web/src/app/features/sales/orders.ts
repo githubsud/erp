@@ -9,6 +9,7 @@ import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
+import { stockLevel } from '../../core/stock-alert';
 import { SalesApi } from '../../core/sales.api';
 import { Customer, DeliveryNote, Quotation, QuotationStatus, SalesInvoice, SalesOrder, SalesOrderStatus } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
@@ -259,7 +260,7 @@ type SalesLineGroup = FormGroup<{
                 </mat-form-field>
                 @if (itemOf(line); as it) {
                   @if (it.itemType === 'Stock') {
-                    <div class="secondary" [class.short]="it.quantityOnHand < (line.controls.quantity.value ?? 0)">
+                    <div class="secondary" [class]="'stock-' + level(line, it)">
                       {{ 'so.onHand' | t }}: <span class="ltr">{{ it.quantityOnHand }} {{ it.uomCode }}</span></div>
                   }
                 }
@@ -376,6 +377,11 @@ export class SalesDocFormPage implements OnInit {
 
   protected itemOf(line: SalesLineGroup): Item | undefined {
     return this.items().find((i) => i.id === line.controls.itemId.value);
+  }
+
+  /** Stock against this line, in base units: out (not enough), low (at or below the reorder level after it) or ok. */
+  protected level(line: SalesLineGroup, it: Item): string {
+    return stockLevel(it.quantityOnHand, it.reorderLevel, (Number(line.controls.quantity.value) || 0) * this.factor(line));
   }
 
   protected amount(line: SalesLineGroup): number {

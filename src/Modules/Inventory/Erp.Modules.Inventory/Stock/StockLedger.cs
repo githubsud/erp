@@ -415,9 +415,13 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
         var companyId = tenant.RequireCompanyId();
         return await (from i in db.Set<Item>().AsNoTracking()
                       join u in db.Set<Uom>() on i.UomId equals u.Id
+                      join v in db.Set<ItemValuation>() on i.Id equals v.ItemId into valuations
+                      from v in valuations.DefaultIfEmpty()
                       where i.CompanyId == companyId && i.IsActive && i.SalesPrice != null
                       orderby i.NameEn
-                      select new CatalogItem(i.Id, i.Sku, i.Barcode, i.NameEn, i.NameAr, u.Code, i.ItemType, i.SalesPrice!.Value)).ToListAsync(ct);
+                      select new CatalogItem(i.Id, i.Sku, i.Barcode, i.NameEn, i.NameAr, u.Code, i.ItemType, i.SalesPrice!.Value,
+                          i.ItemType == ItemType.Stock ? (v == null ? 0m : v.Quantity) : null,
+                          i.ItemType == ItemType.Stock ? i.ReorderLevel : null)).ToListAsync(ct);
     }
 
     public Task<WarehouseInfo?> GetWarehouseAsync(Guid id, CancellationToken ct = default) =>

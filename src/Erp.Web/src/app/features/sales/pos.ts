@@ -9,6 +9,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { Account } from '../../core/models';
 import { NotifyService, problemOf } from '../../core/notify.service';
 import { ReceiptService } from '../../core/receipt.service';
+import { LowItem, LowStockNotice, stockLevel } from '../../core/stock-alert';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
 import { PrinterSettingsDialog } from '../../shared/printer-settings';
@@ -50,6 +51,9 @@ interface CatalogItem {
   uomCode: string;
   type: string;
   salesPrice: number;
+  /** Stock items only: company-wide quantity on hand (kept up to date on this device after each sale) and the reorder level. */
+  onHand?: number | null;
+  reorderLevel?: number | null;
 }
 
 interface CartLine {
@@ -226,6 +230,10 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
               <button class="tile" (click)="add(i)">
                 <span class="name">{{ i | bi }}</span>
                 <span class="price ltr">{{ i.salesPrice | money }}</span>
+                @if (i.onHand != null) {
+                  <span [class]="'stock stock-' + tileLevel(i)">
+                    {{ i.onHand > 0 ? ('stock.inStock' | t: { n: i.onHand }) : ('stock.outOfStock' | t) }}</span>
+                }
               </button>
             }
           </div>
@@ -279,6 +287,14 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
                 <button mat-button (click)="print(s)"><mat-icon>print</mat-icon> {{ 'pos.print' | t }}</button>
               </div>
             }
+            @if (low().length) {
+              <div class="low-note stock-low">
+                <mat-icon>inventory_2</mat-icon>
+                <span class="text">{{ lowStock.text(low()) }}</span>
+                @if (lowStock.canReorder()) { <button mat-button (click)="lowStock.openReorder()">{{ 'stock.reorderNow' | t }}</button> }
+                <button mat-icon-button (click)="low.set([])" [attr.aria-label]="'app.close' | t"><mat-icon>close</mat-icon></button>
+              </div>
+            }
           </div>
         </section>
       </div>
@@ -323,12 +339,20 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
     .account-btn { width: 100%; margin-top: 8px; }
     .last { display: flex; align-items: center; justify-content: space-between; margin-block-start: 8px; }
     .failed { color: var(--mat-sys-error); }
+    .tile .stock { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
+    .tile .stock.stock-out { color: var(--mat-sys-error); font-weight: 600; }
+    .tile .stock.stock-low { color: #9a5b00; font-weight: 600; }
+    .low-note { display: flex; align-items: center; gap: 8px; margin-block-start: 8px; padding: 4px 8px; border-radius: 8px; background: #fff1d6; }
+    .low-note .text { flex: 1; }
   `
 })
 export class PosPage implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly dialog = inject(MatDialog);
   private readonly notify = inject(NotifyService);
+  protected readonly lowStock = inject(LowStockNotice);
+  /** Items the last sale left at or below their reorder level; stays until the next sale or until closed. */
+  protected readonly low = signal<LowItem[]>([]);
   private readonly i18n = inject(I18nService);
   private readonly receipt = inject(ReceiptService);
   protected readonly canManage = inject(AuthService).can('sal.pos:manage');
@@ -456,6 +480,24 @@ export class PosPage implements OnInit, OnDestroy {
       this.add(hit);
       this.search.setValue('');
     } else this.notify.info(this.i18n.t('pos.notFound'));
+  }
+
+  /** Red when the cart already takes all of it, amber at or below the reorder level after the cart. */
+  protected tileLevel(item: CatalogItem): string {
+    const inCart = this.cart().find((l) => l.item.id === item.id)?.quantity ?? 0;
+    return stockLevel(item.onHand ?? 0, item.reorderLevel, inCart);
+  }
+
+  /** Takes a sale off the stock this device knows (also offline) and notes what is now running low. */
+  private sold(lines: { itemId: string | null; quantity: number }[]): void {
+    const taken = new Map<string, number>();
+    for (const l of lines) if (l.itemId) taken.set(l.itemId, (taken.get(l.itemId) ?? 0) + l.quantity);
+    const catalog = this.catalog().map((i) => (i.onHand != null && taken.has(i.id) ? { ...i, onHand: round2(i.onHand - taken.get(i.id)!) } : i));
+    this.catalog.set(catalog);
+    writeStore(CATALOG_KEY, catalog);
+    this.low.set(catalog
+      .filter((i) => taken.has(i.id) && i.onHand != null && stockLevel(i.onHand, i.reorderLevel) !== 'ok')
+      .map((i) => ({ nameEn: i.nameEn, nameAr: i.nameAr, left: i.onHand! })));
   }
 
   protected add(item: CatalogItem): void {
@@ -597,6 +639,7 @@ export class PosPage implements OnInit, OnDestroy {
         this.busy.set(false);
         if (isOffline(e)) {
           this.enqueue(sale);
+          this.sold(sale.lines);
           this.last.set(this.provisional(sale));
           if (this.receipt.settings().autoPrint) this.print(this.last()!);
           this.reset();
@@ -621,6 +664,7 @@ export class PosPage implements OnInit, OnDestroy {
 
   private done(s: Sale): void {
     this.last.set(s);
+    if (!s.isRefund) this.sold(s.lines);
     if (this.receipt.settings().autoPrint) this.print(s);
     this.reset();
     if (s.changeGiven > 0) this.notify.info(`${this.i18n.t('pos.change')}: ${s.changeGiven.toFixed(2)}`);

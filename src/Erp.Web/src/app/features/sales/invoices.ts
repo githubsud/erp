@@ -9,6 +9,7 @@ import { filter, merge, switchMap } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
+import { LowStockNotice, stockLevel } from '../../core/stock-alert';
 import { SalesApi } from '../../core/sales.api';
 import { CreditNote, Customer, DeliveryNote, SalesInvoice, SalesInvoiceLine, SalesInvoiceStatus, SalesOrder } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
@@ -210,6 +211,12 @@ interface OpenDeliveryLine {
                         @for (it of items(); track it.id) { <mat-option [value]="it.id"><span class="ltr">{{ it.sku }}</span> · {{ it | bi }}</mat-option> }
                       </mat-select>
                     </mat-form-field>
+                    @if (itemOf(line); as it) {
+                      @if (it.itemType === 'Stock') {
+                        <div class="secondary" [class]="'stock-' + level(line, it)">
+                          {{ 'so.onHand' | t }}: <span class="ltr">{{ it.quantityOnHand }} {{ it.uomCode }}</span></div>
+                      }
+                    }
                   }
                   @case ('service') {
                     <mat-form-field><input matInput formControlName="description" [placeholder]="'po.description' | t" /></mat-form-field>
@@ -249,6 +256,7 @@ export class SalesInvoiceFormPage implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder).nonNullable;
+  private readonly lowStock = inject(LowStockNotice);
 
   protected readonly customers = signal<Customer[]>([]);
   protected readonly items = signal<Item[]>([]);
@@ -314,6 +322,15 @@ export class SalesInvoiceFormPage implements OnInit {
     return this.lines.controls.some((l) => l.controls.deliveryNoteLineId.value === dnLineId);
   }
 
+  protected itemOf(line: InvoiceLineGroup): Item | undefined {
+    return this.items().find((i) => i.id === line.controls.itemId.value);
+  }
+
+  /** Stock against this line: out (not enough), low (at or below the reorder level after it) or ok. */
+  protected level(line: InvoiceLineGroup, it: Item): string {
+    return stockLevel(it.quantityOnHand, it.reorderLevel, Number(line.controls.quantity.value) || 0);
+  }
+
   protected amount(line: InvoiceLineGroup): number {
     const v = line.getRawValue();
     return Math.round((Number(v.quantity) || 0) * (Number(v.unitPrice) || 0) * (100 - (Number(v.discountPercent) || 0))) / 100;
@@ -369,6 +386,7 @@ export class SalesInvoiceFormPage implements OnInit {
       .subscribe({
         next: (i) => {
           this.notify.success();
+          if (post) this.lowStock.afterSale(i.lines.map((l) => l.itemId));
           void this.router.navigate(['/sales/invoices', i.id]);
         },
         error: (e) => {
@@ -630,6 +648,7 @@ export class SalesInvoiceDetailPage implements OnInit {
   protected readonly auth = inject(AuthService);
   private readonly sales = inject(SalesApi);
   private readonly notify = inject(NotifyService);
+  private readonly lowStock = inject(LowStockNotice);
   private readonly dialog = inject(MatDialog);
   private readonly router = inject(Router);
   protected readonly chip = salesInvoiceChip;
@@ -662,6 +681,7 @@ export class SalesInvoiceDetailPage implements OnInit {
         this.busy.set(false);
         this.invoice.set(i);
         this.notify.success();
+        this.lowStock.afterSale(i.lines.map((l) => l.itemId));
       },
       error: (e) => {
         this.busy.set(false);

@@ -62,6 +62,9 @@ public sealed class PosLimitTests(ErpFixture fixture)
         (await CodeAsync(Sell(cashier, 0m, 8m))).ShouldBe("sal.pos_needs_approval");
         // Someone with the override permission selling at the till needs nobody.
         (await Sell(owner, 50m)).EnsureSuccessStatusCode();
+        // The till sees what is left (100 opening, 3 sold) to show it on the item and warn when it runs low.
+        var soap = (await cashier.GetAsync<List<JsonElement>>("/api/sales/pos/catalog")).Single(i => i.GetProperty("id").GetGuid() == item);
+        soap.GetProperty("onHand").GetDecimal().ShouldBe(97m);
 
         // PINs: only managers set one, and not an easy one.
         (await cashier.PutJsonAsync("/api/sales/pos/my-pin", new { pin = "4827" })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);

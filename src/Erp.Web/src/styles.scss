@@ -118,6 +118,11 @@ td.ltr, th.ltr { display: table-cell; direction: inherit; unicode-bidi: normal; 
 
 .snack-success { --mat-snack-bar-container-color: #0b5a35; }
 .snack-error { --mat-snack-bar-container-color: #8c1d18; }
+.snack-warn { --mat-snack-bar-container-color: #7a4a00; }
+
+/* Stock next to an item being sold: red when there is not enough, amber at or below the reorder level. */
+.stock-out { color: var(--mat-sys-error); font-weight: 600; }
+.stock-low { color: #9a5b00; font-weight: 600; }
 
 mat-dialog-content .form-grid { min-width: min(560px, 80vw); }
 
