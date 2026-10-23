@@ -10,6 +10,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { stockLevel } from '../../core/stock-alert';
+import { inBoxes } from '../../core/item-units';
 import { SalesApi } from '../../core/sales.api';
 import { Customer, DeliveryNote, Quotation, QuotationStatus, SalesInvoice, SalesOrder, SalesOrderStatus } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
@@ -261,7 +262,7 @@ type SalesLineGroup = FormGroup<{
                 @if (itemOf(line); as it) {
                   @if (it.itemType === 'Stock') {
                     <div class="secondary" [class]="'stock-' + level(line, it)">
-                      {{ 'so.onHand' | t }}: <span class="ltr">{{ it.quantityOnHand }} {{ it.uomCode }}</span></div>
+                      {{ 'so.onHand' | t }}: <span class="ltr">{{ boxes(it) }}</span></div>
                   }
                 }
               </td>
@@ -379,6 +380,10 @@ export class SalesDocFormPage implements OnInit {
     return this.items().find((i) => i.id === line.controls.itemId.value);
   }
 
+  protected boxes(it: Item): string {
+    return inBoxes(it.quantityOnHand, it.uomCode, this.unitsOf(it.id));
+  }
+
   /** Stock against this line, in base units: out (not enough), low (at or below the reorder level after it) or ok. */
   protected level(line: SalesLineGroup, it: Item): string {
     return stockLevel(it.quantityOnHand, it.reorderLevel, (Number(line.controls.quantity.value) || 0) * this.factor(line));
@@ -432,8 +437,8 @@ export class SalesDocFormPage implements OnInit {
     const itemId = line.controls.itemId.value;
     if (!itemId) return;
     const rate = this.form.value.currency !== 'QAR' ? Number(this.form.value.exchangeRate) || null : null;
-    this.sales.prices(this.customerId() || null, [itemId], rate).subscribe(([p]) => {
-      if (p?.unitPrice !== null && p?.unitPrice !== undefined) line.controls.unitPrice.setValue(Math.round(p.unitPrice * this.factor(line) * 1000000) / 1000000);
+    this.sales.unitPrice(this.customerId() || null, itemId, line.controls.uomId.value, rate).subscribe((price) => {
+      if (price !== null) line.controls.unitPrice.setValue(price);
     });
   }
 

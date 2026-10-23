@@ -7,6 +7,14 @@ import {
 } from './trade.models';
 
 /** Inventory and purchasing endpoints. */
+/** An alternative unit of an item (a box of 12), with its own price and barcode when it has them. */
+export interface UnitRequest {
+  uomId: string;
+  factor: number;
+  salesPrice?: number | null;
+  barcode?: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class TradeApi {
   private readonly api = inject(ApiService);
@@ -27,7 +35,7 @@ export class TradeApi {
   item = (id: string) => this.api.get<Item>(`inventory/items/${id}`);
   saveItem = (id: string | null, body: unknown) => (id ? this.api.put<Item>(`inventory/items/${id}`, body) : this.api.post<Item>('inventory/items', body));
   units = (id: string) => this.api.get<ItemUnit[]>(`inventory/items/${id}/units`);
-  saveUnits = (id: string, units: { uomId: string; factor: number }[]) => this.api.put<ItemUnit[]>(`inventory/items/${id}/units`, units);
+  saveUnits = (id: string, units: UnitRequest[]) => this.api.put<ItemUnit[]>(`inventory/items/${id}/units`, units);
   itemLedger = (id: string, from: string, to: string) => this.api.get<ItemLedger>(`inventory/items/${id}/ledger`, { from, to });
 
   // Stock

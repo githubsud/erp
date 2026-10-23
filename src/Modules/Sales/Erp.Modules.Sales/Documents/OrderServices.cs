@@ -45,12 +45,14 @@ internal static class SalesLines
         var ids = lines.Select(l => l.ItemId).Distinct().ToList();
         var items = await inventory.GetItemsAsync(ids, ct);
         var units = await inventory.GetUnitsAsync(ids, ct);
-        var prices = lines.Any(l => l.UnitPrice is null) ? await customers.PricesAsync(customerId, ids, ct, exchangeRate) : new Dictionary<Guid, decimal?>();
+        var keys = lines.Where(l => l.UnitPrice is null && items.ContainsKey(l.ItemId))
+            .Select(l => (l.ItemId, ItemUnits.Resolve(units, items[l.ItemId], l.UomId, "sal").UomId)).ToList();
+        IReadOnlyDictionary<(Guid, Guid?), decimal?> prices = keys.Count > 0 ? await customers.UnitPricesAsync(customerId, keys, ct, exchangeRate) : new Dictionary<(Guid, Guid?), decimal?>();
         return lines.Select(l =>
         {
             if (!items.TryGetValue(l.ItemId, out var item) || !item.IsActive) throw new NotFoundException("Item", l.ItemId);
             var (uomId, factor) = ItemUnits.Resolve(units, item, l.UomId, "sal");
-            var price = l.UnitPrice ?? prices.GetValueOrDefault(l.ItemId) * factor
+            var price = l.UnitPrice ?? prices.GetValueOrDefault((l.ItemId, uomId))
                         ?? throw new BusinessRuleException("sal.price_missing", $"Enter a price for {item.Sku}: it has no sales price.",
                             $"أدخل سعراً للصنف {item.Sku}: لا يوجد له سعر بيع.");
             return new PricedLine(item.Id, CustomerService.Clean(l.Description), l.Quantity * factor, Math.Round(price / factor, 6, MidpointRounding.AwayFromZero),

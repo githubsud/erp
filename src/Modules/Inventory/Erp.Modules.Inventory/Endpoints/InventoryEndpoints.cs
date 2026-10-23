@@ -23,8 +23,11 @@ public sealed record ItemDto(Guid Id, string Sku, string NameEn, string NameAr, 
 public sealed record BatchRow(Guid BatchId, Guid ItemId, string Sku, string NameEn, string NameAr, string BatchNo, DateOnly? ExpiryDate, Guid WarehouseId,
     string WarehouseCode, decimal Quantity, int? DaysLeft);
 
+/// <summary><see cref="Boxes"/>: the item's other units (a box of 12), so the quantity can be shown as boxes and pieces.</summary>
 public sealed record StockRow(Guid ItemId, string Sku, string NameEn, string NameAr, string UomCode, Guid ItemGroupId, decimal Quantity,
-    decimal AverageCost, decimal Value, decimal? ReorderLevel, bool BelowReorder);
+    decimal AverageCost, decimal Value, decimal? ReorderLevel, bool BelowReorder, IReadOnlyList<UnitSize>? Boxes = null);
+
+public sealed record UnitSize(string UomCode, decimal Factor);
 
 public sealed record ValuationRow(Guid ItemId, string Sku, string NameEn, string NameAr, decimal Quantity, decimal Value);
 
@@ -237,7 +240,8 @@ internal static class InventoryEndpoints
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var term = search.Trim();
-                q = q.Where(i => EF.Functions.ILike(i.Sku, $"%{term}%") || EF.Functions.ILike(i.NameEn, $"%{term}%") || i.NameAr.Contains(term) || i.Barcode == term);
+                q = q.Where(i => EF.Functions.ILike(i.Sku, $"%{term}%") || EF.Functions.ILike(i.NameEn, $"%{term}%") || i.NameAr.Contains(term) || i.Barcode == term
+                                 || db.Set<ItemUnit>().Any(u => u.ItemId == i.Id && u.Barcode == term));
             }
             if (Enum.TryParse<ItemType>(type, true, out var it)) q = q.Where(i => i.ItemType == it);
             if (groupId is not null) q = q.Where(i => i.ItemGroupId == groupId);
@@ -265,6 +269,12 @@ internal static class InventoryEndpoints
                                   : db.Set<WarehouseStock>().Where(s => s.ItemId == i.Id && s.WarehouseId == warehouseId).Select(s => s.Quantity).FirstOrDefault()
                           }).ToListAsync(ct);
         var term = search?.Trim();
+        var ids = rows.Select(r => r.Id).ToList();
+        var boxes = (await (from x in db.Set<ItemUnit>().AsNoTracking()
+                            join u in db.Set<Uom>() on x.UomId equals u.Id
+                            where ids.Contains(x.ItemId)
+                            select new { x.ItemId, u.Code, x.Factor }).ToListAsync(ct))
+            .ToLookup(x => x.ItemId, x => new UnitSize(x.Code, x.Factor));
         return rows
             .Where(r => r.IsActive || r.WarehouseQuantity != 0)
             .Where(r => string.IsNullOrEmpty(term) || r.Sku.Contains(term, StringComparison.OrdinalIgnoreCase)
@@ -273,7 +283,8 @@ internal static class InventoryEndpoints
             {
                 var value = warehouseId is null ? r.Value : Money.Round(r.WarehouseQuantity * r.AverageCost);
                 var below = r.ReorderLevel is { } level && r.Quantity <= level;
-                return new StockRow(r.Id, r.Sku, r.NameEn, r.NameAr, r.Code, r.ItemGroupId, r.WarehouseQuantity, r.AverageCost, value, r.ReorderLevel, below);
+                return new StockRow(r.Id, r.Sku, r.NameEn, r.NameAr, r.Code, r.ItemGroupId, r.WarehouseQuantity, r.AverageCost, value, r.ReorderLevel, below,
+                    boxes[r.Id].Any() ? boxes[r.Id].ToList() : null);
             })
             .Where(r => !belowReorder || r.BelowReorder)
             .OrderBy(r => r.Sku).ToList();

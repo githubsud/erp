@@ -36,6 +36,9 @@ export interface Item {
 
 /** A unit an item is bought or sold in; one holds `factor` base units (the base unit has factor 1). */
 export interface ItemUnit {
+  /** The price of one of this unit (for the base unit, the item's price); null: the item's price × factor. */
+  salesPrice?: number | null;
+  barcode?: string | null;
   itemId: string;
   uomId: string;
   uomCode: string;
@@ -55,6 +58,8 @@ export interface StockRow {
   value: number;
   reorderLevel: number | null;
   belowReorder: boolean;
+  /** The item's other units (a box of 12), to show the quantity as boxes and pieces. */
+  boxes?: { uomCode: string; factor: number }[] | null;
 }
 
 export interface ValuationReport {

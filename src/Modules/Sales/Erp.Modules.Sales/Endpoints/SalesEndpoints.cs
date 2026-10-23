@@ -20,11 +20,11 @@ public sealed record CustomerDto(Guid Id, string Code, string NameEn, string Nam
 
 public sealed record SalesSettingsDto(string CreditControl, int QuotationValidityDays, decimal PosMaxDiscountPercent);
 
-public sealed record PriceListItemDto(Guid ItemId, string Sku, string NameEn, string NameAr, decimal UnitPrice);
+public sealed record PriceListItemDto(Guid ItemId, string Sku, string NameEn, string NameAr, decimal UnitPrice, Guid? UomId = null, string? UomCode = null);
 
 public sealed record PriceListDto(Guid Id, string Code, string NameEn, string NameAr, bool IsActive, IReadOnlyList<PriceListItemDto> Items);
 
-public sealed record PriceDto(Guid ItemId, decimal? UnitPrice);
+public sealed record PriceDto(Guid ItemId, decimal? UnitPrice, Guid? UomId = null);
 
 public sealed record SalesLineDto(Guid Id, int LineNo, Guid ItemId, string Sku, string NameEn, string NameAr, string ItemType, string UomCode, string? Description,
     decimal Quantity, decimal UnitPrice, decimal DiscountPercent, decimal Amount, decimal QuantityDelivered, decimal QuantityInvoiced, Guid? UomId,
@@ -160,8 +160,11 @@ internal static class SalesEndpoints
             .RequirePermission(SalesPermissions.CustomersManage);
         g.MapGet("/prices", async (string itemIds, CustomerService s, CancellationToken ct, Guid? customerId = null, decimal? exchangeRate = null) =>
         {
-            var ids = itemIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).ToList();
-            return (await s.PricesAsync(customerId, ids, ct, exchangeRate is > 0 ? exchangeRate.Value : 1m)).Select(p => new PriceDto(p.Key, p.Value));
+            // "itemId" for the base unit, "itemId:uomId" for a box.
+            var keys = itemIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(k => k.Split(':') is [var item, var unit] ? (Guid.Parse(item), (Guid?)Guid.Parse(unit)) : (Guid.Parse(k), null)).ToList();
+            return (await s.UnitPricesAsync(customerId, keys, ct, exchangeRate is > 0 ? exchangeRate.Value : 1m))
+                .Select(p => new PriceDto(p.Key.ItemId, p.Value, p.Key.UomId));
         }).RequirePermission(SalesPermissions.CustomersRead);
 
         // Quotations
@@ -322,9 +325,13 @@ internal static class SalesEndpoints
         if (id is not null) q = q.Where(p => p.Id == id);
         var lists = await q.OrderBy(p => p.Code).ToListAsync(ct);
         var items = await inv.GetItemsAsync(lists.SelectMany(p => p.Items.Select(i => i.ItemId)), ct);
+        var withUnit = lists.SelectMany(p => p.Items).Where(i => i.UomId != null).ToList();
+        var codes = withUnit.Count == 0 ? [] : (await inv.GetUnitsAsync(withUnit.Select(i => i.ItemId), ct))
+            .GroupBy(u => u.UomId).ToDictionary(g => g.Key, g => g.First().UomCode);
         return lists.Select(p => new PriceListDto(p.Id, p.Code, p.NameEn, p.NameAr, p.IsActive,
-            p.Items.Select(i => new PriceListItemDto(i.ItemId, items[i.ItemId].Sku, items[i.ItemId].NameEn, items[i.ItemId].NameAr, i.UnitPrice))
-                .OrderBy(i => i.Sku).ToList())).ToList();
+            p.Items.Select(i => new PriceListItemDto(i.ItemId, items[i.ItemId].Sku, items[i.ItemId].NameEn, items[i.ItemId].NameAr, i.UnitPrice, i.UomId,
+                    i.UomId is { } u ? codes.GetValueOrDefault(u) : null))
+                .OrderBy(i => i.Sku).ThenBy(i => i.UomId != null).ToList())).ToList();
     }
 
     private static async Task<QuotationDto> QuotationAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, IClock clock, Guid id, CancellationToken ct) =>

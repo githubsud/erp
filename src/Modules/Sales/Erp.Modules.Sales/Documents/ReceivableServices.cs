@@ -74,10 +74,11 @@ internal sealed class SalesInvoiceService(ErpDbContext db, ITenantContext tenant
             if (r.Currency is not null && SalesRules.CurrencyCode(r.Currency) != currency)
                 throw new BusinessRuleException("sal.invoice_currencies", $"These order lines are in {currency}.", $"بنود الأوامر هذه بعملة {currency}.");
             var rate = SalesRules.ExchangeRate(currency, r.ExchangeRate);
-            var directIds = r.Lines.Where(l => l.DeliveryNoteLineId is null && l.SalesOrderLineId is null && l.ItemId is not null && l.UnitPrice is null)
-                .Select(l => l.ItemId!.Value).ToList();
-            var prices = directIds.Count > 0 ? await customers.PricesAsync(customer.Id, directIds, token, rate) : new Dictionary<Guid, decimal?>();
             var units = await inventory.GetUnitsAsync(r.Lines.Where(l => l.ItemId is not null && l.UomId is not null).Select(l => l.ItemId!.Value), token);
+            var direct = r.Lines.Where(l => l.DeliveryNoteLineId is null && l.SalesOrderLineId is null && l.ItemId is not null && l.UnitPrice is null
+                                            && items.ContainsKey(l.ItemId.Value))
+                .Select(l => (l.ItemId!.Value, ItemUnits.Resolve(units, items[l.ItemId!.Value], l.UomId, "sal").UomId)).ToList();
+            IReadOnlyDictionary<(Guid, Guid?), decimal?> prices = direct.Count > 0 ? await customers.UnitPricesAsync(customer.Id, direct, token, rate) : new Dictionary<(Guid, Guid?), decimal?>();
 
             var invoice = new SalesInvoice
             {
@@ -141,7 +142,7 @@ internal sealed class SalesInvoiceService(ErpDbContext db, ITenantContext tenant
                     if (type == InvoiceLineType.Direct && r.WarehouseId is null)
                         throw new BusinessRuleException("sal.invoice_warehouse", "Choose the warehouse the goods are taken from.", "اختر المستودع الذي تُصرف منه البضاعة.");
                     (uomId, factor) = ItemUnits.Resolve(units, item, l.UomId, "sal");
-                    price = l.UnitPrice ?? prices.GetValueOrDefault(id) * factor
+                    price = l.UnitPrice ?? prices.GetValueOrDefault((id, uomId))
                             ?? throw new BusinessRuleException("sal.price_missing", $"Enter a price for {item.Sku}: it has no sales price.",
                                 $"أدخل سعراً للصنف {item.Sku}: لا يوجد له سعر بيع.");
                     discount = l.DiscountPercent ?? 0;

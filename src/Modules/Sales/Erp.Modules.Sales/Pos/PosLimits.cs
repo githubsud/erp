@@ -71,15 +71,19 @@ internal sealed class PosLimitService(ErpDbContext db, ITenantContext tenant, IP
         return granted.Contains(DefaultRoles.Wildcard) || granted.Contains(SalesPermissions.PosOverride);
     }
 
-    /// <summary>What a sale takes off the item list's prices, and whether any line goes past the cashier limit.</summary>
-    public static (decimal Cut, bool OverLimit) Measure(IEnumerable<PosSaleLine> lines, IReadOnlyDictionary<Guid, ItemInfo> items, decimal maxPercent)
+    /// <summary>
+    /// What a sale takes off the item list's prices, and whether any line goes past the cashier limit. A box is measured against
+    /// the box's own list price, so selling a box at its (lower) box price is not a discount.
+    /// </summary>
+    public static (decimal Cut, bool OverLimit) Measure(IEnumerable<PosSaleLine> lines, IReadOnlyDictionary<Guid, ItemInfo> items,
+        IReadOnlyList<ItemUnitInfo> units, decimal maxPercent)
     {
         decimal cut = 0;
         var over = false;
         foreach (var l in lines)
         {
-            if (items[l.ItemId].SalesPrice is not { } list) continue;
-            var full = Money.Round(l.Quantity * list);
+            if (ItemUnits.ListPrice(units, items[l.ItemId], l.UomId) is not { } list) continue;
+            var full = Money.Round((l.UomQuantity ?? l.Quantity) * list);
             var floor = Money.Round(full * (100m - maxPercent) / 100m);
             if (l.Amount < floor) over = true;
             cut += Math.Max(0, full - l.Amount);
@@ -88,10 +92,11 @@ internal sealed class PosLimitService(ErpDbContext db, ITenantContext tenant, IP
     }
 
     /// <summary>Lets a sale past the cashier limit through, or refuses it. Records the approving manager on the sale.</summary>
-    public async Task AuthorizeAsync(PosSale sale, IReadOnlyDictionary<Guid, ItemInfo> items, Guid? approvalId, CancellationToken ct)
+    public async Task AuthorizeAsync(PosSale sale, IReadOnlyDictionary<Guid, ItemInfo> items, IReadOnlyList<ItemUnitInfo> units, Guid? approvalId,
+        CancellationToken ct)
     {
         var max = await MaxDiscountPercentAsync(ct);
-        var (cut, over) = Measure(sale.Lines, items, max);
+        var (cut, over) = Measure(sale.Lines, items, units, max);
         if (!over || await CanOverrideAsync(tenant.ActingUserId, ct)) return;
         if (approvalId is null)
             throw new BusinessRuleException("sal.pos_needs_approval", $"A discount of more than {max:0.##}% needs a manager's approval.",

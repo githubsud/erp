@@ -31,7 +31,8 @@ public sealed record CountRequest(Guid WarehouseId, DateOnly Date, string? Notes
 public sealed record CountEntry(Guid ItemId, decimal? CountedQuantity);
 
 /// <summary>Units, item groups, warehouses and items.</summary>
-public sealed record ItemUnitRequest(Guid UomId, decimal Factor);
+/// <summary>An alternative unit: how many base units one holds, and optionally its own sales price and barcode (a box of 12 sold for 100).</summary>
+public sealed record ItemUnitRequest(Guid UomId, decimal Factor, decimal? SalesPrice = null, string? Barcode = null);
 
 internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext tenant)
 {
@@ -46,14 +47,37 @@ internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext ten
             if (units.Select(u => u.UomId).Distinct().Count() != units.Count || units.Any(u => u.Factor <= 0))
                 throw new BusinessRuleException("inv.unit_factor", "List each unit once with a positive number of base units.",
                     "أدخل كل وحدة مرة واحدة مع عدد موجب من الوحدات الأساسية.");
+            if (units.Any(u => u.SalesPrice < 0))
+                throw new BusinessRuleException("inv.unit_price", "A unit's price cannot be negative.", "لا يمكن أن يكون سعر الوحدة سالباً.");
             var ids = units.Select(u => u.UomId).ToList();
             var known = await db.Set<Uom>().Where(u => ids.Contains(u.Id) && u.CompanyId == item.CompanyId).CountAsync(token);
             if (known != ids.Count) throw new NotFoundException("Unit", string.Join(',', ids));
+            var barcodes = units.Select(u => Clean(u.Barcode)).OfType<string>().ToList();
+            if (barcodes.GroupBy(b => b).FirstOrDefault(g => g.Count() > 1 || g.Key == item.Barcode) is { } repeated) throw BarcodeTaken(repeated.Key);
+            foreach (var barcode in barcodes)
+                if (await BarcodeUsedAsync(barcode, item.CompanyId, itemId, token)) throw BarcodeTaken(barcode);
             db.RemoveRange(await db.Set<ItemUnit>().Where(u => u.ItemId == itemId).ToListAsync(token));
             await db.SaveChangesAsync(token);
-            foreach (var u in units) db.Add(new ItemUnit { ItemId = itemId, UomId = u.UomId, Factor = Math.Round(u.Factor, 6, MidpointRounding.AwayFromZero) });
+            foreach (var u in units)
+                db.Add(new ItemUnit
+                {
+                    ItemId = itemId, UomId = u.UomId, Factor = Math.Round(u.Factor, 6, MidpointRounding.AwayFromZero), SalesPrice = u.SalesPrice, Barcode = Clean(u.Barcode)
+                });
             await db.SaveChangesAsync(token);
         }, ct);
+
+    private static string? Clean(string? barcode) => string.IsNullOrWhiteSpace(barcode) ? null : barcode.Trim();
+
+    /// <summary>Whether another item, or a unit of another item, already has this barcode (a scan must find one thing).</summary>
+    private async Task<bool> BarcodeUsedAsync(string barcode, Guid companyId, Guid itemId, CancellationToken ct) =>
+        await db.Set<Item>().AnyAsync(i => i.CompanyId == companyId && i.Id != itemId && i.Barcode == barcode, ct)
+        || await (from u in db.Set<ItemUnit>()
+                  join i in db.Set<Item>() on u.ItemId equals i.Id
+                  where i.CompanyId == companyId && u.ItemId != itemId && u.Barcode == barcode
+                  select u).AnyAsync(ct);
+
+    private static BusinessRuleException BarcodeTaken(string barcode) =>
+        new("inv.barcode_taken", $"The barcode {barcode} is already used by another item or unit.", $"الباركود {barcode} مستخدم لصنف أو وحدة أخرى.");
 
     public async Task<Uom> CreateUomAsync(MasterRequest r, CancellationToken ct)
     {
@@ -133,7 +157,10 @@ internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext ten
             item.ItemType = r.ItemType;
             item.ItemGroupId = r.ItemGroupId;
             item.UomId = r.UomId;
-            item.Barcode = string.IsNullOrWhiteSpace(r.Barcode) ? null : r.Barcode.Trim();
+            item.Barcode = Clean(r.Barcode);
+            if (item.Barcode is { } code && await db.Set<ItemUnit>().AnyAsync(u => u.Barcode == code
+                    && db.Set<Item>().Any(i => i.Id == u.ItemId && i.CompanyId == item.CompanyId), token))
+                throw BarcodeTaken(code);
             item.ReorderLevel = r.ReorderLevel;
             item.ReorderQuantity = r.ReorderQuantity is > 0 ? r.ReorderQuantity : null;
             item.PurchasePrice = r.PurchasePrice;

@@ -52,6 +52,9 @@ export interface PriceListItem {
   nameEn: string;
   nameAr: string;
   unitPrice: number;
+  /** The unit the price is for (a box); null: a piece. */
+  uomId?: string | null;
+  uomCode?: string | null;
 }
 
 export interface PriceList {

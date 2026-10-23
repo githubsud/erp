@@ -10,6 +10,7 @@ import { AuthService } from '../../core/auth.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { LowStockNotice, stockLevel } from '../../core/stock-alert';
+import { inBoxes, ItemUnitsCache } from '../../core/item-units';
 import { SalesApi } from '../../core/sales.api';
 import { CreditNote, Customer, DeliveryNote, SalesInvoice, SalesInvoiceLine, SalesInvoiceStatus, SalesOrder } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
@@ -110,6 +111,7 @@ type InvoiceLineGroup = FormGroup<{
   deliveryNoteLineId: FormControl<string | null>;
   salesOrderLineId: FormControl<string | null>;
   itemId: FormControl<string | null>;
+  uomId: FormControl<string | null>;
   label: FormControl<string>;
   description: FormControl<string>;
   quantity: FormControl<number | null>;
@@ -207,14 +209,24 @@ interface OpenDeliveryLine {
                 @switch (line.controls.kind.value) {
                   @case ('item') {
                     <mat-form-field>
-                      <mat-select formControlName="itemId" (selectionChange)="priceLine(line)">
+                      <mat-select formControlName="itemId" (selectionChange)="itemChanged(line)">
                         @for (it of items(); track it.id) { <mat-option [value]="it.id"><span class="ltr">{{ it.sku }}</span> · {{ it | bi }}</mat-option> }
                       </mat-select>
                     </mat-form-field>
+                    @if (units.of(line.controls.itemId.value).length > 1) {
+                      <mat-form-field class="unit">
+                        <mat-label>{{ 'units.sellBy' | t }}</mat-label>
+                        <mat-select formControlName="uomId" (selectionChange)="priceLine(line)">
+                          @for (u of units.of(line.controls.itemId.value); track u.uomId) {
+                            <mat-option [value]="u.isBase ? null : u.uomId"><span class="ltr">{{ u.uomCode }}</span>@if (!u.isBase) { <span class="secondary ltr">= {{ u.factor }}</span> }</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                    }
                     @if (itemOf(line); as it) {
                       @if (it.itemType === 'Stock') {
                         <div class="secondary" [class]="'stock-' + level(line, it)">
-                          {{ 'so.onHand' | t }}: <span class="ltr">{{ it.quantityOnHand }} {{ it.uomCode }}</span></div>
+                          {{ 'so.onHand' | t }}: <span class="ltr">{{ boxes(it) }}</span></div>
                       }
                     }
                   }
@@ -243,6 +255,7 @@ interface OpenDeliveryLine {
       </div>
     </mat-card>
   `,
+  providers: [ItemUnitsCache],
   styles: `
     .bar { align-items: center; margin-top: 8px; }
     .spacer { flex: 1; }
@@ -257,6 +270,7 @@ export class SalesInvoiceFormPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder).nonNullable;
   private readonly lowStock = inject(LowStockNotice);
+  protected readonly units = inject(ItemUnitsCache);
 
   protected readonly customers = signal<Customer[]>([]);
   protected readonly items = signal<Item[]>([]);
@@ -326,9 +340,19 @@ export class SalesInvoiceFormPage implements OnInit {
     return this.items().find((i) => i.id === line.controls.itemId.value);
   }
 
-  /** Stock against this line: out (not enough), low (at or below the reorder level after it) or ok. */
+  /** Stock against this line, in pieces: out (not enough), low (at or below the reorder level after it) or ok. */
   protected level(line: InvoiceLineGroup, it: Item): string {
-    return stockLevel(it.quantityOnHand, it.reorderLevel, Number(line.controls.quantity.value) || 0);
+    return stockLevel(it.quantityOnHand, it.reorderLevel, (Number(line.controls.quantity.value) || 0) * this.units.factor(it.id, line.controls.uomId.value));
+  }
+
+  protected boxes(it: Item): string {
+    return inBoxes(it.quantityOnHand, it.uomCode, this.units.of(it.id));
+  }
+
+  protected itemChanged(line: InvoiceLineGroup): void {
+    line.controls.uomId.setValue(null);
+    this.units.load(line.controls.itemId.value);
+    this.priceLine(line);
   }
 
   protected amount(line: InvoiceLineGroup): number {
@@ -353,8 +377,8 @@ export class SalesInvoiceFormPage implements OnInit {
   protected priceLine(line: InvoiceLineGroup): void {
     const itemId = line.controls.itemId.value;
     if (!itemId) return;
-    this.sales.prices(this.customerId() || null, [itemId]).subscribe(([p]) => {
-      if (p?.unitPrice !== null && p?.unitPrice !== undefined) line.controls.unitPrice.setValue(p.unitPrice);
+    this.sales.unitPrice(this.customerId() || null, itemId, line.controls.uomId.value).subscribe((price) => {
+      if (price !== null) line.controls.unitPrice.setValue(price);
     });
   }
 
@@ -373,6 +397,7 @@ export class SalesInvoiceFormPage implements OnInit {
         deliveryNoteLineId: l.deliveryNoteLineId,
         salesOrderLineId: l.salesOrderLineId,
         itemId: l.kind === 'item' ? l.itemId : null,
+        uomId: l.kind === 'item' ? l.uomId : null,
         description: l.description || null,
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
@@ -419,6 +444,7 @@ export class SalesInvoiceFormPage implements OnInit {
       deliveryNoteLineId: this.fb.control<string | null>(v.deliveryNoteLineId ?? null),
       salesOrderLineId: this.fb.control<string | null>(v.salesOrderLineId ?? null),
       itemId: this.fb.control<string | null>(v.itemId ?? null, kind === 'item' ? Validators.required : []),
+      uomId: this.fb.control<string | null>(v.uomId ?? null),
       label: this.fb.control(v.label ?? ''),
       description: this.fb.control(v.description ?? '', kind === 'service' ? Validators.required : []),
       quantity: this.fb.control<number | null>(v.quantity ?? null, [Validators.required, Validators.min(0.000001)]),

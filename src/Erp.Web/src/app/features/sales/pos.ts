@@ -10,6 +10,7 @@ import { Account } from '../../core/models';
 import { NotifyService, problemOf } from '../../core/notify.service';
 import { ReceiptService } from '../../core/receipt.service';
 import { LowItem, LowStockNotice, stockLevel } from '../../core/stock-alert';
+import { inBoxes } from '../../core/item-units';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
 import { PrinterSettingsDialog } from '../../shared/printer-settings';
@@ -54,10 +55,22 @@ interface CatalogItem {
   /** Stock items only: company-wide quantity on hand (kept up to date on this device after each sale) and the reorder level. */
   onHand?: number | null;
   reorderLevel?: number | null;
+  /** Boxes (or other units) it is also sold in: pieces per one, the box's price and barcode. */
+  units?: CatalogUnit[] | null;
+}
+
+interface CatalogUnit {
+  uomId: string;
+  uomCode: string;
+  factor: number;
+  salesPrice: number;
+  barcode: string | null;
 }
 
 interface CartLine {
   item: CatalogItem;
+  /** Sold by the box; none: by the piece. Quantity and price are per this unit. */
+  unit?: CatalogUnit | null;
   quantity: number;
   discountPercent: number;
   /** A price other than the item list's (a lower one counts against the cashier discount limit). */
@@ -76,6 +89,10 @@ interface SaleLine {
   discountPercent: number;
   amount: number;
   refundable: number;
+  /** Rung up by the box: the box and how many at what price (quantity and unit price above are in pieces). */
+  uomCode?: string | null;
+  uomQuantity?: number | null;
+  uomPrice?: number | null;
 }
 
 interface Sale {
@@ -117,7 +134,7 @@ interface QueuedSale {
   clientId: string;
   shiftId: string;
   soldAt: string;
-  lines: { itemId: string; quantity: number; unitPrice: number; discountPercent: number }[];
+  lines: { itemId: string; quantity: number; unitPrice: number; discountPercent: number; uomId?: string | null }[];
   cash: number;
   card: number;
   customerName: string | null;
@@ -157,7 +174,11 @@ function writeStore(key: string, value: unknown): void {
 }
 
 const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
-const priceOf = (l: CartLine) => l.price ?? l.item.salesPrice;
+/** The item list's price of one piece, or of one box (the box's own price). */
+const listPriceOf = (l: CartLine) => l.unit?.salesPrice ?? l.item.salesPrice;
+const priceOf = (l: CartLine) => l.price ?? listPriceOf(l);
+const piecesOf = (l: CartLine) => l.quantity * (l.unit?.factor ?? 1);
+const sameLine = (l: CartLine, item: CatalogItem, unit: CatalogUnit | null) => l.item.id === item.id && (l.unit?.uomId ?? null) === (unit?.uomId ?? null);
 const lineAmount = (l: CartLine) => round2(l.quantity * priceOf(l) * (1 - l.discountPercent / 100));
 
 /** Same rule as the server: how much comes off the item list's prices, and whether a line goes past the cashier limit. */
@@ -232,7 +253,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
                 <span class="price ltr">{{ i.salesPrice | money }}</span>
                 @if (i.onHand != null) {
                   <span [class]="'stock stock-' + tileLevel(i)">
-                    {{ i.onHand > 0 ? ('stock.inStock' | t: { n: i.onHand }) : ('stock.outOfStock' | t) }}</span>
+                    {{ i.onHand > 0 ? ('stock.inStock' | t: { n: boxes(i) }) : ('stock.outOfStock' | t) }}</span>
                 }
               </button>
             }
@@ -240,10 +261,10 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
         </section>
         <section class="cart">
           <div class="lines">
-            @for (l of cart(); track l.item.id; let idx = $index) {
+            @for (l of cart(); track l.item.id + (l.unit?.uomId ?? ''); let idx = $index) {
               <div class="line">
                 <div class="what">
-                  <div>{{ l.item | bi }}</div>
+                  <div>{{ l.item | bi }} @if (l.unit) { <span class="chip info ltr">{{ l.unit.uomCode }}</span> }</div>
                   <div class="secondary ltr">{{ price(l) | money }} × {{ l.quantity }} @if (l.discountPercent) { − {{ l.discountPercent }}% }</div>
                 </div>
                 <div class="qty">
@@ -252,6 +273,13 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
                   <button mat-icon-button (click)="change(idx, 1)"><mat-icon>add</mat-icon></button>
                   <button mat-icon-button [matMenuTriggerFor]="lineMenu"><mat-icon>more_vert</mat-icon></button>
                   <mat-menu #lineMenu="matMenu">
+                    @if (l.item.units?.length) {
+                      <button mat-menu-item (click)="sellBy(idx, null)" [disabled]="!l.unit">{{ 'units.sellBy' | t }}: {{ 'units.piece' | t }}</button>
+                      @for (u of l.item.units; track u.uomId) {
+                        <button mat-menu-item (click)="sellBy(idx, u)" [disabled]="l.unit?.uomId === u.uomId">
+                          {{ 'units.sellBy' | t }}: <span class="ltr">{{ u.uomCode }} ({{ u.factor }}) · {{ u.salesPrice | money }}</span></button>
+                      }
+                    }
                     <button mat-menu-item (click)="discount(idx)">{{ 'pos.discount' | t }}</button>
                     <button mat-menu-item (click)="changePrice(idx)">{{ 'pos.changePrice' | t }}</button>
                     <button mat-menu-item (click)="remove(idx)">{{ 'app.delete' | t }}</button>
@@ -476,16 +504,34 @@ export class PosPage implements OnInit, OnDestroy {
     if (!code) return;
     const lower = code.toLowerCase();
     const hit = this.catalog().find((i) => i.barcode === code || i.sku.toLowerCase() === lower) ?? (this.visible().length === 1 ? this.visible()[0] : null);
-    if (hit) {
-      this.add(hit);
+    // A box has its own barcode: scanning it adds one box at the box price.
+    const box = hit ? null : this.catalog().flatMap((i) => (i.units ?? []).filter((u) => u.barcode === code).map((u) => ({ item: i, unit: u })))[0];
+    if (hit || box) {
+      if (box) this.add(box.item, box.unit);
+      else this.add(hit!);
       this.search.setValue('');
     } else this.notify.info(this.i18n.t('pos.notFound'));
   }
 
   /** Red when the cart already takes all of it, amber at or below the reorder level after the cart. */
   protected tileLevel(item: CatalogItem): string {
-    const inCart = this.cart().find((l) => l.item.id === item.id)?.quantity ?? 0;
+    const inCart = this.cart().filter((l) => l.item.id === item.id).reduce((sum, l) => sum + piecesOf(l), 0);
     return stockLevel(item.onHand ?? 0, item.reorderLevel, inCart);
+  }
+
+  /** Stock in boxes and pieces ("4 BOX12 + 10"), or pieces alone. */
+  protected boxes(item: CatalogItem): string {
+    return inBoxes(item.onHand ?? 0, item.uomCode, item.units ?? []);
+  }
+
+  /** Switches a line between pieces and a box; the box's price applies (a price typed for the line is dropped). */
+  protected sellBy(idx: number, unit: CatalogUnit | null): void {
+    this.cart.update((list) => {
+      const line = list[idx];
+      const other = list.findIndex((l, i) => i !== idx && sameLine(l, line.item, unit));
+      if (other >= 0) return list.map((l, i) => (i === other ? { ...l, quantity: l.quantity + line.quantity } : l)).filter((_, i) => i !== idx);
+      return list.map((l, i) => (i === idx ? { ...l, unit, price: undefined } : l));
+    });
   }
 
   /** Takes a sale off the stock this device knows (also offline) and notes what is now running low. */
@@ -500,10 +546,10 @@ export class PosPage implements OnInit, OnDestroy {
       .map((i) => ({ nameEn: i.nameEn, nameAr: i.nameAr, left: i.onHand! })));
   }
 
-  protected add(item: CatalogItem): void {
+  protected add(item: CatalogItem, unit: CatalogUnit | null = null): void {
     this.cart.update((list) => {
-      const idx = list.findIndex((l) => l.item.id === item.id);
-      return idx < 0 ? [...list, { item, quantity: 1, discountPercent: 0 }] : list.map((l, i) => (i === idx ? { ...l, quantity: l.quantity + 1 } : l));
+      const idx = list.findIndex((l) => sameLine(l, item, unit));
+      return idx < 0 ? [...list, { item, unit, quantity: 1, discountPercent: 0 }] : list.map((l, i) => (i === idx ? { ...l, quantity: l.quantity + 1 } : l));
     });
   }
 
@@ -526,7 +572,7 @@ export class PosPage implements OnInit, OnDestroy {
     const value = prompt(this.i18n.t('pos.pricePrompt'), String(priceOf(this.cart()[idx])));
     const price = Number(value);
     if (value == null || value.trim() === '' || isNaN(price) || price < 0) return;
-    this.cart.update((list) => list.map((l, i) => (i === idx ? { ...l, price: price === l.item.salesPrice ? undefined : round2(price) } : l)));
+    this.cart.update((list) => list.map((l, i) => (i === idx ? { ...l, price: price === listPriceOf(l) ? undefined : round2(price) } : l)));
   }
 
   /**
@@ -548,14 +594,15 @@ export class PosPage implements OnInit, OnDestroy {
   }
 
   private cartLines() {
-    return this.cart().map((l) => ({ listPrice: l.item.salesPrice, quantity: l.quantity, amount: lineAmount(l) }));
+    return this.cart().map((l) => ({ listPrice: listPriceOf(l), quantity: l.quantity, amount: lineAmount(l) }));
   }
 
   /** A queued sale the server refused for want of approval: the manager approves it now and it is sent again. */
   protected askManager(q: QueuedSale): void {
     const lines = q.lines.flatMap((l) => {
       const item = this.catalog().find((i) => i.id === l.itemId);
-      return item ? [{ listPrice: item.salesPrice, quantity: l.quantity, amount: round2(l.quantity * l.unitPrice * (1 - l.discountPercent / 100)) }] : [];
+      const listPrice = l.uomId ? item?.units?.find((u) => u.uomId === l.uomId)?.salesPrice : item?.salesPrice;
+      return listPrice != null ? [{ listPrice, quantity: l.quantity, amount: round2(l.quantity * l.unitPrice * (1 - l.discountPercent / 100)) }] : [];
     });
     const { cut } = measure(lines, this.policy().maxDiscountPercent);
     this.dialog
@@ -595,7 +642,7 @@ export class PosPage implements OnInit, OnDestroy {
       this.api.post<Sale>('sales/pos/sales', {
         clientId: crypto.randomUUID(), shiftId: shift.id, soldAt: new Date().toISOString(), cash: 0, card: 0, customerId: customer.id,
         customerName: customer.nameEn, customerPhone: null, approvalId,
-        lines: this.cart().map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: priceOf(l), discountPercent: l.discountPercent }))
+        lines: this.cartRequest()
       }).subscribe({
         next: (s) => {
           this.busy.set(false);
@@ -621,7 +668,7 @@ export class PosPage implements OnInit, OnDestroy {
       clientId: crypto.randomUUID(),
       shiftId: shift.id,
       soldAt: new Date().toISOString(), // an instant (when the till rang it up), not a calendar date
-      lines: this.cart().map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: priceOf(l), discountPercent: l.discountPercent })),
+      lines: this.cartRequest(),
       approvalId,
       cash: this.paid().cash,
       card: this.paid().card,
@@ -639,7 +686,7 @@ export class PosPage implements OnInit, OnDestroy {
         this.busy.set(false);
         if (isOffline(e)) {
           this.enqueue(sale);
-          this.sold(sale.lines);
+          this.sold(this.cart().map((l) => ({ itemId: l.item.id, quantity: piecesOf(l) })));
           this.last.set(this.provisional(sale));
           if (this.receipt.settings().autoPrint) this.print(this.last()!);
           this.reset();
@@ -649,11 +696,17 @@ export class PosPage implements OnInit, OnDestroy {
     });
   }
 
+  /** The cart as the server takes it: quantity and price per the line's unit (piece or box). */
+  private cartRequest() {
+    return this.cart().map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: priceOf(l), discountPercent: l.discountPercent, uomId: l.unit?.uomId ?? null }));
+  }
+
   /** What the customer's receipt shows for a sale kept on this device until the connection is back. */
   private provisional(q: QueuedSale): Sale {
     const lines = this.cart().map((l, i) => ({
-      id: String(i), lineNo: i + 1, itemId: l.item.id, sku: l.item.sku, nameEn: l.item.nameEn, nameAr: l.item.nameAr, quantity: l.quantity,
-      unitPrice: priceOf(l), discountPercent: l.discountPercent, amount: lineAmount(l), refundable: 0
+      id: String(i), lineNo: i + 1, itemId: l.item.id, sku: l.item.sku, nameEn: l.item.nameEn, nameAr: l.item.nameAr, quantity: piecesOf(l),
+      unitPrice: priceOf(l) / (l.unit?.factor ?? 1), discountPercent: l.discountPercent, amount: lineAmount(l), refundable: 0,
+      uomCode: l.unit?.uomCode ?? null, uomQuantity: l.unit ? l.quantity : null, uomPrice: l.unit ? priceOf(l) : null
     }));
     const gross = round2(this.cart().reduce((sum, l) => sum + l.quantity * priceOf(l), 0));
     return {
@@ -797,7 +850,9 @@ export class PosPage implements OnInit, OnDestroy {
       meta: [new Date(s.soldAt).toLocaleString('en-GB'), ...(reg ? [ar ? reg.nameAr : reg.nameEn] : []), ...(s.customerName ? [s.customerName] : [])],
       lines: s.lines.map((l) => ({
         text: ar ? l.nameAr : l.nameEn,
-        sub: `${l.quantity} × ${l.unitPrice.toFixed(2)}${l.discountPercent ? ` −${l.discountPercent}%` : ''}`,
+        sub: (l.uomCode && l.uomQuantity != null && l.uomPrice != null
+          ? `${l.uomQuantity} ${l.uomCode} × ${l.uomPrice.toFixed(2)}`
+          : `${l.quantity} × ${l.unitPrice.toFixed(2)}`) + (l.discountPercent ? ` −${l.discountPercent}%` : ''),
         amount: l.amount
       })),
       totals: [

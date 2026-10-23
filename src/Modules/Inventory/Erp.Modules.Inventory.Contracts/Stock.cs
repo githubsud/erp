@@ -16,8 +16,11 @@ public static class Serials
 /// <summary>Part of a movement in one batch. <see cref="Quantity"/> is positive (base unit); expiry is given when receiving a new batch.</summary>
 public sealed record BatchQuantity(string BatchNo, decimal Quantity, DateOnly? ExpiryDate = null);
 
-/// <summary>A unit an item can be bought or sold in, and how many base units one of it holds (the base unit itself has factor 1).</summary>
-public sealed record ItemUnitInfo(Guid ItemId, Guid UomId, string UomCode, decimal Factor, bool IsBase);
+/// <summary>
+/// A unit an item can be bought or sold in, and how many base units one of it holds (the base unit itself has factor 1).
+/// <see cref="SalesPrice"/>: the unit's own price (for the base unit, the item's price); <see cref="Barcode"/>: the unit's own barcode.
+/// </summary>
+public sealed record ItemUnitInfo(Guid ItemId, Guid UomId, string UomCode, decimal Factor, bool IsBase, decimal? SalesPrice = null, string? Barcode = null);
 
 public sealed record WarehouseInfo(Guid Id, string Code, string NameEn, string NameAr, bool IsActive);
 
@@ -66,7 +69,10 @@ public interface IStockService
 /// and their reorder level, so the till can show what is running out.
 /// </summary>
 public sealed record CatalogItem(Guid Id, string Sku, string? Barcode, string NameEn, string NameAr, string UomCode, ItemType Type, decimal SalesPrice,
-    decimal? OnHand = null, decimal? ReorderLevel = null);
+    decimal? OnHand = null, decimal? ReorderLevel = null, IReadOnlyList<CatalogUnit>? Units = null);
+
+/// <summary>A box (or other unit) the till can sell: base units per one, its price and its barcode.</summary>
+public sealed record CatalogUnit(Guid UomId, string UomCode, decimal Factor, decimal SalesPrice, string? Barcode);
 
 /// <summary>An active stock item at or below its reorder level (company-wide quantity).</summary>
 public sealed record ReorderCandidate(Guid ItemId, string Sku, string NameEn, string NameAr, string UomCode, decimal OnHand, decimal ReorderLevel,
@@ -103,5 +109,17 @@ public static class ItemUnits
                    ?? throw new Erp.SharedKernel.Domain.BusinessRuleException($"{errorPrefix}.unit", $"That unit is not set up for {item.Sku}.",
                        $"هذه الوحدة غير معرفة للصنف {item.Sku}.");
         return unit.IsBase ? (null, 1m) : (unit.UomId, unit.Factor);
+    }
+
+    /// <summary>
+    /// The item list's price of one <paramref name="uomId"/> (null: the base unit): the unit's own price when it has one (a box is
+    /// often cheaper than its pieces), else the item's price times the unit's size.
+    /// </summary>
+    public static decimal? ListPrice(IReadOnlyList<ItemUnitInfo> units, ItemInfo item, Guid? uomId)
+    {
+        if (uomId is null) return item.SalesPrice;
+        var unit = units.FirstOrDefault(u => u.ItemId == item.Id && u.UomId == uomId);
+        if (unit is null || unit.IsBase) return item.SalesPrice;
+        return unit.SalesPrice ?? (item.SalesPrice is { } price ? Math.Round(price * unit.Factor, 6, MidpointRounding.AwayFromZero) : null);
     }
 }

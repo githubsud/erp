@@ -129,6 +129,7 @@ internal sealed class ItemUnitConfiguration : IEntityTypeConfiguration<ItemUnit>
     {
         b.ToTable("item_unit", "inv");
         b.Property(x => x.Factor).AsQuantity();
+        b.Property(x => x.SalesPrice).AsQuantity();
     }
 }
 

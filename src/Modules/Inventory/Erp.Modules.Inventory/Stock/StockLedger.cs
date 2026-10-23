@@ -413,7 +413,7 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
     public async Task<IReadOnlyList<CatalogItem>> GetCatalogAsync(CancellationToken ct = default)
     {
         var companyId = tenant.RequireCompanyId();
-        return await (from i in db.Set<Item>().AsNoTracking()
+        var items = await (from i in db.Set<Item>().AsNoTracking()
                       join u in db.Set<Uom>() on i.UomId equals u.Id
                       join v in db.Set<ItemValuation>() on i.Id equals v.ItemId into valuations
                       from v in valuations.DefaultIfEmpty()
@@ -422,6 +422,20 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
                       select new CatalogItem(i.Id, i.Sku, i.Barcode, i.NameEn, i.NameAr, u.Code, i.ItemType, i.SalesPrice!.Value,
                           i.ItemType == ItemType.Stock ? (v == null ? 0m : v.Quantity) : null,
                           i.ItemType == ItemType.Stock ? i.ReorderLevel : null)).ToListAsync(ct);
+        var ids = items.Select(i => i.Id).ToList();
+        var units = (await (from x in db.Set<ItemUnit>().AsNoTracking()
+                            join u in db.Set<Uom>() on x.UomId equals u.Id
+                            where ids.Contains(x.ItemId)
+                            orderby x.Factor
+                            select new { x.ItemId, x.UomId, u.Code, x.Factor, x.SalesPrice, x.Barcode }).ToListAsync(ct))
+            .ToLookup(x => x.ItemId);
+        return items.Select(i => units[i.Id].Any()
+            ? i with
+            {
+                Units = units[i.Id].Select(u => new CatalogUnit(u.UomId, u.Code, u.Factor,
+                    u.SalesPrice ?? Math.Round(i.SalesPrice * u.Factor, 6, MidpointRounding.AwayFromZero), u.Barcode)).ToList()
+            }
+            : i).ToList();
     }
 
     public Task<WarehouseInfo?> GetWarehouseAsync(Guid id, CancellationToken ct = default) =>
@@ -438,11 +452,11 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
         var baseUnits = await (from i in db.Set<Item>().AsNoTracking()
                                join u in db.Set<Uom>() on i.UomId equals u.Id
                                where list.Contains(i.Id) && i.CompanyId == companyId
-                               select new ItemUnitInfo(i.Id, u.Id, u.Code, 1m, true)).ToListAsync(ct);
+                               select new ItemUnitInfo(i.Id, u.Id, u.Code, 1m, true, i.SalesPrice, i.Barcode)).ToListAsync(ct);
         var alternatives = await (from x in db.Set<ItemUnit>().AsNoTracking()
                                   join u in db.Set<Uom>() on x.UomId equals u.Id
                                   where list.Contains(x.ItemId)
-                                  select new ItemUnitInfo(x.ItemId, u.Id, u.Code, x.Factor, false)).ToListAsync(ct);
+                                  select new ItemUnitInfo(x.ItemId, u.Id, u.Code, x.Factor, false, x.SalesPrice, x.Barcode)).ToListAsync(ct);
         return [.. baseUnits, .. alternatives];
     }
 }

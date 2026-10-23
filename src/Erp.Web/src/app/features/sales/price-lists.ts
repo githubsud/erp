@@ -6,14 +6,16 @@ import { SalesApi } from '../../core/sales.api';
 import { PriceList } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
 import { Item } from '../../core/trade.models';
+import { ItemUnitsCache } from '../../core/item-units';
 import { SHARED } from '../../shared/shared';
 
-type PriceRow = FormGroup<{ itemId: FormControl<string>; unitPrice: FormControl<number | null> }>;
+type PriceRow = FormGroup<{ itemId: FormControl<string>; uomId: FormControl<string | null>; unitPrice: FormControl<number | null> }>;
 
 /** Special prices per customer group (wholesale, contractors…). Customers without a list pay the item's sales price. */
 @Component({
   selector: 'app-price-lists',
   imports: [...SHARED],
+  providers: [ItemUnitsCache],
   template: `
     <div class="page-header">
       <a mat-icon-button routerLink="/sales/customers"><mat-icon class="flip-rtl">arrow_back</mat-icon></a>
@@ -40,14 +42,18 @@ type PriceRow = FormGroup<{ itemId: FormControl<string>; unitPrice: FormControl<
             <mat-form-field><mat-label>{{ 'sup.nameEn' | t }}</mat-label><input matInput formControlName="nameEn" dir="ltr" /></mat-form-field>
           </form>
           <table class="line-editor">
-            <thead><tr><th>{{ 'po.item' | t }}</th><th class="num">{{ 'pl.standard' | t }}</th><th class="narrow">{{ 'pl.price' | t }}</th><th></th></tr></thead>
+            <thead><tr><th>{{ 'po.item' | t }}</th><th class="narrow">{{ 'units.unit' | t }}</th><th class="num">{{ 'pl.standard' | t }}</th>
+              <th class="narrow">{{ 'pl.price' | t }}</th><th></th></tr></thead>
             <tbody>
               @for (row of rows.controls; track row; let i = $index) {
                 <tr [formGroup]="row">
-                  <td><mat-form-field><mat-select formControlName="itemId">
+                  <td><mat-form-field><mat-select formControlName="itemId" (selectionChange)="itemChanged(row)">
                     @for (it of items(); track it.id) { <mat-option [value]="it.id"><span class="ltr">{{ it.sku }}</span> · {{ it | bi }}</mat-option> }
                   </mat-select></mat-form-field></td>
-                  <td class="num ltr">{{ standard(row.controls.itemId.value) }}</td>
+                  <td class="narrow"><mat-form-field><mat-select formControlName="uomId">
+                    @for (u of units.of(row.controls.itemId.value); track u.uomId) { <mat-option [value]="u.isBase ? null : u.uomId">{{ u.uomCode }}</mat-option> }
+                  </mat-select></mat-form-field></td>
+                  <td class="num ltr">{{ standard(row.controls.itemId.value, row.controls.uomId.value) }}</td>
                   <td class="narrow"><mat-form-field><input matInput type="number" min="0" formControlName="unitPrice" dir="ltr" /></mat-form-field></td>
                   <td><button mat-icon-button type="button" (click)="rows.removeAt(i)"><mat-icon>delete</mat-icon></button></td>
                 </tr>
@@ -87,36 +93,49 @@ export class PriceListsPage {
   protected readonly busy = signal(false);
   protected readonly form = this.fb.group({ code: ['', Validators.required], nameEn: [''], nameAr: [''], isActive: [true] });
   protected readonly rows = new FormArray<PriceRow>([]);
+  protected readonly units = inject(ItemUnitsCache);
 
   constructor() {
     this.trade.items({ active: true, pageSize: 500 }).subscribe((r) => this.items.set(r.items));
     this.load();
   }
 
-  protected standard(itemId: string): string {
-    const price = this.items().find((i) => i.id === itemId)?.salesPrice;
+  /** The item list's price of one piece, or of one box (its own price, else pieces × size). */
+  protected standard(itemId: string, uomId: string | null): string {
+    const unit = uomId ? this.units.of(itemId).find((u) => u.uomId === uomId) : null;
+    const piece = this.items().find((i) => i.id === itemId)?.salesPrice;
+    const price = unit ? (unit.salesPrice ?? (piece == null ? null : piece * unit.factor)) : piece;
     return price === null || price === undefined ? '—' : price.toFixed(2);
+  }
+
+  protected itemChanged(row: PriceRow): void {
+    row.controls.uomId.setValue(null);
+    this.units.load(row.controls.itemId.value);
   }
 
   protected edit(p: PriceList | null): void {
     this.selected.set(p);
     this.form.reset({ code: p?.code ?? '', nameEn: p?.nameEn ?? '', nameAr: p?.nameAr ?? '', isActive: p?.isActive ?? true });
     this.rows.clear();
-    for (const i of p?.items ?? []) this.addRow(i.itemId, i.unitPrice);
+    for (const i of p?.items ?? []) {
+      this.addRow(i.itemId, i.unitPrice, i.uomId ?? null);
+      this.units.load(i.itemId);
+    }
     if (!p) this.addRow();
     this.editing.set(true);
   }
 
-  protected addRow(itemId = '', unitPrice: number | null = null): void {
+  protected addRow(itemId = '', unitPrice: number | null = null, uomId: string | null = null): void {
     this.rows.push(this.fb.group({
       itemId: this.fb.control(itemId, Validators.required),
+      uomId: this.fb.control<string | null>(uomId),
       unitPrice: this.fb.control<number | null>(unitPrice, [Validators.required, Validators.min(0)])
     }) as PriceRow);
   }
 
   protected save(): void {
     this.busy.set(true);
-    const body = { ...this.form.getRawValue(), items: this.rows.getRawValue().map((r) => ({ itemId: r.itemId, unitPrice: Number(r.unitPrice) })) };
+    const body = { ...this.form.getRawValue(), items: this.rows.getRawValue().map((r) => ({ itemId: r.itemId, uomId: r.uomId, unitPrice: Number(r.unitPrice) })) };
     this.sales.savePriceList(this.selected()?.id ?? null, body).subscribe({
       next: (p) => {
         this.busy.set(false);

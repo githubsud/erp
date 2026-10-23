@@ -7,6 +7,7 @@ import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import { Master, StockRow, ValuationReport } from '../../core/trade.models';
+import { inBoxes } from '../../core/item-units';
 import { SHARED } from '../../shared/shared';
 
 @Component({
@@ -35,7 +36,8 @@ import { SHARED } from '../../shared/shared';
             </ng-container>
             <ng-container matColumnDef="qty">
               <th mat-header-cell *matHeaderCellDef class="num">{{ 'stock.quantity' | t }}</th>
-              <td mat-cell *matCellDef="let r" class="num ltr">{{ r.quantity }} <span class="secondary">{{ r.uomCode }}</span></td>
+              <td mat-cell *matCellDef="let r" class="num ltr">{{ r.quantity }} <span class="secondary">{{ r.uomCode }}</span>
+                @if (r.boxes?.length && r.quantity > 0) { <div class="secondary">= {{ boxes(r) }}</div> }</td>
               <td mat-footer-cell *matFooterCellDef></td>
             </ng-container>
             <ng-container matColumnDef="avg">
@@ -119,6 +121,10 @@ import { SHARED } from '../../shared/shared';
   `
 })
 export class StockPage {
+  protected boxes(r: StockRow): string {
+    return inBoxes(r.quantity, r.uomCode, r.boxes ?? []);
+  }
+
   protected readonly auth = inject(AuthService);
   private readonly trade = inject(TradeApi);
   private readonly notify = inject(NotifyService);

@@ -94,6 +94,9 @@ public sealed class ItemUnit : TenantEntity
     public Guid ItemId { get; init; }
     public Guid UomId { get; init; }
     public decimal Factor { get; set; }
+    /// <summary>The price of one of this unit (a box is often cheaper than its pieces); null: the item's price times <see cref="Factor"/>.</summary>
+    public decimal? SalesPrice { get; set; }
+    public string? Barcode { get; set; }
 }
 
 /// <summary>Running quantity and value of an item across the company (weighted-average cost).</summary>

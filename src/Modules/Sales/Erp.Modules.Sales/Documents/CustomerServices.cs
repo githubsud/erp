@@ -15,7 +15,8 @@ public sealed record CustomerRequest(string Code, string? NameEn, string? NameAr
 /// <summary><see cref="PosMaxDiscountPercent"/> left out keeps the current till discount limit.</summary>
 public sealed record SalesSettingsRequest(CreditControl CreditControl, int QuotationValidityDays, decimal? PosMaxDiscountPercent = null);
 
-public sealed record PriceListItemRequest(Guid ItemId, decimal UnitPrice);
+/// <summary><see cref="UomId"/>: the unit the price is for (a box price); null for the item's base unit.</summary>
+public sealed record PriceListItemRequest(Guid ItemId, decimal UnitPrice, Guid? UomId = null);
 
 public sealed record PriceListRequest(string Code, string? NameEn, string? NameAr, bool IsActive, IReadOnlyList<PriceListItemRequest>? Items);
 
@@ -90,16 +91,20 @@ internal sealed class CustomerService(ErpDbContext db, ITenantContext tenant, II
             list.IsActive = r.IsActive;
 
             var requested = r.Items ?? [];
-            if (requested.Select(i => i.ItemId).Distinct().Count() != requested.Count)
-                throw new BusinessRuleException("sal.price_duplicate", "Each item can appear only once in a price list.", "يجب ألا يتكرر الصنف في قائمة الأسعار.");
             var items = await inventory.GetItemsAsync(requested.Select(i => i.ItemId), token);
+            var units = requested.Any(i => i.UomId is not null) ? await inventory.GetUnitsAsync(requested.Select(i => i.ItemId), token) : [];
+            Guid? UnitOf(PriceListItemRequest i) =>
+                items.TryGetValue(i.ItemId, out var item) ? ItemUnits.Resolve(units, item, i.UomId, "sal").UomId : throw new NotFoundException("Item", i.ItemId);
+            if (requested.Select(i => (i.ItemId, UnitOf(i))).Distinct().Count() != requested.Count)
+                throw new BusinessRuleException("sal.price_duplicate", "Each item (and each of its units) can appear only once in a price list.",
+                    "يجب ألا يتكرر الصنف (أو الوحدة نفسها منه) في قائمة الأسعار.");
             db.RemoveRange(list.Items);
             list.Items.Clear();
             await db.SaveChangesAsync(token);
             foreach (var i in requested)
             {
                 if (!items.ContainsKey(i.ItemId)) throw new NotFoundException("Item", i.ItemId);
-                var line = new PriceListItem { PriceListId = list.Id, ItemId = i.ItemId, UnitPrice = Guard.NonNegative(i.UnitPrice, "unitPrice") };
+                var line = new PriceListItem { PriceListId = list.Id, ItemId = i.ItemId, UomId = UnitOf(i), UnitPrice = Guard.NonNegative(i.UnitPrice, "unitPrice") };
                 list.Items.Add(line);
                 db.Add(line);
             }
@@ -113,10 +118,23 @@ internal sealed class CustomerService(ErpDbContext db, ITenantContext tenant, II
     /// <paramref name="exchangeRate"/> for foreign-currency documents.
     /// </summary>
     public async Task<IReadOnlyDictionary<Guid, decimal?>> PricesAsync(Guid? customerId, IReadOnlyCollection<Guid> itemIds, CancellationToken ct,
-        decimal exchangeRate = 1m)
+        decimal exchangeRate = 1m) =>
+        (await UnitPricesAsync(customerId, itemIds.Distinct().Select(id => (id, (Guid?)null)).ToList(), ct, exchangeRate))
+        .ToDictionary(p => p.Key.ItemId, p => p.Value);
+
+    /// <summary>
+    /// The price a customer pays for one of each item in a unit (null: the base unit, e.g. a piece; or a box). In order: the
+    /// customer's price list for that unit, the price list's piece price times the box size, the box's own price on the item, the
+    /// item's price times the box size. Price-list prices are in the document's currency; the item's prices are in QAR, converted at
+    /// <paramref name="exchangeRate"/>.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<(Guid ItemId, Guid? UomId), decimal?>> UnitPricesAsync(Guid? customerId,
+        IReadOnlyCollection<(Guid ItemId, Guid? UomId)> keys, CancellationToken ct, decimal exchangeRate = 1m)
     {
+        var itemIds = keys.Select(k => k.ItemId).Distinct().ToList();
         var items = await inventory.GetItemsAsync(itemIds, ct);
-        Dictionary<Guid, decimal> listed = [];
+        var units = keys.Any(k => k.UomId is not null) ? await inventory.GetUnitsAsync(itemIds, ct) : [];
+        List<PriceListItem> listed = [];
         if (customerId is { } cid)
         {
             var priceListId = await db.Set<Customer>().AsNoTracking().Where(c => c.Id == cid && c.CompanyId == tenant.RequireCompanyId())
@@ -125,11 +143,17 @@ internal sealed class CustomerService(ErpDbContext db, ITenantContext tenant, II
                 listed = await (from i in db.Set<PriceListItem>().AsNoTracking()
                                 join p in db.Set<PriceList>() on i.PriceListId equals p.Id
                                 where i.PriceListId == pl && p.IsActive && itemIds.Contains(i.ItemId)
-                                select i).ToDictionaryAsync(i => i.ItemId, i => i.UnitPrice, ct);
+                                select i).ToListAsync(ct);
         }
-        return itemIds.Distinct().ToDictionary(id => id,
-            id => listed.TryGetValue(id, out var price) ? (decimal?)price
-                : items.TryGetValue(id, out var item) && item.SalesPrice is { } qar ? Money.Round(qar / exchangeRate) : null);
+        decimal? Listed(Guid itemId, Guid? uomId) => listed.FirstOrDefault(x => x.ItemId == itemId && x.UomId == uomId)?.UnitPrice;
+        return keys.Distinct().ToDictionary(k => k, k =>
+        {
+            if (!items.TryGetValue(k.ItemId, out var item)) return null;
+            var unit = k.UomId is null ? null : units.FirstOrDefault(u => u.ItemId == k.ItemId && u.UomId == k.UomId && !u.IsBase);
+            if (Listed(k.ItemId, unit?.UomId) is { } exact) return exact;
+            if (unit is not null && Listed(k.ItemId, null) is { } perPiece) return Money.Round(perPiece * unit.Factor);
+            return ItemUnits.ListPrice(units, item, unit?.UomId) is { } qar ? Money.Round(qar / exchangeRate) : (decimal?)null;
+        });
     }
 
     internal static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

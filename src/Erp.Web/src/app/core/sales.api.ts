@@ -1,3 +1,4 @@
+import { map } from 'rxjs';
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from './api.service';
 import {
@@ -25,7 +26,10 @@ export class SalesApi {
   savePriceList = (id: string | null, body: unknown) =>
     id ? this.api.put<PriceList>(`sales/price-lists/${id}`, body) : this.api.post<PriceList>('sales/price-lists', body);
   prices = (customerId: string | null, itemIds: string[], exchangeRate?: number | null) =>
-    this.api.get<{ itemId: string; unitPrice: number | null }[]>('sales/prices', { customerId, itemIds: itemIds.join(','), exchangeRate });
+    this.api.get<{ itemId: string; unitPrice: number | null; uomId?: string | null }[]>('sales/prices', { customerId, itemIds: itemIds.join(','), exchangeRate });
+  /** What the customer pays for one of `uomId` (null: a piece): their price list's box price, else the box's own price, else pieces × size. */
+  unitPrice = (customerId: string | null, itemId: string, uomId: string | null, exchangeRate?: number | null) =>
+    this.prices(customerId, [uomId ? `${itemId}:${uomId}` : itemId], exchangeRate).pipe(map(([p]) => p?.unitPrice ?? null));
 
   quotations = (status?: string, customerId?: string) => this.api.get<Quotation[]>('sales/quotations', { status, customerId });
   quotation = (id: string) => this.api.get<Quotation>(`sales/quotations/${id}`);

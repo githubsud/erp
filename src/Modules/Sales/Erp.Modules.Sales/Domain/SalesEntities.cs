@@ -29,6 +29,8 @@ public sealed class PriceListItem : TenantEntity
 {
     public Guid PriceListId { get; init; }
     public Guid ItemId { get; init; }
+    /// <summary>The unit this price is for (a box); null: the item's base unit.</summary>
+    public Guid? UomId { get; init; }
     public decimal UnitPrice { get; set; }
 }
 

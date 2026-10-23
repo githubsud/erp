@@ -7,7 +7,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { AuthService } from '../../core/auth.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
-import { TradeApi } from '../../core/trade.api';
+import { TradeApi, UnitRequest } from '../../core/trade.api';
 import { Item, ItemLedger, ItemUnit, Master } from '../../core/trade.models';
 import { SHARED } from '../../shared/shared';
 import { ItemDialog } from './items';
@@ -84,8 +84,16 @@ export const SOURCE_LABELS: Record<string, string> = {
           <tbody>
             @for (u of alternatives(); track u.uomId) {
               <tr>
-                <td>1 <b class="ltr">{{ u.uomCode }}</b> = <b class="ltr">{{ u.factor }}</b> {{ i.uomCode }}</td>
-                <td>@if (canManage) { <button mat-icon-button (click)="removeUnit(u)"><mat-icon>delete</mat-icon></button> }</td>
+                <td>
+                  1 <b class="ltr">{{ u.uomCode }}</b> = <b class="ltr">{{ u.factor }}</b> {{ i.uomCode }}
+                  · <span class="ltr">{{ unitPrice(u, i) | money }}</span>
+                  @if (u.salesPrice != null) { <span class="chip info">{{ 'units.ownPrice' | t }}</span> }
+                  @if (u.barcode) { · <mat-icon class="inline">qr_code_2</mat-icon> <span class="ltr">{{ u.barcode }}</span> }
+                </td>
+                <td>@if (canManage) {
+                  <button mat-icon-button (click)="editUnit(u)" [attr.aria-label]="'units.edit' | t"><mat-icon>edit</mat-icon></button>
+                  <button mat-icon-button (click)="removeUnit(u)"><mat-icon>delete</mat-icon></button>
+                }</td>
               </tr>
             }
             @if (canManage) {
@@ -99,8 +107,18 @@ export const SOURCE_LABELS: Record<string, string> = {
                   <mat-form-field><mat-label>{{ 'units.factor' | t: { base: i.uomCode } }}</mat-label>
                     <input matInput type="number" min="0" [formControl]="newFactor" dir="ltr" />
                   </mat-form-field>
+                  <mat-form-field><mat-label>{{ 'units.price' | t }}</mat-label>
+                    <input matInput type="number" min="0" [formControl]="newPrice" dir="ltr" />
+                    @if (i.salesPrice != null && Number(newFactor.value) > 0) {
+                      <mat-hint>{{ 'units.priceHint' | t: { price: (i.salesPrice * Number(newFactor.value)).toFixed(2), n: Number(newFactor.value) } }}</mat-hint>
+                    }
+                  </mat-form-field>
+                  <mat-form-field><mat-label>{{ 'units.barcode' | t }}</mat-label>
+                    <input matInput [formControl]="newBarcode" dir="ltr" autocomplete="off" />
+                  </mat-form-field>
                 </td>
-                <td><button mat-stroked-button (click)="addUnit()" [disabled]="!newUom.value || !(Number(newFactor.value) > 0)"><mat-icon>add</mat-icon> {{ 'tset.add' | t }}</button></td>
+                <td><button mat-stroked-button (click)="addUnit()" [disabled]="!newUom.value || !(Number(newFactor.value) > 0)">
+                  <mat-icon>{{ editing() ? 'save' : 'add' }}</mat-icon> {{ (editing() ? 'units.save' : 'tset.add') | t }}</button></td>
               </tr>
             }
           </tbody>
@@ -167,6 +185,7 @@ export const SOURCE_LABELS: Record<string, string> = {
     .ledger .num { text-align: end; }
     .opening td { font-weight: 600; background: var(--mat-sys-surface-container-low); }
     .units { max-width: 720px; }
+    mat-icon.inline { font-size: 16px; width: 16px; height: 16px; vertical-align: middle; }
     .new-unit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   `
 })
@@ -187,9 +206,13 @@ export class ItemDetailPage implements OnInit {
   protected readonly units = signal<ItemUnit[]>([]);
   protected readonly alternatives = computed(() => this.units().filter((u) => !u.isBase));
   private readonly uoms = signal<Master[]>([]);
-  protected readonly uomChoices = computed(() => this.uoms().filter((u) => !this.units().some((x) => x.uomId === u.id)));
+  /** The unit being changed (it stays in the choices while its form is open). */
+  protected readonly editing = signal<string | null>(null);
+  protected readonly uomChoices = computed(() => this.uoms().filter((u) => u.id === this.editing() || !this.units().some((x) => x.uomId === u.id)));
   protected readonly newUom = new FormControl<string | null>(null);
   protected readonly newFactor = new FormControl<number | null>(null, Validators.min(0));
+  protected readonly newPrice = new FormControl<number | null>(null, Validators.min(0));
+  protected readonly newBarcode = new FormControl<string>('', { nonNullable: true });
   protected readonly from = new FormControl(`${new Date().getFullYear()}-01-01`, { nonNullable: true });
   protected readonly to = new FormControl(todayIso(), { nonNullable: true });
 
@@ -201,20 +224,47 @@ export class ItemDetailPage implements OnInit {
     this.load();
   }
 
+  /** One of this unit at the item list's price: its own price, else the item's price times its size. */
+  protected unitPrice(u: ItemUnit, item: Item): number | null {
+    return u.salesPrice ?? (item.salesPrice == null ? null : Math.round(item.salesPrice * u.factor * 100) / 100);
+  }
+
+  private static request(u: ItemUnit): UnitRequest {
+    return { uomId: u.uomId, factor: u.factor, salesPrice: u.salesPrice ?? null, barcode: u.barcode ?? null };
+  }
+
+  protected editUnit(u: ItemUnit): void {
+    this.editing.set(u.uomId);
+    this.newUom.setValue(u.uomId);
+    this.newFactor.setValue(u.factor);
+    this.newPrice.setValue(u.salesPrice ?? null);
+    this.newBarcode.setValue(u.barcode ?? '');
+  }
+
   protected addUnit(): void {
-    this.saveUnits([...this.alternatives().map((u) => ({ uomId: u.uomId, factor: u.factor })), { uomId: this.newUom.value!, factor: Number(this.newFactor.value) }]);
+    const price = this.newPrice.value;
+    this.saveUnits([
+      ...this.alternatives().filter((u) => u.uomId !== this.newUom.value).map(ItemDetailPage.request),
+      {
+        uomId: this.newUom.value!, factor: Number(this.newFactor.value), salesPrice: price == null || String(price) === '' ? null : Number(price),
+        barcode: this.newBarcode.value.trim() || null
+      }
+    ]);
   }
 
   protected removeUnit(unit: ItemUnit): void {
-    this.saveUnits(this.alternatives().filter((u) => u.uomId !== unit.uomId).map((u) => ({ uomId: u.uomId, factor: u.factor })));
+    this.saveUnits(this.alternatives().filter((u) => u.uomId !== unit.uomId).map(ItemDetailPage.request));
   }
 
-  private saveUnits(list: { uomId: string; factor: number }[]): void {
+  private saveUnits(list: UnitRequest[]): void {
     this.trade.saveUnits(this.id(), list).subscribe({
       next: (u) => {
         this.units.set(u);
+        this.editing.set(null);
         this.newUom.setValue(null);
         this.newFactor.setValue(null);
+        this.newPrice.setValue(null);
+        this.newBarcode.setValue('');
         this.notify.success();
       },
       error: (e) => this.notify.error(e)
