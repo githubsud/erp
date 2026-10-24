@@ -455,6 +455,7 @@ export const ar: Record<TranslationKey, string> = {
   'stock.lowAfterSaleTell': 'المخزون قارب على النفاد: {items}. أبلغ المدير.',
   'stock.reorderNow': 'إعادة الطلب',
   'stock.outOfStock': 'نفد من المخزون',
+  'pos.onlyInStock': 'المتوفر {n} فقط',
   'stock.quantity': 'الكمية',
   'stock.reorder': 'إعادة طلب',
   'stock.valuation': 'تقييم المخزون',

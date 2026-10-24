@@ -248,24 +248,45 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
           </mat-form-field>
           <div class="grid">
             @for (i of visible(); track i.id) {
-              <button class="tile" (click)="add(i)">
-                <span class="name">{{ i | bi }}</span>
-                <span class="price ltr">{{ i.salesPrice | money }}</span>
-                @if (i.onHand != null) {
-                  <span [class]="'stock stock-' + tileLevel(i)">
-                    @if (i.onHand > 0) { {{ 'so.onHand' | t }} <span class="ltr">{{ boxes(i) }}</span> } @else { {{ 'stock.outOfStock' | t }} }</span>
-                }
-              </button>
+              @if (i.units?.length) {
+                <!-- Sold by the piece or the box: one button each, so the cashier picks the right one with one tap. -->
+                <div class="tile">
+                  <span class="name">{{ i | bi }}</span>
+                  <div class="unit-btns">
+                    <button class="unit-btn" (click)="add(i)">
+                      <span>{{ 'units.piece' | t }}</span><span class="price ltr">{{ i.salesPrice | money }}</span></button>
+                    @for (u of i.units; track u.uomId) {
+                      <button class="unit-btn" (click)="add(i, u)">
+                        <span class="ltr">{{ u.uomCode }}</span><span class="price ltr">{{ u.salesPrice | money }}</span></button>
+                    }
+                  </div>
+                  @if (i.onHand != null) {
+                    <span [class]="'stock stock-' + tileLevel(i)">
+                      @if (i.onHand > 0) { {{ 'so.onHand' | t }} <span class="ltr">{{ boxes(i) }}</span> } @else { {{ 'stock.outOfStock' | t }} }</span>
+                  }
+                </div>
+              } @else {
+                <button class="tile" (click)="add(i)">
+                  <span class="name">{{ i | bi }}</span>
+                  <span class="price ltr">{{ i.salesPrice | money }}</span>
+                  @if (i.onHand != null) {
+                    <span [class]="'stock stock-' + tileLevel(i)">
+                      @if (i.onHand > 0) { {{ 'so.onHand' | t }} <span class="ltr">{{ boxes(i) }}</span> } @else { {{ 'stock.outOfStock' | t }} }</span>
+                  }
+                </button>
+              }
             }
           </div>
         </section>
         <section class="cart">
           <div class="lines">
             @for (l of cart(); track l.item.id + (l.unit?.uomId ?? ''); let idx = $index) {
-              <div class="line">
+              <div class="line" [class.over]="short(l)">
                 <div class="what">
                   <div>{{ l.item | bi }} @if (l.unit) { <span class="chip info ltr">{{ l.unit.uomCode }}</span> }</div>
-                  <div class="secondary ltr">{{ price(l) | money }} × {{ l.quantity }} @if (l.discountPercent) { − {{ l.discountPercent }}% }</div>
+                  <div class="secondary ltr">{{ price(l) | money }} × {{ l.quantity }}@if (l.unit) { {{ l.unit.uomCode }} = {{ pieces(l) }} {{ l.item.uomCode }} }
+                    @if (l.discountPercent) { − {{ l.discountPercent }}% }</div>
+                  @if (short(l)) { <div class="short-note">{{ 'pos.onlyInStock' | t: { n: (l.item.onHand ?? 0) + ' ' + l.item.uomCode } }}</div> }
                 </div>
                 <div class="qty">
                   <button mat-icon-button (click)="change(idx, -1)"><mat-icon>remove</mat-icon></button>
@@ -367,6 +388,13 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
     .account-btn { width: 100%; margin-top: 8px; }
     .last { display: flex; align-items: center; justify-content: space-between; margin-block-start: 8px; }
     .failed { color: var(--mat-sys-error); }
+    .unit-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+    .unit-btn { flex: 1 1 56px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--mat-sys-outline); background: var(--mat-sys-surface); color: inherit; font: inherit; font-size: 13px; }
+    .unit-btn:hover { background: var(--mat-sys-secondary-container); }
+    .unit-btn .price { font-weight: 600; color: var(--mat-sys-primary); }
+    .line.over .what, .line.over .amount { color: var(--mat-sys-error); }
+    .short-note { font-size: 12px; font-weight: 600; color: var(--mat-sys-error); }
     .tile .stock { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
     .tile .stock.stock-out { color: var(--mat-sys-error); font-weight: 600; }
     .tile .stock.stock-low { color: #9a5b00; font-weight: 600; }
@@ -517,6 +545,16 @@ export class PosPage implements OnInit, OnDestroy {
   protected tileLevel(item: CatalogItem): string {
     const inCart = this.cart().filter((l) => l.item.id === item.id).reduce((sum, l) => sum + piecesOf(l), 0);
     return stockLevel(item.onHand ?? 0, item.reorderLevel, inCart);
+  }
+
+  protected pieces(l: CartLine): number {
+    return piecesOf(l);
+  }
+
+  /** The cart takes more of this item (all its lines, in pieces) than the stock this device knows. */
+  protected short(l: CartLine): boolean {
+    if (l.item.onHand == null) return false;
+    return this.cart().filter((x) => x.item.id === l.item.id).reduce((sum, x) => sum + piecesOf(x), 0) > l.item.onHand;
   }
 
   /** Stock in pieces, then the boxes they make ("30 PCS (3 BOX10)"). */
