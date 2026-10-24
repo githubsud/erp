@@ -68,8 +68,18 @@ public interface IStockService
 /// An active, priced item as a till sees it (barcode lookups and an offline copy). Stock items carry the company-wide quantity on hand
 /// and their reorder level, so the till can show what is running out.
 /// </summary>
+/// <summary><see cref="PartKeys"/> and <see cref="Fits"/>: a spare part's other numbers (letters and digits only) and the cars it fits.</summary>
 public sealed record CatalogItem(Guid Id, string Sku, string? Barcode, string NameEn, string NameAr, string UomCode, ItemType Type, decimal SalesPrice,
-    decimal? OnHand = null, decimal? ReorderLevel = null, IReadOnlyList<CatalogUnit>? Units = null);
+    decimal? OnHand = null, decimal? ReorderLevel = null, IReadOnlyList<CatalogUnit>? Units = null, string? Brand = null,
+    IReadOnlyList<string>? PartKeys = null, IReadOnlyList<CatalogFitment>? Fits = null);
+
+public sealed record CatalogFitment(string Make, string Model, int? YearFrom, int? YearTo, string? Engine);
+
+/// <summary>Part numbers compare in upper case with letters and digits only ("04152-YZZA1" = "04152yzza1").</summary>
+public static class PartNumbers
+{
+    public static string Key(string? partNo) => new((partNo ?? "").Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+}
 
 /// <summary>A box (or other unit) the till can sell: base units per one, its price and its barcode.</summary>
 public sealed record CatalogUnit(Guid UomId, string UomCode, decimal Factor, decimal SalesPrice, string? Barcode);

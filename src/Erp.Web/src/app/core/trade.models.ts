@@ -25,6 +25,8 @@ export interface Item {
   purchasePrice: number | null;
   salesPrice: number | null;
   hsCode: string | null;
+  /** The maker's brand (NGK, Denso, Toyota Genuine). */
+  brand?: string | null;
   isActive: boolean;
   quantityOnHand: number;
   averageCost: number;
@@ -32,6 +34,12 @@ export interface Item {
   trackBatches: boolean;
   trackSerials?: boolean;
   reorderQuantity?: number | null;
+}
+
+/** A spare part's other numbers (OEM and replacement brands) and the cars it fits. */
+export interface ItemParts {
+  partNumbers: { id: string; partNo: string; brand: string | null }[];
+  fitments: { id: string; make: string; model: string; yearFrom: number | null; yearTo: number | null; engine: string | null }[];
 }
 
 /** A unit an item is bought or sold in; one holds `factor` base units (the base unit has factor 1). */

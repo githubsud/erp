@@ -10,6 +10,7 @@ import { Account } from '../../core/models';
 import { NotifyService, problemOf } from '../../core/notify.service';
 import { ReceiptService } from '../../core/receipt.service';
 import { LowItem, LowStockNotice, stockLevel } from '../../core/stock-alert';
+import { Fitment, matchesSearch } from '../../core/part-search';
 import { withBoxes } from '../../core/item-units';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
@@ -57,6 +58,10 @@ interface CatalogItem {
   reorderLevel?: number | null;
   /** Boxes (or other units) it is also sold in: pieces per one, the box's price and barcode. */
   units?: CatalogUnit[] | null;
+  /** Spare parts: the brand, other part numbers (letters and digits only) and the cars it fits, for the search. */
+  brand?: string | null;
+  partKeys?: string[] | null;
+  fits?: Fitment[] | null;
 }
 
 interface CatalogUnit {
@@ -429,9 +434,9 @@ export class PosPage implements OnInit, OnDestroy {
   private readonly term = signal('');
   private readonly paid = signal({ cash: 0, card: 0 });
   protected readonly visible = computed(() => {
-    const term = this.term().trim().toLowerCase();
+    const term = this.term().trim();
     const list = this.catalog();
-    return (term ? list.filter((i) => i.sku.toLowerCase().includes(term) || i.nameEn.toLowerCase().includes(term) || i.nameAr.includes(term)) : list).slice(0, 120);
+    return (term ? list.filter((i) => matchesSearch(i, term)) : list).slice(0, 120);
   });
   protected readonly total = computed(() => round2(this.cart().reduce((s, l) => s + lineAmount(l), 0)));
   protected readonly due = computed(() => round2(this.total() - this.paid().cash - this.paid().card));

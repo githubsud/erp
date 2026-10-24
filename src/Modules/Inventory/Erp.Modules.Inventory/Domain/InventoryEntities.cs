@@ -56,6 +56,9 @@ public sealed class Item : TenantEntity
     public decimal? SalesPrice { get; set; }
     public string? HsCode { get; set; }
 
+    /// <summary>The maker's brand (NGK, Denso, Toyota Genuine): shown on the item and found by search.</summary>
+    public string? Brand { get; set; }
+
     /// <summary>Quantities are kept per batch with an expiry date (food, chemicals, medicines).</summary>
     public bool TrackBatches { get; set; }
 
@@ -97,6 +100,28 @@ public sealed class ItemUnit : TenantEntity
     /// <summary>The price of one of this unit (a box is often cheaper than its pieces); null: the item's price times <see cref="Factor"/>.</summary>
     public decimal? SalesPrice { get; set; }
     public string? Barcode { get; set; }
+}
+
+/// <summary>Another number the item is sold under: the car maker's (OEM) number or a replacement brand's.</summary>
+public sealed class ItemPartNumber : TenantEntity
+{
+    public Guid ItemId { get; init; }
+    public required string PartNo { get; set; }
+
+    /// <summary><see cref="PartNo"/> in upper case with letters and digits only, so "04152-YZZA1" is found as "04152yzza1".</summary>
+    public required string PartKey { get; set; }
+    public string? Brand { get; set; }
+}
+
+/// <summary>A car the part fits: make, model, model years (open-ended when left out) and engine.</summary>
+public sealed class ItemFitment : TenantEntity
+{
+    public Guid ItemId { get; init; }
+    public required string Make { get; set; }
+    public required string Model { get; set; }
+    public int? YearFrom { get; set; }
+    public int? YearTo { get; set; }
+    public string? Engine { get; set; }
 }
 
 /// <summary>Running quantity and value of an item across the company (weighted-average cost).</summary>

@@ -18,7 +18,8 @@ public sealed record MasterDto(Guid Id, string Code, string NameEn, string NameA
 
 public sealed record ItemDto(Guid Id, string Sku, string NameEn, string NameAr, string ItemType, Guid ItemGroupId, Guid UomId, string UomCode,
     string? Barcode, decimal? ReorderLevel, decimal? PurchasePrice, decimal? SalesPrice, string? HsCode, bool IsActive,
-    decimal QuantityOnHand, decimal AverageCost, decimal StockValue, bool TrackBatches = false, bool TrackSerials = false, decimal? ReorderQuantity = null);
+    decimal QuantityOnHand, decimal AverageCost, decimal StockValue, bool TrackBatches = false, bool TrackSerials = false, decimal? ReorderQuantity = null,
+    string? Brand = null);
 
 public sealed record BatchRow(Guid BatchId, Guid ItemId, string Sku, string NameEn, string NameAr, string BatchNo, DateOnly? ExpiryDate, Guid WarehouseId,
     string WarehouseCode, decimal Quantity, int? DaysLeft);
@@ -130,6 +131,14 @@ internal static class InventoryEndpoints
             return await q.GetUnitsAsync([id], ct);
         }).RequirePermission(InventoryPermissions.ItemsManage);
 
+        g.MapGet("/items/{id:guid}/parts", (Guid id, InventoryMasterService s, CancellationToken ct) => s.GetPartsAsync(id, ct))
+            .RequirePermission(InventoryPermissions.ItemsRead);
+        g.MapPut("/items/{id:guid}/parts", async (Guid id, ItemPartsRequest r, InventoryMasterService s, CancellationToken ct) =>
+        {
+            await s.SavePartsAsync(id, r, ct);
+            return await s.GetPartsAsync(id, ct);
+        }).RequirePermission(InventoryPermissions.ItemsManage);
+
         g.MapGet("/stock", StockAsync).RequirePermission(InventoryPermissions.ItemsRead);
         g.MapGet("/reports/valuation", ValuationAsync).RequirePermission(InventoryPermissions.ReportsRead);
         g.MapGet("/batches", (ErpDbContext db, ITenantContext t, IClock clock, CancellationToken ct, Guid? itemId = null, Guid? warehouseId = null) =>
@@ -228,7 +237,7 @@ internal static class InventoryEndpoints
         orderby i.Sku
         select new ItemDto(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType.ToString(), i.ItemGroupId, i.UomId, u.Code, i.Barcode, i.ReorderLevel,
             i.PurchasePrice, i.SalesPrice, i.HsCode, i.IsActive, v == null ? 0 : v.Quantity, v == null ? 0 : v.AverageCost, v == null ? 0 : v.Value,
-            i.TrackBatches, i.TrackSerials, i.ReorderQuantity);
+            i.TrackBatches, i.TrackSerials, i.ReorderQuantity, i.Brand);
 
     private static async Task<PagedResult<ItemDto>> ListItems(ErpDbContext db, ITenantContext t, CancellationToken ct, string? search = null,
         string? type = null, Guid? groupId = null, bool? active = null, int page = 1, int pageSize = 50)
@@ -237,11 +246,19 @@ internal static class InventoryEndpoints
         pageSize = Math.Clamp(pageSize, 1, 500);
         IQueryable<Item> Filter(IQueryable<Item> q)
         {
-            if (!string.IsNullOrWhiteSpace(search))
+            // Every word must match something: the code, a name, the brand, a barcode, another part number, or a car the part fits
+            // ("corolla 2015 filter": a filter that fits a 2015 Corolla).
+            foreach (var word in (search ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                var term = search.Trim();
-                q = q.Where(i => EF.Functions.ILike(i.Sku, $"%{term}%") || EF.Functions.ILike(i.NameEn, $"%{term}%") || i.NameAr.Contains(term) || i.Barcode == term
-                                 || db.Set<ItemUnit>().Any(u => u.ItemId == i.Id && u.Barcode == term));
+                var key = PartNumbers.Key(word);
+                int? year = int.TryParse(word, out var y) && y is >= 1950 and <= 2100 ? y : null;
+                q = q.Where(i => EF.Functions.ILike(i.Sku, $"%{word}%") || EF.Functions.ILike(i.NameEn, $"%{word}%") || i.NameAr.Contains(word)
+                                 || i.Barcode == word || EF.Functions.ILike(i.Brand!, $"%{word}%")
+                                 || db.Set<ItemUnit>().Any(u => u.ItemId == i.Id && u.Barcode == word)
+                                 || (key != "" && db.Set<ItemPartNumber>().Any(p => p.ItemId == i.Id && p.PartKey.Contains(key)))
+                                 || db.Set<ItemFitment>().Any(f => f.ItemId == i.Id && (EF.Functions.ILike(f.Make, $"%{word}%") || EF.Functions.ILike(f.Model, $"%{word}%")
+                                     || EF.Functions.ILike(f.Engine!, $"%{word}%")
+                                     || (year != null && (f.YearFrom == null || f.YearFrom <= year) && (f.YearTo == null || f.YearTo >= year)))));
             }
             if (Enum.TryParse<ItemType>(type, true, out var it)) q = q.Where(i => i.ItemType == it);
             if (groupId is not null) q = q.Where(i => i.ItemGroupId == groupId);

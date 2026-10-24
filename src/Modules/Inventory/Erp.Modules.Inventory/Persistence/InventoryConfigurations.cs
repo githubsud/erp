@@ -133,6 +133,16 @@ internal sealed class ItemUnitConfiguration : IEntityTypeConfiguration<ItemUnit>
     }
 }
 
+internal sealed class ItemPartNumberConfiguration : IEntityTypeConfiguration<ItemPartNumber>
+{
+    public void Configure(EntityTypeBuilder<ItemPartNumber> b) => b.ToTable("item_part_number", "inv");
+}
+
+internal sealed class ItemFitmentConfiguration : IEntityTypeConfiguration<ItemFitment>
+{
+    public void Configure(EntityTypeBuilder<ItemFitment> b) => b.ToTable("item_fitment", "inv");
+}
+
 internal sealed class BatchConfiguration : IEntityTypeConfiguration<Batch>
 {
     public void Configure(EntityTypeBuilder<Batch> b) => b.ToTable("batch", "inv");

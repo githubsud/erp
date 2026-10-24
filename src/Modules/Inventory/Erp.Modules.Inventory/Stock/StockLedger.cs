@@ -421,8 +421,15 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
                       orderby i.NameEn
                       select new CatalogItem(i.Id, i.Sku, i.Barcode, i.NameEn, i.NameAr, u.Code, i.ItemType, i.SalesPrice!.Value,
                           i.ItemType == ItemType.Stock ? (v == null ? 0m : v.Quantity) : null,
-                          i.ItemType == ItemType.Stock ? i.ReorderLevel : null)).ToListAsync(ct);
+                          i.ItemType == ItemType.Stock ? i.ReorderLevel : null, null, i.Brand)).ToListAsync(ct);
         var ids = items.Select(i => i.Id).ToList();
+        var partKeys = (await db.Set<ItemPartNumber>().AsNoTracking().Where(p => ids.Contains(p.ItemId)).Select(p => new { p.ItemId, p.PartKey }).ToListAsync(ct))
+            .ToLookup(p => p.ItemId, p => p.PartKey);
+        var fits = (await db.Set<ItemFitment>().AsNoTracking().Where(f => ids.Contains(f.ItemId)).ToListAsync(ct))
+            .ToLookup(f => f.ItemId, f => new CatalogFitment(f.Make, f.Model, f.YearFrom, f.YearTo, f.Engine));
+        items = items.Select(i => partKeys[i.Id].Any() || fits[i.Id].Any()
+            ? i with { PartKeys = partKeys[i.Id].Any() ? partKeys[i.Id].ToList() : null, Fits = fits[i.Id].Any() ? fits[i.Id].ToList() : null }
+            : i).ToList();
         var units = (await (from x in db.Set<ItemUnit>().AsNoTracking()
                             join u in db.Set<Uom>() on x.UomId equals u.Id
                             where ids.Contains(x.ItemId)

@@ -1,6 +1,7 @@
 import { ItemBatches } from './batches';
 import { ItemBins, ItemSerials } from './serials';
 import { ItemKit } from './kits';
+import { ItemPartsCard } from './parts';
 import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { FormControl, Validators } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
@@ -27,7 +28,7 @@ export const SOURCE_LABELS: Record<string, string> = {
 
 @Component({
   selector: 'app-item-detail',
-  imports: [...SHARED, ItemBatches, ItemBins, ItemSerials, ItemKit],
+  imports: [...SHARED, ItemBatches, ItemBins, ItemSerials, ItemKit, ItemPartsCard],
   template: `
     @if (item(); as i) {
       <div class="page-header">
@@ -41,7 +42,7 @@ export const SOURCE_LABELS: Record<string, string> = {
         <mat-card appearance="outlined" class="stat">
           <div class="label">{{ 'item.onHand' | t }}</div>
           <div class="value ltr">{{ i.quantityOnHand }} <span class="secondary">{{ i.uomCode }}</span></div>
-          <div class="hint">{{ 'item.type.' + i.itemType | t }} · {{ groupName(i.itemGroupId) }}</div>
+          <div class="hint">{{ 'item.type.' + i.itemType | t }} · {{ groupName(i.itemGroupId) }}@if (i.brand) { · <span class="ltr">{{ i.brand }}</span> }</div>
         </mat-card>
         <mat-card appearance="outlined" class="stat">
           <div class="label">{{ 'item.avgCost' | t }}</div>
@@ -59,6 +60,12 @@ export const SOURCE_LABELS: Record<string, string> = {
         <mat-card appearance="outlined" class="form-card units">
           <div class="section-title">{{ 'kit.title' | t }}</div>
           <app-item-kit [itemId]="i.id" />
+        </mat-card>
+      }
+      @if (i.itemType === 'Stock') {
+        <mat-card appearance="outlined" class="form-card parts">
+          <div class="section-title">{{ 'parts.title' | t }}</div>
+          <app-item-parts [itemId]="i.id" />
         </mat-card>
       }
       <mat-card appearance="outlined" class="form-card units">
@@ -185,6 +192,7 @@ export const SOURCE_LABELS: Record<string, string> = {
     .ledger .num { text-align: end; }
     .opening td { font-weight: 600; background: var(--mat-sys-surface-container-low); }
     .units { max-width: 720px; }
+    .parts { max-width: 960px; }
     mat-icon.inline { font-size: 16px; width: 16px; height: 16px; vertical-align: middle; }
     .new-unit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   `

@@ -12,7 +12,20 @@ public sealed record MasterRequest(string Code, string? NameEn, string? NameAr, 
 
 public sealed record ItemRequest(string Sku, string? NameEn, string? NameAr, ItemType ItemType, Guid ItemGroupId, Guid UomId, string? Barcode,
     decimal? ReorderLevel, decimal? PurchasePrice, decimal? SalesPrice, string? HsCode, bool IsActive = true, bool TrackBatches = false,
-    bool TrackSerials = false, decimal? ReorderQuantity = null);
+    bool TrackSerials = false, decimal? ReorderQuantity = null, string? Brand = null);
+
+public sealed record PartNumberRequest(string? PartNo, string? Brand = null);
+
+/// <summary>A car the part fits; years left out are open-ended.</summary>
+public sealed record FitmentRequest(string? Make, string? Model, int? YearFrom = null, int? YearTo = null, string? Engine = null);
+
+public sealed record ItemPartsRequest(IReadOnlyList<PartNumberRequest>? PartNumbers, IReadOnlyList<FitmentRequest>? Fitments);
+
+public sealed record PartNumberDto(Guid Id, string PartNo, string? Brand);
+
+public sealed record FitmentDto(Guid Id, string Make, string Model, int? YearFrom, int? YearTo, string? Engine);
+
+public sealed record ItemPartsDto(IReadOnlyList<PartNumberDto> PartNumbers, IReadOnlyList<FitmentDto> Fitments);
 
 /// <summary>For batch-tracked items: the batch added to (with its expiry), or taken from (first to expire when omitted).</summary>
 public sealed record AdjustmentLineRequest(Guid ItemId, decimal Quantity, decimal? UnitCost, string? BatchNo = null, DateOnly? ExpiryDate = null,
@@ -67,6 +80,52 @@ internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext ten
         }, ct);
 
     private static string? Clean(string? barcode) => string.IsNullOrWhiteSpace(barcode) ? null : barcode.Trim();
+
+    private static string? Text(string? value, int max, string field)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var text = value.Trim();
+        if (text.Length > max)
+            throw new BusinessRuleException("inv.text_too_long", $"{field} is longer than {max} characters.", $"الحقل {field} أطول من {max} حرفاً.");
+        return text;
+    }
+
+    public async Task<ItemPartsDto> GetPartsAsync(Guid itemId, CancellationToken ct)
+    {
+        if (!await db.Set<Item>().AnyAsync(i => i.Id == itemId && i.CompanyId == tenant.RequireCompanyId(), ct)) throw new NotFoundException("Item", itemId);
+        var numbers = await db.Set<ItemPartNumber>().AsNoTracking().Where(p => p.ItemId == itemId).OrderBy(p => p.PartNo)
+            .Select(p => new PartNumberDto(p.Id, p.PartNo, p.Brand)).ToListAsync(ct);
+        var fits = await db.Set<ItemFitment>().AsNoTracking().Where(f => f.ItemId == itemId).OrderBy(f => f.Make).ThenBy(f => f.Model).ThenBy(f => f.YearFrom)
+            .Select(f => new FitmentDto(f.Id, f.Make, f.Model, f.YearFrom, f.YearTo, f.Engine)).ToListAsync(ct);
+        return new ItemPartsDto(numbers, fits);
+    }
+
+    /// <summary>Replaces a part's other numbers and the cars it fits.</summary>
+    public Task SavePartsAsync(Guid itemId, ItemPartsRequest r, CancellationToken ct) =>
+        db.InTransactionAsync(async token =>
+        {
+            if (!await db.Set<Item>().AnyAsync(i => i.Id == itemId && i.CompanyId == tenant.RequireCompanyId(), token)) throw new NotFoundException("Item", itemId);
+            var numbers = (r.PartNumbers ?? []).Select(p => (No: Text(p.PartNo, 60, "part number"), Brand: Text(p.Brand, 80, "brand"))).ToList();
+            if (numbers.Any(p => PartNumbers.Key(p.No) == ""))
+                throw new BusinessRuleException("inv.part_no", "Each part number needs letters or digits.", "يجب أن يحتوي كل رقم قطعة على حروف أو أرقام.");
+            if (numbers.GroupBy(p => PartNumbers.Key(p.No)).FirstOrDefault(g => g.Count() > 1) is { } twice)
+                throw new BusinessRuleException("inv.part_no_twice", $"The part number {twice.First().No} is listed twice.", $"رقم القطعة {twice.First().No} مكرر.");
+            var fits = (r.Fitments ?? []).Select(f => (Make: Text(f.Make, 60, "make"), Model: Text(f.Model, 60, "model"), f.YearFrom, f.YearTo,
+                Engine: Text(f.Engine, 60, "engine"))).ToList();
+            if (fits.Any(f => f.Make is null || f.Model is null))
+                throw new BusinessRuleException("inv.fitment_car", "Each car needs a make and a model.", "يجب إدخال الشركة المصنعة والطراز لكل سيارة.");
+            if (fits.Any(f => f.YearFrom is < 1950 or > 2100 || f.YearTo is < 1950 or > 2100 || f.YearTo < f.YearFrom))
+                throw new BusinessRuleException("inv.fitment_years", "Model years must be between 1950 and 2100, the first not after the last.",
+                    "يجب أن تكون سنوات الطراز بين 1950 و2100، وألا تكون سنة البداية بعد سنة النهاية.");
+            db.RemoveRange(await db.Set<ItemPartNumber>().Where(p => p.ItemId == itemId).ToListAsync(token));
+            db.RemoveRange(await db.Set<ItemFitment>().Where(f => f.ItemId == itemId).ToListAsync(token));
+            await db.SaveChangesAsync(token);
+            foreach (var p in numbers)
+                db.Add(new ItemPartNumber { ItemId = itemId, PartNo = p.No!, PartKey = PartNumbers.Key(p.No), Brand = p.Brand });
+            foreach (var f in fits)
+                db.Add(new ItemFitment { ItemId = itemId, Make = f.Make!, Model = f.Model!, YearFrom = f.YearFrom, YearTo = f.YearTo, Engine = f.Engine });
+            await db.SaveChangesAsync(token);
+        }, ct);
 
     /// <summary>Whether another item, or a unit of another item, already has this barcode (a scan must find one thing).</summary>
     private async Task<bool> BarcodeUsedAsync(string barcode, Guid companyId, Guid itemId, CancellationToken ct) =>
@@ -166,6 +225,7 @@ internal sealed class InventoryMasterService(ErpDbContext db, ITenantContext ten
             item.PurchasePrice = r.PurchasePrice;
             item.SalesPrice = r.SalesPrice;
             item.HsCode = string.IsNullOrWhiteSpace(r.HsCode) ? null : r.HsCode.Trim();
+            item.Brand = Text(r.Brand, 80, "brand");
             item.TrackSerials = r.ItemType == ItemType.Stock && r.TrackSerials;
             item.TrackBatches = item.TrackSerials || (r.ItemType == ItemType.Stock && r.TrackBatches);
             item.IsActive = r.IsActive;

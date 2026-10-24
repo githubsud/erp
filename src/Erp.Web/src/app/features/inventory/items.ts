@@ -76,6 +76,10 @@ import { SHARED } from '../../shared/shared';
           <mat-label>{{ 'item.hsCode' | t }}</mat-label>
           <input matInput formControlName="hsCode" dir="ltr" />
         </mat-form-field>
+        <mat-form-field>
+          <mat-label>{{ 'item.brand' | t }}</mat-label>
+          <input matInput formControlName="brand" dir="ltr" maxlength="80" />
+        </mat-form-field>
         @if (form.value.itemType === 'Stock') {
           <mat-slide-toggle formControlName="trackBatches">{{ 'item.trackBatches' | t }}</mat-slide-toggle>
           <mat-slide-toggle formControlName="trackSerials">{{ 'item.trackSerials' | t }}</mat-slide-toggle>
@@ -110,6 +114,7 @@ export class ItemDialog {
     purchasePrice: [this.data.item?.purchasePrice ?? (null as number | null)],
     salesPrice: [this.data.item?.salesPrice ?? (null as number | null)],
     hsCode: [this.data.item?.hsCode ?? ''],
+    brand: [this.data.item?.brand ?? ''],
     isActive: [this.data.item?.isActive ?? true],
     trackBatches: [this.data.item?.trackBatches ?? false],
     trackSerials: [this.data.item?.trackSerials ?? false]
@@ -188,7 +193,7 @@ export class ItemDialog {
         <ng-container matColumnDef="name">
           <th mat-header-cell *matHeaderCellDef>{{ 'item.name' | t }}</th>
           <td mat-cell *matCellDef="let i">
-            {{ i | bi }}
+            {{ i | bi }} @if (i.brand) { <span class="chip ltr">{{ i.brand }}</span> }
             @if (!i.isActive) { <span class="chip">{{ 'app.no' | t }} · {{ 'item.active' | t }}</span> }
           </td>
         </ng-container>
