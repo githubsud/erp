@@ -253,7 +253,8 @@ internal static class InventoryEndpoints
             foreach (var word in words)
             {
                 var key = PartNumbers.Key(word);
-                IQueryable<ItemFitment>? sameCar = null;
+                // Without a year nothing matches here (an empty set keeps the query translatable).
+                var sameCar = db.Set<ItemFitment>().Where(f => false);
                 if (Year(word) is { } year)
                 {
                     // A model year belongs to one car: it must fit in that year a car that also answers the other car words
@@ -269,7 +270,7 @@ internal static class InventoryEndpoints
                                  || i.Barcode == word || EF.Functions.ILike(i.Brand!, $"%{word}%")
                                  || db.Set<ItemUnit>().Any(u => u.ItemId == i.Id && u.Barcode == word)
                                  || (key != "" && db.Set<ItemPartNumber>().Any(p => p.ItemId == i.Id && p.PartKey.Contains(key)))
-                                 || (sameCar != null && sameCar.Any(f => f.ItemId == i.Id))
+                                 || sameCar.Any(f => f.ItemId == i.Id)
                                  || db.Set<ItemFitment>().Any(f => f.ItemId == i.Id && (EF.Functions.ILike(f.Make, $"%{word}%") || EF.Functions.ILike(f.Model, $"%{word}%")
                                      || EF.Functions.ILike(f.Engine!, $"%{word}%"))));
             }
