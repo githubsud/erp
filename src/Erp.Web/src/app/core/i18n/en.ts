@@ -452,7 +452,6 @@ export const en = {
   'stock.lowAfterSale': 'Running low: {items}. Reorder now?',
   'stock.lowAfterSaleTell': 'Running low: {items}. Tell the manager.',
   'stock.reorderNow': 'Reorder',
-  'stock.inStock': '{n} in stock',
   'stock.outOfStock': 'Out of stock',
   'stock.quantity': 'Quantity',
   'stock.reorder': 'Reorder',

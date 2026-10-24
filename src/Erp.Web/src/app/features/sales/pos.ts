@@ -253,7 +253,7 @@ const isOffline = (e: unknown) => e instanceof HttpErrorResponse && (e.status ==
                 <span class="price ltr">{{ i.salesPrice | money }}</span>
                 @if (i.onHand != null) {
                   <span [class]="'stock stock-' + tileLevel(i)">
-                    {{ i.onHand > 0 ? ('stock.inStock' | t: { n: boxes(i) }) : ('stock.outOfStock' | t) }}</span>
+                    @if (i.onHand > 0) { {{ 'so.onHand' | t }} <span class="ltr">{{ boxes(i) }}</span> } @else { {{ 'stock.outOfStock' | t }} }</span>
                 }
               </button>
             }
