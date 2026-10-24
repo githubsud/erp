@@ -32,6 +32,8 @@ export const en = {
   'app.qar': 'QAR',
   'app.days': 'days',
   'app.errorTitle': 'Something went wrong',
+  'app.errorOffline': 'Cannot reach the server. Check the internet connection (and Tailscale) and try again.',
+  'app.errorServerDown': 'The server is not answering right now. It may be starting or updating: try again in a minute.',
 
   'paginator.itemsPerPage': 'Items per page',
   'paginator.next': 'Next page',

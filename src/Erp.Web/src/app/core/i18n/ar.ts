@@ -34,6 +34,8 @@ export const ar: Record<TranslationKey, string> = {
   'app.qar': 'ريال',
   'app.days': 'يوم',
   'app.errorTitle': 'حدث خطأ',
+  'app.errorOffline': 'تعذّر الوصول إلى الخادم. تحقق من اتصال الإنترنت (وتطبيق Tailscale) ثم حاول مرة أخرى.',
+  'app.errorServerDown': 'الخادم لا يستجيب الآن. قد يكون قيد التشغيل أو التحديث: حاول مرة أخرى بعد دقيقة.',
 
   'paginator.itemsPerPage': 'عدد العناصر في الصفحة',
   'paginator.next': 'الصفحة التالية',

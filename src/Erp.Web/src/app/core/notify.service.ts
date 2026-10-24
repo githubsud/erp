@@ -26,9 +26,17 @@ export class NotifyService {
   /** Bilingual message from RFC 7807 problem details. */
   message(error: unknown): string {
     const problem = problemOf(error);
-    if (!problem) return this.i18n.t('app.errorTitle');
+    if (!problem) return this.i18n.t(errorKey(error));
     return (this.i18n.isArabic() && problem.message_ar) || problem.title || this.i18n.t('app.errorTitle');
   }
+}
+
+/** No server message: say whether the server could not be reached or is down, instead of a bare "something went wrong". */
+export function errorKey(error: unknown): string {
+  if (!(error instanceof HttpErrorResponse)) return 'app.errorTitle';
+  if (error.status === 0) return 'app.errorOffline';
+  if (error.status === 502 || error.status === 503 || error.status === 504) return 'app.errorServerDown';
+  return 'app.errorTitle';
 }
 
 export function problemOf(error: unknown): Problem | null {
