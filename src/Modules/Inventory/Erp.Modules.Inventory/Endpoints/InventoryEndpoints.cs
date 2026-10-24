@@ -248,17 +248,30 @@ internal static class InventoryEndpoints
         {
             // Every word must match something: the code, a name, the brand, a barcode, another part number, or a car the part fits
             // ("corolla 2015 filter": a filter that fits a 2015 Corolla).
-            foreach (var word in (search ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            var words = (search ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            static int? Year(string w) => int.TryParse(w, out var y) && y is >= 1950 and <= 2100 ? y : null;
+            foreach (var word in words)
             {
                 var key = PartNumbers.Key(word);
-                int? year = int.TryParse(word, out var y) && y is >= 1950 and <= 2100 ? y : null;
+                IQueryable<ItemFitment>? sameCar = null;
+                if (Year(word) is { } year)
+                {
+                    // A model year belongs to one car: it must fit in that year a car that also answers the other car words
+                    // ("corolla 2021" is not a part for 2014-2019 Corollas that also fits 2021 Camrys).
+                    sameCar = db.Set<ItemFitment>().Where(f => (f.YearFrom == null || f.YearFrom <= year) && (f.YearTo == null || f.YearTo >= year));
+                    foreach (var other in words.Where(o => Year(o) is null))
+                        sameCar = sameCar.Where(f => EF.Functions.ILike(f.Make, $"%{other}%") || EF.Functions.ILike(f.Model, $"%{other}%")
+                                                     || EF.Functions.ILike(f.Engine!, $"%{other}%")
+                                                     || !db.Set<ItemFitment>().Any(g => g.ItemId == f.ItemId && (EF.Functions.ILike(g.Make, $"%{other}%")
+                                                         || EF.Functions.ILike(g.Model, $"%{other}%") || EF.Functions.ILike(g.Engine!, $"%{other}%"))));
+                }
                 q = q.Where(i => EF.Functions.ILike(i.Sku, $"%{word}%") || EF.Functions.ILike(i.NameEn, $"%{word}%") || i.NameAr.Contains(word)
                                  || i.Barcode == word || EF.Functions.ILike(i.Brand!, $"%{word}%")
                                  || db.Set<ItemUnit>().Any(u => u.ItemId == i.Id && u.Barcode == word)
                                  || (key != "" && db.Set<ItemPartNumber>().Any(p => p.ItemId == i.Id && p.PartKey.Contains(key)))
+                                 || (sameCar != null && sameCar.Any(f => f.ItemId == i.Id))
                                  || db.Set<ItemFitment>().Any(f => f.ItemId == i.Id && (EF.Functions.ILike(f.Make, $"%{word}%") || EF.Functions.ILike(f.Model, $"%{word}%")
-                                     || EF.Functions.ILike(f.Engine!, $"%{word}%")
-                                     || (year != null && (f.YearFrom == null || f.YearFrom <= year) && (f.YearTo == null || f.YearTo >= year)))));
+                                     || EF.Functions.ILike(f.Engine!, $"%{word}%"))));
             }
             if (Enum.TryParse<ItemType>(type, true, out var it)) q = q.Where(i => i.ItemType == it);
             if (groupId is not null) q = q.Where(i => i.ItemGroupId == groupId);

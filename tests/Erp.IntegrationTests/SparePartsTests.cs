@@ -52,7 +52,8 @@ public sealed class SparePartsTests(ErpFixture fixture)
         (await SearchAsync(c, "04152 YZZA1")).ShouldBe(["OF-DENSO-1"]);
         (await SearchAsync(c, "denso")).ShouldBe(["OF-DENSO-1"]);
         (await SearchAsync(c, "corolla 2015")).ShouldBe(["OF-DENSO-1"]);
-        (await SearchAsync(c, "corolla 2021")).ShouldBeEmpty();
+        (await SearchAsync(c, "corolla 2021")).ShouldBeEmpty(); // 2021 fits the Camry, not the Corolla: the year belongs to one car
+        (await SearchAsync(c, "toyota 2021")).ShouldBe(["OF-DENSO-1"]);
         (await SearchAsync(c, "camry 2025 filter")).ShouldBe(["OF-DENSO-1"]);
         (await SearchAsync(c, "patrol 2012")).ShouldBe(["PLUG-NGK"]);
 

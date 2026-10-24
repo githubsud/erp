@@ -20,9 +20,11 @@ describe('part search', () => {
 
   it('finds a part by car and model year, open-ended years fitting every later model', () => {
     expect(matchesSearch(filter, 'corolla 2015')).toBe(true);
-    expect(matchesSearch(filter, 'corolla 2021 filter')).toBe(true); // 2021 fits the Camry (2012+)
+    expect(matchesSearch(filter, 'camry 2025 filter')).toBe(true); // the Camry fit has no end year
     expect(matchesSearch(filter, 'patrol 2015')).toBe(false);
-    expect(matchesSearch({ ...filter, fits: [filter.fits![0]] }, 'corolla 2021')).toBe(false);
+    // The year must belong to the same car: 2021 fits the Camry, not the Corolla.
+    expect(matchesSearch(filter, 'corolla 2021')).toBe(false);
+    expect(matchesSearch(filter, 'toyota 2021')).toBe(true);
   });
 
   it('writes model years briefly', () => {
