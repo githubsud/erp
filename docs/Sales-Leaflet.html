@@ -10,24 +10,25 @@
   :root { --green: #0F5C4D; --gold: #B8860B; --ink: #1d2524; --soft: #eef5f3; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: Tahoma, "Segoe UI", Arial, sans-serif; color: var(--ink); background: #fff; }
-  .page { width: 186mm; height: 271mm; overflow: hidden; margin: 0 auto; padding: 1mm 1mm; display: flex; flex-direction: column; gap: 3mm; page-break-after: always; }
+  .page { width: 186mm; height: 271mm; overflow: hidden; margin: 0 auto; padding: 1mm 1mm; display: flex; flex-direction: column; gap: 2.5mm; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  header { background: var(--green); color: #fff; border-radius: 5mm; padding: 5mm 7mm; }
+  header { background: var(--green); color: #fff; border-radius: 5mm; padding: 4mm 6mm; }
   header .brand { font-size: 11pt; opacity: .9; }
-  header h1 { margin: 1.5mm 0 1mm; font-size: 18pt; line-height: 1.3; }
-  header p { margin: 0; font-size: 11pt; opacity: .95; line-height: 1.6; }
+  header h1 { margin: 1mm 0 1mm; font-size: 16pt; line-height: 1.3; }
+  header p { margin: 0; font-size: 10.5pt; opacity: .95; line-height: 1.5; }
   h2 { color: var(--green); font-size: 12.5pt; margin: 0 0 1.5mm; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
-  .card { background: var(--soft); border-radius: 3mm; padding: 3mm 4mm; }
-  .card h3 { margin: 0 0 1mm; font-size: 11pt; color: var(--green); }
-  .card p { margin: 0; font-size: 9.5pt; line-height: 1.5; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5mm; }
+  .card { background: var(--soft); border-radius: 3mm; padding: 2.3mm 3.5mm; }
+  .card h3 { margin: 0 0 0.6mm; font-size: 10.5pt; color: var(--green); }
+  .card p { margin: 0; font-size: 9pt; line-height: 1.4; }
   .segments { display: flex; flex-wrap: wrap; gap: 2mm; }
   .segments span { border: 1px solid var(--green); color: var(--green); border-radius: 20mm; padding: 0.8mm 3mm; font-size: 9.5pt; }
-  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
-  th, td { border-bottom: 1px solid #d5dcda; padding: 1.5mm 2mm; text-align: start; vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  th, td { border-bottom: 1px solid #d5dcda; padding: 1mm 2mm; text-align: start; vertical-align: top; }
   th { color: var(--green); }
   td.price { white-space: nowrap; font-weight: bold; }
-  .offer { border: 2px dashed var(--gold); border-radius: 3mm; padding: 3mm 4mm; font-size: 10.5pt; line-height: 1.5; }
+  td.price small { font-weight: normal; font-size: 8.5pt; }
+  .offer { border: 2px dashed var(--gold); border-radius: 3mm; padding: 2.5mm 4mm; font-size: 10pt; line-height: 1.45; }
   .offer b { color: var(--gold); }
   footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; border-top: 2px solid var(--green); padding-top: 2.5mm; font-size: 10.5pt; }
   footer .contact { font-weight: bold; color: var(--green); }
@@ -46,9 +47,11 @@
   </header>
 
   <div class="grid">
-    <div class="card"><h3>✔ بدون غرامات نظام حماية الأجور</h3><p>احسب الرواتب والإضافي ومكافأة نهاية الخدمة، وأنشئ ملف SIF للبنك بضغطة، مع تذكير قبل الموعد.</p></div>
+    <div class="card"><h3>✔ رواتب وحماية أجور في وقتها</h3><p>احسب الرواتب والإضافي ومكافأة نهاية الخدمة، وأنشئ ملف SIF للبنك بضغطة، مع تذكير قبل الموعد.</p></div>
     <div class="card"><h3>✔ لا مفاجآت في الرخص والإقامات</h3><p>تنبيه قبل انتهاء البطاقات والجوازات وأذونات العمل والسجل التجاري والرخص، مع قائمة خطوات التجديد.</p></div>
     <div class="card"><h3>✔ نقطة بيع وبيع بالآجل (الدفتر)</h3><p>بيع نقداً أو بالبطاقة أو على حساب العميل بحد ائتمان، حتى لو انقطع الإنترنت، وتذكير بالدفع برسالة واتساب.</p></div>
+    <div class="card"><h3>✔ بالحبة أو بالكرتون</h3><p>لكل كرتون سعره وباركوده، والمخزون يُحسب بالحبة دائماً. تنبيه أحمر إذا كانت الكمية أكثر من المتوفر، وتنبيه قبل نفاد الصنف.</p></div>
+    <div class="card"><h3>✔ لا خصومات بدون إذن</h3><p>حد خصم لكل كاشير، وأي سعر أقل يحتاج رمز موافقة المدير. فروقات الوردية تظهر لك في ملخص المساء.</p></div>
     <div class="card"><h3>✔ ملخص يومي على جوالك</h3><p>كل مساء: مبيعات اليوم، النقد في الصندوق، فروقات الوردية، الديون المتأخرة، والأصناف التي تحتاج طلب.</p></div>
     <div class="card"><h3>✔ اسأل عن عملك بالعربي</h3><p>«من أكثر عميل مديون؟» «كم ربحي هذا الشهر؟» يجيب المساعد الذكي من أرقامك، ويكتب رسائل واتساب للعملاء.</p></div>
     <div class="card"><h3>✔ جاهز خلال 10 دقائق</h3><p>اختر نوع نشاطك فيجهز النظام الوحدات، وأدخل أصنافك ومخزونك من ملف Excel. تصدير كل بياناتك إلى Excel في أي وقت.</p></div>
@@ -57,18 +60,19 @@
   <div>
     <h2>مصمم لنشاطك</h2>
     <div class="segments">
-      <span>عبايات وخياطة: المقاسات والعربون وموعد التسليم</span><span>صالونات: المواعيد وعمولة الموظفات</span><span>بقالات وميني ماركت</span>
+      <span>عبايات وخياطة: المقاسات والعربون وموعد التسليم</span><span>صالونات: المواعيد وعمولة الموظفات</span><span>بقالات وميني ماركت</span><span>قطع غيار: أسعار خاصة للورش</span>
       <span>مطاعم وكافيهات</span><span>أثاث</span><span>ورش سيارات</span><span>مكاتب طباعة وتخليص معاملات</span><span>مقاولات</span>
     </div>
   </div>
 
   <div>
-    <h2>الباقات (ريال قطري شهرياً)</h2>
+    <h2>الباقات (ريال قطري شهرياً · السنوي بسعر 10 أشهر)</h2>
     <table>
       <tr><th>الباقة</th><th>لمن</th><th>السعر</th></tr>
-      <tr><td>الرواتب</td><td>أي شركة لديها موظفون: الرواتب، حماية الأجور، المكافأة، الإجازات، المستندات، تطبيق الموظف</td><td class="price">99 حتى 10 موظفين</td></tr>
-      <tr><td>المحل</td><td>عبايات، صالون، بقالة، ملابس: الرواتب + صندوق بيع + المخزون + وحدة نشاطك + الملخص اليومي</td><td class="price">199</td></tr>
-      <tr><td>الأعمال</td><td>فرعان أو ثلاثة، أثاث، ورش: المحل + المشتريات والمبيعات + القوائم المالية + 3 صناديق</td><td class="price">399</td></tr>
+      <tr><td>الرواتب</td><td>أي شركة لديها موظفون: الرواتب، حماية الأجور، المكافأة، الإجازات، المستندات، تطبيق الموظف</td><td class="price">99<br><small>حتى 10 موظفين</small></td></tr>
+      <tr><td>المحل</td><td>عبايات، صالون، بقالة، قطع غيار: الرواتب + صندوق بيع + المخزون + المبيعات + وحدة نشاطك + الملخص اليومي</td><td class="price">199<br><small>حتى 15 موظفاً</small></td></tr>
+      <tr><td>الأعمال</td><td>فرعان أو ثلاثة، أثاث، مقاولات: المحل + المشتريات + الحسابات الكاملة + المشاريع والأصول</td><td class="price">399<br><small>حتى 50 موظفاً</small></td></tr>
+      <tr><td>المؤسسات</td><td>شركات أكبر وورش السيارات: كل شيء بدون حد للموظفين أو المستخدمين</td><td class="price">799</td></tr>
     </table>
   </div>
 
@@ -76,7 +80,7 @@
 
   <footer>
     <span>للتجربة المجانية على جهازك اللوحي:</span>
-    <span class="contact">الاسم ــــــــــــــــ · واتساب <span class="ltr">+974 ____ ____</span></span>
+    <span class="contact">واتساب <span class="ltr">+974 5539 7885</span></span>
   </footer>
 </section>
 
@@ -88,9 +92,11 @@
   </header>
 
   <div class="grid">
-    <div class="card"><h3>✔ No WPS fines</h3><p>Salaries, overtime and end-of-service gratuity calculated for you; the bank SIF file in one click, with a reminder before the deadline.</p></div>
+    <div class="card"><h3>✔ Payroll and WPS on time</h3><p>Salaries, overtime and end-of-service gratuity calculated for you; the bank SIF file in one click, with a reminder before the deadline.</p></div>
     <div class="card"><h3>✔ No surprise expiries</h3><p>Alerts before QIDs, passports, work permits, the CR and licences expire, with a renewal checklist.</p></div>
     <div class="card"><h3>✔ POS and credit customers</h3><p>Sell for cash, card or on the customer's account with a credit limit, even when the internet is down; send payment reminders by WhatsApp.</p></div>
+    <div class="card"><h3>✔ By the piece or the box</h3><p>Each box has its own price and barcode; stock is always counted in pieces. A red warning when the cart is more than the stock, and an alert before an item runs out.</p></div>
+    <div class="card"><h3>✔ No unapproved discounts</h3><p>A discount limit per cashier; any lower price needs the manager's approval PIN. Shift differences show in your evening summary.</p></div>
     <div class="card"><h3>✔ A daily summary on your phone</h3><p>Every evening: today's sales, cash in the till, shift differences, overdue money and items to reorder.</p></div>
     <div class="card"><h3>✔ Ask about your business</h3><p>"Who owes me the most?" "What is my profit this month?" The AI assistant answers from your own figures and drafts WhatsApp messages.</p></div>
     <div class="card"><h3>✔ Ready in 10 minutes</h3><p>Choose your kind of business and the system sets up the modules; bring in your products and stock from Excel. Export all your data to Excel at any time.</p></div>
@@ -99,18 +105,19 @@
   <div>
     <h2>Made for your business</h2>
     <div class="segments">
-      <span>Abaya &amp; tailoring: measurements, deposits, ready dates</span><span>Salons: appointments and staff commission</span><span>Groceries &amp; mini-marts</span>
+      <span>Abaya &amp; tailoring: measurements, deposits, ready dates</span><span>Salons: appointments and staff commission</span><span>Groceries &amp; mini-marts</span><span>Spare parts: special prices for garages</span>
       <span>Restaurants &amp; cafés</span><span>Furniture</span><span>Car workshops</span><span>Typing &amp; PRO offices</span><span>Contracting</span>
     </div>
   </div>
 
   <div>
-    <h2>Plans (QAR per month)</h2>
+    <h2>Plans (QAR per month · yearly costs 10 months)</h2>
     <table>
       <tr><th>Plan</th><th>For</th><th>Price</th></tr>
-      <tr><td>Payroll</td><td>Any company with staff: payroll, WPS, gratuity, leave, documents, employee app</td><td class="price">99 up to 10 staff</td></tr>
-      <tr><td>Shop</td><td>Abaya, salon, grocery, clothing: Payroll + a POS till + stock + your business module + daily summary</td><td class="price">199</td></tr>
-      <tr><td>Business</td><td>2–3 branches, furniture, workshops: Shop + purchasing and sales + financial statements + 3 tills</td><td class="price">399</td></tr>
+      <tr><td>Payroll</td><td>Any company with staff: payroll, WPS, gratuity, leave, documents, employee app</td><td class="price">99<br><small>up to 10 staff</small></td></tr>
+      <tr><td>Shop</td><td>Abaya, salon, grocery, spare parts: Payroll + a POS till + stock + sales + your business module + daily summary</td><td class="price">199<br><small>up to 15 staff</small></td></tr>
+      <tr><td>Business</td><td>2–3 branches, furniture, contracting: Shop + purchasing + full accounts + projects and assets</td><td class="price">399<br><small>up to 50 staff</small></td></tr>
+      <tr><td>Enterprise</td><td>Larger companies and car workshops: everything, no limit on staff or users</td><td class="price">799</td></tr>
     </table>
   </div>
 
@@ -118,7 +125,7 @@
 
   <footer>
     <span>For a free demo on a tablet:</span>
-    <span class="contact">Name ____________ · WhatsApp +974 ____ ____</span>
+    <span class="contact">WhatsApp <span class="ltr">+974 5539 7885</span></span>
   </footer>
 </section>
 
