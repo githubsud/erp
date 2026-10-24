@@ -32,3 +32,10 @@ export function inBoxes(quantity: number, baseCode: string, units: { uomCode: st
   const rest = Math.round((quantity - boxes * box.factor) * 1000000) / 1000000;
   return rest ? `${boxes} ${box.uomCode} + ${rest} ${baseCode}` : `${boxes} ${box.uomCode}`;
 }
+
+/** Pieces first, then the boxes they make: "30 PCS (3 BOX10)", "37 PCS (3 BOX10 + 7 PCS)"; just "7 PCS" when less than a box. */
+export function withBoxes(quantity: number, baseCode: string, units: { uomCode: string; factor: number; isBase?: boolean }[]): string {
+  const boxes = inBoxes(quantity, baseCode, units);
+  const pieces = `${quantity} ${baseCode}`;
+  return boxes === pieces ? pieces : `${pieces} (${boxes})`;
+}

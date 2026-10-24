@@ -10,7 +10,7 @@ import { AuthService } from '../../core/auth.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { LowStockNotice, stockLevel } from '../../core/stock-alert';
-import { inBoxes, ItemUnitsCache } from '../../core/item-units';
+import { ItemUnitsCache, withBoxes } from '../../core/item-units';
 import { SalesApi } from '../../core/sales.api';
 import { CreditNote, Customer, DeliveryNote, SalesInvoice, SalesInvoiceLine, SalesInvoiceStatus, SalesOrder } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
@@ -346,7 +346,7 @@ export class SalesInvoiceFormPage implements OnInit {
   }
 
   protected boxes(it: Item): string {
-    return inBoxes(it.quantityOnHand, it.uomCode, this.units.of(it.id));
+    return withBoxes(it.quantityOnHand, it.uomCode, this.units.of(it.id));
   }
 
   protected itemChanged(line: InvoiceLineGroup): void {

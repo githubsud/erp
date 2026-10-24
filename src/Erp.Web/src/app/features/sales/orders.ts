@@ -10,7 +10,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { todayIso } from '../../core/dates';
 import { NotifyService } from '../../core/notify.service';
 import { stockLevel } from '../../core/stock-alert';
-import { inBoxes } from '../../core/item-units';
+import { withBoxes } from '../../core/item-units';
 import { SalesApi } from '../../core/sales.api';
 import { Customer, DeliveryNote, Quotation, QuotationStatus, SalesInvoice, SalesOrder, SalesOrderStatus } from '../../core/sales.models';
 import { TradeApi } from '../../core/trade.api';
@@ -381,7 +381,7 @@ export class SalesDocFormPage implements OnInit {
   }
 
   protected boxes(it: Item): string {
-    return inBoxes(it.quantityOnHand, it.uomCode, this.unitsOf(it.id));
+    return withBoxes(it.quantityOnHand, it.uomCode, this.unitsOf(it.id));
   }
 
   /** Stock against this line, in base units: out (not enough), low (at or below the reorder level after it) or ok. */

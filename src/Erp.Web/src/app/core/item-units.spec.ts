@@ -1,4 +1,14 @@
-import { inBoxes } from './item-units';
+import { inBoxes, withBoxes } from './item-units';
+
+describe('withBoxes', () => {
+  const units = [{ uomCode: 'PCS', factor: 1, isBase: true }, { uomCode: 'BOX10', factor: 10 }];
+
+  it('shows the pieces first, then the boxes they make', () => {
+    expect(withBoxes(30, 'PCS', units)).toBe('30 PCS (3 BOX10)');
+    expect(withBoxes(37, 'PCS', units)).toBe('37 PCS (3 BOX10 + 7 PCS)');
+    expect(withBoxes(7, 'PCS', units)).toBe('7 PCS');
+  });
+});
 
 describe('inBoxes', () => {
   const units = [{ uomCode: 'PCS', factor: 1, isBase: true }, { uomCode: 'BOX12', factor: 12 }, { uomCode: 'CTN48', factor: 48 }];

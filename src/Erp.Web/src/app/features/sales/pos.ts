@@ -10,7 +10,7 @@ import { Account } from '../../core/models';
 import { NotifyService, problemOf } from '../../core/notify.service';
 import { ReceiptService } from '../../core/receipt.service';
 import { LowItem, LowStockNotice, stockLevel } from '../../core/stock-alert';
-import { inBoxes } from '../../core/item-units';
+import { withBoxes } from '../../core/item-units';
 import { TradeApi } from '../../core/trade.api';
 import { Master } from '../../core/trade.models';
 import { PrinterSettingsDialog } from '../../shared/printer-settings';
@@ -519,9 +519,9 @@ export class PosPage implements OnInit, OnDestroy {
     return stockLevel(item.onHand ?? 0, item.reorderLevel, inCart);
   }
 
-  /** Stock in boxes and pieces ("4 BOX12 + 10"), or pieces alone. */
+  /** Stock in pieces, then the boxes they make ("30 PCS (3 BOX10)"). */
   protected boxes(item: CatalogItem): string {
-    return inBoxes(item.onHand ?? 0, item.uomCode, item.units ?? []);
+    return withBoxes(item.onHand ?? 0, item.uomCode, item.units ?? []);
   }
 
   /** Switches a line between pieces and a box; the box's price applies (a price typed for the line is dropped). */
