@@ -13,7 +13,8 @@ import { SHARED } from '../../shared/shared';
   imports: [...SHARED],
   template: `
     <p class="secondary">{{ 'parts.hint' | t }}</p>
-    @if (canManage) {
+    <!-- Reading saved() makes the form redraw when the server's answer fills it. -->
+    @if (canManage && saved()) {
       <div class="sub">{{ 'parts.numbers' | t }}</div>
       <table class="line-editor">
         <tbody>
