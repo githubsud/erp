@@ -107,6 +107,55 @@ public sealed class CartLine : TenantEntity
     public decimal Quantity { get; set; }
 }
 
+public enum CheckoutStatus { Placed, Cancelled }
+
+public enum PaymentMethod { Cod }
+
+/// <summary>One purchase of a cart: the shopper, the Qatar delivery address, what was charged and the sales order it became.</summary>
+public sealed class Checkout : TenantEntity
+{
+    public Guid CompanyId { get; init; }
+    public Guid StoreId { get; init; }
+    public Guid CartId { get; init; }
+    public required string OrderNo { get; init; }
+    public CheckoutStatus Status { get; set; } = CheckoutStatus.Placed;
+    public PaymentMethod PaymentMethod { get; init; } = PaymentMethod.Cod;
+    public required string CustomerName { get; init; }
+    public required string Phone { get; init; }
+    public required string Zone { get; init; }
+    public required string Street { get; init; }
+    public required string Building { get; init; }
+    public string? Unit { get; init; }
+    public string? AddressNotes { get; init; }
+    public decimal? Latitude { get; init; }
+    public decimal? Longitude { get; init; }
+    public decimal Subtotal { get; init; }
+    public decimal DeliveryFee { get; init; }
+    public decimal Total { get; init; }
+
+    /// <summary>The priced lines as the shopper confirmed them (JSON).</summary>
+    public required string PricedSnapshot { get; init; }
+    public Guid SalesOrderId { get; init; }
+    public required string StatusTokenHash { get; init; }
+
+    public string Address => $"Zone {Zone}, Street {Street}, Building {Building}" + (Unit is null ? "" : $", Unit {Unit}");
+}
+
+public enum ReservationStatus { Held, Converted, Released }
+
+/// <summary>A soft stock hold made at checkout (design §5.2).</summary>
+public sealed class Reservation : TenantEntity
+{
+    public Guid StoreId { get; init; }
+    public Guid CartId { get; init; }
+    public Guid? CheckoutId { get; set; }
+    public Guid ItemId { get; init; }
+    public Guid WarehouseId { get; init; }
+    public decimal Quantity { get; init; }
+    public ReservationStatus Status { get; set; } = ReservationStatus.Held;
+    public DateTimeOffset ExpiresAt { get; init; }
+}
+
 /// <summary>URL slugs: lower-case letters, digits and single hyphens.</summary>
 public static partial class Slugs
 {
@@ -176,6 +225,27 @@ internal sealed class CartLineConfiguration : IEntityTypeConfiguration<CartLine>
     public void Configure(EntityTypeBuilder<CartLine> b)
     {
         b.ToTable("cart_line", "commerce");
+        b.Property(x => x.Quantity).AsQuantity();
+    }
+}
+
+internal sealed class CheckoutConfiguration : IEntityTypeConfiguration<Checkout>
+{
+    public void Configure(EntityTypeBuilder<Checkout> b)
+    {
+        b.ToTable("checkout", "commerce");
+        b.Property(x => x.PricedSnapshot).HasColumnType("jsonb");
+        b.Property(x => x.Latitude).HasPrecision(9, 6);
+        b.Property(x => x.Longitude).HasPrecision(9, 6);
+        b.Ignore(x => x.Address);
+    }
+}
+
+internal sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservation>
+{
+    public void Configure(EntityTypeBuilder<Reservation> b)
+    {
+        b.ToTable("reservation", "commerce");
         b.Property(x => x.Quantity).AsQuantity();
     }
 }

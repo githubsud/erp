@@ -20,6 +20,7 @@ public sealed class CommerceModule : IModule
         services.AddScoped<Storefront.StorefrontCatalog>();
         services.AddScoped<Storefront.StockAvailability>();
         services.AddScoped<Storefront.CartService>();
+        services.AddScoped<Storefront.CheckoutService>();
         services.AddScoped<ITenantProvisioner, Provisioning.CommerceProvisioner>();
         services.AddSingleton<IPermissionProvider, CommercePermissionProvider>();
     }

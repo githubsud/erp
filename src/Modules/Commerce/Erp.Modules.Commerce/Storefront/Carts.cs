@@ -28,14 +28,22 @@ public sealed record NewCartDto(string Token, CartDto Cart);
 internal sealed record PricedCartLine(CartLine Line, Listing? Listing, CatalogItem? Item, string UomCode, decimal UnitPrice, decimal Amount, decimal BaseQuantity,
     bool Available);
 
-/// <summary>Stock the store can still promise: on hand, less what open sales orders still have to deliver (any channel).</summary>
-internal sealed class StockAvailability(IOnlineOrderIntake orders)
+/// <summary>
+/// Stock the store can still promise: on hand, less what open sales orders still have to deliver (any channel), less other carts'
+/// active holds.
+/// </summary>
+internal sealed class StockAvailability(ErpDbContext db, IOnlineOrderIntake orders, IClock clock)
 {
-    public async Task<IReadOnlyDictionary<Guid, decimal>> AvailableAsync(IEnumerable<CatalogItem> items, CancellationToken ct)
+    public async Task<IReadOnlyDictionary<Guid, decimal>> AvailableAsync(IEnumerable<CatalogItem> items, CancellationToken ct, Guid? exceptCart = null)
     {
         var stock = items.Where(i => i.Type == ItemType.Stock).ToList();
-        var promised = await orders.GetUndeliveredQuantitiesAsync(stock.Select(i => i.Id), ct);
-        return stock.ToDictionary(i => i.Id, i => (i.OnHand ?? 0m) - promised.GetValueOrDefault(i.Id));
+        var ids = stock.Select(i => i.Id).ToList();
+        var promised = await orders.GetUndeliveredQuantitiesAsync(ids, ct);
+        var now = clock.UtcNow;
+        var held = await db.Set<Reservation>().AsNoTracking()
+            .Where(r => ids.Contains(r.ItemId) && r.Status == ReservationStatus.Held && r.ExpiresAt > now && r.CartId != exceptCart)
+            .GroupBy(r => r.ItemId).Select(g => new { ItemId = g.Key, Quantity = g.Sum(r => r.Quantity) }).ToDictionaryAsync(x => x.ItemId, x => x.Quantity, ct);
+        return stock.ToDictionary(i => i.Id, i => (i.OnHand ?? 0m) - promised.GetValueOrDefault(i.Id) - held.GetValueOrDefault(i.Id));
     }
 }
 
@@ -132,7 +140,7 @@ internal sealed class CartService(ErpDbContext db, IInventoryQueries inventory, 
     public async Task<CartDto> ToDtoAsync(Store store, Cart cart, CancellationToken ct)
     {
         var (lines, subtotal) = await PriceAsync(store, cart, ct);
-        var available = await availability.AvailableAsync(lines.Where(l => l.Item is not null).Select(l => l.Item!).DistinctBy(i => i.Id), ct);
+        var available = await availability.AvailableAsync(lines.Where(l => l.Item is not null).Select(l => l.Item!).DistinctBy(i => i.Id), ct, cart.Id);
         var wanted = lines.Where(l => l.Available).GroupBy(l => l.Line.ItemId).ToDictionary(g => g.Key, g => g.Sum(l => l.BaseQuantity));
         var dtos = lines.Select(l =>
         {

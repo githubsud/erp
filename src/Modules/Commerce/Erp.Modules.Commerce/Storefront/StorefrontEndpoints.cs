@@ -130,5 +130,10 @@ internal static class StorefrontEndpoints
             var store = StorefrontTenant.Current(http);
             return await carts.ToDtoAsync(store, await carts.SetLineAsync(store, http, r, ct), ct);
         });
+
+        g.MapPost("/checkout", async (CheckoutRequest r, HttpContext http, CheckoutService checkout, CancellationToken ct) =>
+            await checkout.PlaceCodAsync(StorefrontTenant.Current(http), http, r, ct));
+        g.MapGet("/orders/{orderNo}", async (string orderNo, HttpContext http, CheckoutService checkout, CancellationToken ct) =>
+            await checkout.StatusAsync(StorefrontTenant.Current(http), orderNo.Trim().ToUpperInvariant(), http, ct));
     }
 }
