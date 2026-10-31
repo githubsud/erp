@@ -449,6 +449,9 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
         db.Set<Warehouse>().AsNoTracking().Where(w => w.Id == id && w.CompanyId == tenant.RequireCompanyId())
             .Select(w => new WarehouseInfo(w.Id, w.Code, w.NameEn, w.NameAr, w.IsActive)).SingleOrDefaultAsync(ct);
 
+    public Task<bool> ItemGroupExistsAsync(Guid id, CancellationToken ct = default) =>
+        db.Set<ItemGroup>().AnyAsync(g => g.Id == id && g.CompanyId == tenant.RequireCompanyId(), ct);
+
     public Task<decimal> GetQuantityOnHandAsync(Guid itemId, CancellationToken ct = default) =>
         db.Set<ItemValuation>().Where(v => v.ItemId == itemId).Select(v => v.Quantity).SingleOrDefaultAsync(ct);
 

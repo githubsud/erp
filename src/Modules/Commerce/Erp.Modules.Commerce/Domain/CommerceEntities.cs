@@ -82,6 +82,9 @@ public sealed class ListingImage : TenantEntity
 /// <summary>URL slugs: lower-case letters, digits and single hyphens.</summary>
 public static partial class Slugs
 {
+    /// <summary>Reserved: <c>/api/store/_/…</c> finds the store by the request's host (a custom domain) instead of a slug.</summary>
+    public const string HostSlug = "_";
+
     [GeneratedRegex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")]
     private static partial Regex Valid();
 

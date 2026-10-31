@@ -16,11 +16,13 @@ public sealed class CommerceModule : IModule
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddScoped<Admin.StoreAdminService>();
         services.AddScoped<ITenantProvisioner, Provisioning.CommerceProvisioner>();
         services.AddSingleton<IPermissionProvider, CommercePermissionProvider>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
+        Admin.StoreAdminEndpoints.Map(app);
     }
 }

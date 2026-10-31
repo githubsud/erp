@@ -99,6 +99,9 @@ public interface IInventoryQueries
 
     Task<WarehouseInfo?> GetWarehouseAsync(Guid id, CancellationToken ct = default);
 
+    /// <summary>Whether the item group exists in the current company.</summary>
+    Task<bool> ItemGroupExistsAsync(Guid id, CancellationToken ct = default);
+
     /// <summary>Quantity on hand for the company (all warehouses).</summary>
     Task<decimal> GetQuantityOnHandAsync(Guid itemId, CancellationToken ct = default);
 
