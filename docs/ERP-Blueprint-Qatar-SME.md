@@ -1651,6 +1651,7 @@ Simplified role-based screens:
 4. **Report/export test**: every report endpoint and Excel export checked as above.
 5. **Cache key test**: every Redis key prefixed `t:{tenant_id}:`; static analysis rule fails the build on unprefixed keys.
 6. **Annual external penetration test** with explicit multi-tenant scope.
+7. **Storefront (anonymous) isolation**: two tenants with open stores and the same product addresses; store A's slug, custom domain, cookies and shopper token never read store B's catalog, carts, orders or shoppers, including by guessing ids ([Commerce design](Commerce-Storefront-Design.md) §3; `CommerceIsolationTests`).
 
 ### 7.5 Backup and recovery
 
