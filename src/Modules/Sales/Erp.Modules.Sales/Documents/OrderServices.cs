@@ -36,8 +36,11 @@ internal sealed record PricedLine(Guid ItemId, string? Description, decimal Quan
 
 internal static class SalesLines
 {
-    /// <summary>Validates items (active) and prices each line; missing prices come from the customer's price list or the item.</summary>
-    public static async Task<List<PricedLine>> PriceAsync(CustomerService customers, IInventoryQueries inventory, Guid customerId,
+    /// <summary>
+    /// Validates items (active) and prices each line; missing prices come from the customer's price list or the item (the item only,
+    /// without a customer). Also behind <see cref="Erp.Modules.Sales.Contracts.ISalesPricing"/>.
+    /// </summary>
+    public static async Task<List<PricedLine>> PriceAsync(CustomerService customers, IInventoryQueries inventory, Guid? customerId,
         IReadOnlyList<SalesLineRequest>? lines, CancellationToken ct, decimal exchangeRate = 1m)
     {
         if (lines is not { Count: > 0 })

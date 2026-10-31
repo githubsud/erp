@@ -28,6 +28,7 @@
     <Project Path="src/Modules/Purchasing/Erp.Modules.Purchasing/Erp.Modules.Purchasing.csproj" />
   </Folder>
   <Folder Name="/src/Modules/Sales/">
+    <Project Path="src/Modules/Sales/Erp.Modules.Sales.Contracts/Erp.Modules.Sales.Contracts.csproj" />
     <Project Path="src/Modules/Sales/Erp.Modules.Sales/Erp.Modules.Sales.csproj" />
   </Folder>
   <Folder Name="/tests/">

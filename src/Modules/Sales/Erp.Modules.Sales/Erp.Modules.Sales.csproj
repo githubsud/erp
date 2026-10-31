@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.Infrastructure\Erp.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Finance\Erp.Modules.Finance.Contracts\Erp.Modules.Finance.Contracts.csproj" />
     <ProjectReference Include="..\..\Inventory\Erp.Modules.Inventory.Contracts\Erp.Modules.Inventory.Contracts.csproj" />
+    <ProjectReference Include="..\Erp.Modules.Sales.Contracts\Erp.Modules.Sales.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Migrations\*.sql" />

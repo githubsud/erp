@@ -20,6 +20,7 @@ public sealed class SalesModule : IModule
         services.AddScoped<CreditControlService>();
         services.AddScoped<QuotationService>();
         services.AddScoped<SalesOrderService>();
+        services.AddScoped<Contracts.ISalesPricing, SalesPricing>();
         services.AddScoped<DeliveryNoteService>();
         services.AddScoped<SalesInvoiceService>();
         services.AddScoped<CreditNoteService>();
