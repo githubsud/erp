@@ -32,13 +32,23 @@ public static class SignInRateLimit
             {
                 context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                 context.HttpContext.Response.Headers.RetryAfter = "60";
-                await context.HttpContext.Response.WriteAsJsonAsync(new
-                {
-                    status = 429,
-                    title = "Too many sign-in attempts. Wait a minute and try again.",
-                    code = "auth.too_many_attempts",
-                    message_ar = "محاولات دخول كثيرة. انتظر دقيقة ثم حاول مرة أخرى."
-                }, ct);
+                // Other modules add their own policies (the online store); they share this answer with their own wording.
+                var signIn = !context.HttpContext.Request.Path.StartsWithSegments("/api/store");
+                await context.HttpContext.Response.WriteAsJsonAsync(signIn
+                    ? new
+                    {
+                        status = 429,
+                        title = "Too many sign-in attempts. Wait a minute and try again.",
+                        code = "auth.too_many_attempts",
+                        message_ar = "محاولات دخول كثيرة. انتظر دقيقة ثم حاول مرة أخرى."
+                    }
+                    : new
+                    {
+                        status = 429,
+                        title = "Too many requests. Wait a minute and try again.",
+                        code = "store.too_many_requests",
+                        message_ar = "طلبات كثيرة. انتظر دقيقة ثم حاول مرة أخرى."
+                    }, ct);
             };
         });
     }

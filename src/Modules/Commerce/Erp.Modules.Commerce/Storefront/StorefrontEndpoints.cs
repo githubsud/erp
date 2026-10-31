@@ -84,7 +84,8 @@ internal static class StorefrontEndpoints
 {
     public static void Map(IEndpointRouteBuilder app)
     {
-        var g = app.MapGroup("/api/store/{slug}").WithTags("Storefront").AllowAnonymous().AddEndpointFilter(StorefrontTenant.ResolveAsync);
+        var g = app.MapGroup("/api/store/{slug}").WithTags("Storefront").AllowAnonymous().AddEndpointFilter(StorefrontTenant.ResolveAsync)
+            .RequireRateLimiting(StorefrontLimits.Browse);
 
         g.MapGet("", (HttpContext http) =>
         {
@@ -119,7 +120,7 @@ internal static class StorefrontEndpoints
             var store = StorefrontTenant.Current(http);
             var (token, cart) = await carts.CreateAsync(store, ct);
             return new NewCartDto(token, await carts.ToDtoAsync(store, cart, ct));
-        });
+        }).RequireRateLimiting(StorefrontLimits.Cart);
         g.MapGet("/cart", async (HttpContext http, CartService carts, CancellationToken ct) =>
         {
             var store = StorefrontTenant.Current(http);
@@ -129,10 +130,10 @@ internal static class StorefrontEndpoints
         {
             var store = StorefrontTenant.Current(http);
             return await carts.ToDtoAsync(store, await carts.SetLineAsync(store, http, r, ct), ct);
-        });
+        }).RequireRateLimiting(StorefrontLimits.Cart);
 
         g.MapPost("/checkout", async (CheckoutRequest r, HttpContext http, CheckoutService checkout, CancellationToken ct) =>
-            await checkout.PlaceCodAsync(StorefrontTenant.Current(http), http, r, ct));
+            await checkout.PlaceCodAsync(StorefrontTenant.Current(http), http, r, ct)).RequireRateLimiting(StorefrontLimits.Checkout);
         g.MapGet("/orders/{orderNo}", async (string orderNo, HttpContext http, CheckoutService checkout, CancellationToken ct) =>
             await checkout.StatusAsync(StorefrontTenant.Current(http), orderNo.Trim().ToUpperInvariant(), http, ct));
     }

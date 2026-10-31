@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Erp.IntegrationTests.Infrastructure;
+using Microsoft.AspNetCore.Hosting;
 
 namespace Erp.IntegrationTests;
 
@@ -72,6 +73,37 @@ public sealed class CommerceCheckoutTests(ErpFixture fixture)
         cart.GetProperty("canCheckout").GetBoolean().ShouldBeFalse();
         (await (await shopper.PostJsonAsync($"/api/store/{s.Slug}/checkout", Address())).ProblemAsync()).GetProperty("code").GetString()
             .ShouldBe("commerce.checkout_closed");
+    }
+
+    [Fact]
+    public async Task Each_device_gets_a_budget_for_browsing_cart_changes_and_checkouts()
+    {
+        var s = await CommerceCartTests.ReadyStoreAsync(fixture);
+        await using var strict = fixture.Factory.WithWebHostBuilder(b => b
+            .UseSetting("Commerce:BrowseRequestsPerMinute", "4").UseSetting("Commerce:CartChangesPerMinute", "2").UseSetting("Commerce:CheckoutsPerMinute", "1"));
+        HttpClient Device(string address)
+        {
+            var client = strict.CreateClient();
+            client.DefaultRequestHeaders.Add("X-Forwarded-For", address);
+            return client;
+        }
+        var phone = Device("100.64.1.7");
+        for (var i = 0; i < 4; i++) (await phone.GetAsync($"/api/store/{s.Slug}/catalog")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var blocked = await phone.GetAsync($"/api/store/{s.Slug}/catalog");
+        blocked.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await blocked.ProblemAsync()).GetProperty("code").GetString().ShouldBe("store.too_many_requests");
+
+        // Cart changes and checkouts have their own, smaller budgets.
+        var laptop = Device("100.64.1.8");
+        var token = (await laptop.PostAsync<JsonElement>($"/api/store/{s.Slug}/cart", new { })).GetProperty("token").GetString();
+        laptop.DefaultRequestHeaders.Add("X-Cart-Token", token);
+        (await laptop.PutJsonAsync($"/api/store/{s.Slug}/cart/lines", new { productSlug = "plug", quantity = 5m })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await laptop.PutJsonAsync($"/api/store/{s.Slug}/cart/lines", new { productSlug = "plug", quantity = 6m })).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await laptop.PostJsonAsync($"/api/store/{s.Slug}/checkout", Address(phone: "1"))).StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await laptop.PostJsonAsync($"/api/store/{s.Slug}/checkout", Address())).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+
+        // Another device behind the same proxy is not affected.
+        (await Device("100.64.1.9").GetAsync($"/api/store/{s.Slug}/catalog")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]

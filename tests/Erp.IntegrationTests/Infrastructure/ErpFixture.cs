@@ -73,6 +73,9 @@ public sealed class ErpFixture : IAsyncLifetime
             builder.UseSetting("Platform:ApiKey", PlatformKey);
             // Every test signs in from the same address; one test checks the limit with its own host.
             builder.UseSetting("Security:SignInAttemptsPerMinute", "100000");
+            builder.UseSetting("Commerce:BrowseRequestsPerMinute", "100000");
+            builder.UseSetting("Commerce:CartChangesPerMinute", "100000");
+            builder.UseSetting("Commerce:CheckoutsPerMinute", "100000");
             builder.ConfigureTestServices(services => services.AddSingleton<IAiChatClient>(Ai));
         });
         _ = _factory.Server; // starts the host and runs migrations

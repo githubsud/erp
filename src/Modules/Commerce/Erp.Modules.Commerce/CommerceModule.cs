@@ -1,4 +1,5 @@
 using Erp.Infrastructure.Web;
+using Erp.Modules.Commerce.Storefront;
 using Erp.SharedKernel.Application;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +22,7 @@ public sealed class CommerceModule : IModule
         services.AddScoped<Storefront.StockAvailability>();
         services.AddScoped<Storefront.CartService>();
         services.AddScoped<Storefront.CheckoutService>();
+        services.AddStorefrontLimits(configuration);
         services.AddScoped<ITenantProvisioner, Provisioning.CommerceProvisioner>();
         services.AddSingleton<IPermissionProvider, CommercePermissionProvider>();
     }
