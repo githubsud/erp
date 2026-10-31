@@ -31,6 +31,10 @@
     <Project Path="src/Modules/Sales/Erp.Modules.Sales.Contracts/Erp.Modules.Sales.Contracts.csproj" />
     <Project Path="src/Modules/Sales/Erp.Modules.Sales/Erp.Modules.Sales.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Commerce/">
+    <Project Path="src/Modules/Commerce/Erp.Modules.Commerce.Contracts/Erp.Modules.Commerce.Contracts.csproj" />
+    <Project Path="src/Modules/Commerce/Erp.Modules.Commerce/Erp.Modules.Commerce.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Erp.IntegrationTests/Erp.IntegrationTests.csproj" />
     <Project Path="tests/Erp.UnitTests/Erp.UnitTests.csproj" />

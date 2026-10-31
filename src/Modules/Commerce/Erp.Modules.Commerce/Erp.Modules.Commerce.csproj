@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Erp.Modules.Commerce</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.Infrastructure\Erp.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Inventory\Erp.Modules.Inventory.Contracts\Erp.Modules.Inventory.Contracts.csproj" />
+    <ProjectReference Include="..\..\Sales\Erp.Modules.Sales.Contracts\Erp.Modules.Sales.Contracts.csproj" />
+    <ProjectReference Include="..\Erp.Modules.Commerce.Contracts\Erp.Modules.Commerce.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Migrations\*.sql" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Erp.UnitTests" />
+    <InternalsVisibleTo Include="Erp.IntegrationTests" />
+  </ItemGroup>
+</Project>

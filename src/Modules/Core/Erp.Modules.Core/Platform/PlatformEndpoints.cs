@@ -81,7 +81,8 @@ internal static class PlatformEndpoints
         (ModuleCodes.Tailoring, "Tailoring & abaya orders", "طلبات الخياطة والعبايات"),
         (ModuleCodes.Salon, "Salon & appointments", "الصالون والمواعيد"),
         (ModuleCodes.Workshop, "Car workshop job cards", "بطاقات عمل ورشة السيارات"),
-        (ModuleCodes.Ai, "AI assistant", "المساعد الذكي")
+        (ModuleCodes.Ai, "AI assistant", "المساعد الذكي"),
+        (ModuleCodes.Commerce, "Online store", "المتجر الإلكتروني")
     ];
 
     private static IEnumerable<(string Code, string En, string Ar, string[] Requires)> Catalog =>

@@ -111,7 +111,8 @@ public sealed partial class TenantProvisioningService(
             }
             await db.SaveChangesAsync(token);
 
-            var context = new TenantProvisioningContext(tenant.Id, company.Id, branch.Id, admin.Id, request.FiscalYearStartMonth, clock.Today);
+            var context = new TenantProvisioningContext(tenant.Id, company.Id, branch.Id, admin.Id, request.FiscalYearStartMonth, clock.Today,
+                tenant.Code, company.NameEn, company.NameAr);
             foreach (var provisioner in provisioners.OrderBy(p => p.Order))
             {
                 await provisioner.ProvisionAsync(context, token);

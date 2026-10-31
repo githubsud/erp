@@ -20,15 +20,16 @@ public static class ModuleCodes
     public const string Salon = "salon";
     public const string Workshop = "workshop";
     public const string Ai = "ai";
+    public const string Commerce = "commerce";
 
     public static readonly IReadOnlyList<string> Optional =
-        [Hr, Ess, Inventory, Purchasing, Sales, Pos, Crm, Projects, Subcontracts, Assets, Budgets, Tailoring, Salon, Workshop, Ai];
+        [Hr, Ess, Inventory, Purchasing, Sales, Pos, Crm, Projects, Subcontracts, Assets, Budgets, Tailoring, Salon, Workshop, Ai, Commerce];
 
     /// <summary>A module only works together with these.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> Requires = new Dictionary<string, string[]>
     {
         [Ess] = [Hr], [Purchasing] = [Inventory], [Sales] = [Inventory], [Pos] = [Inventory], [Crm] = [Sales], [Projects] = [Sales],
-        [Subcontracts] = [Purchasing], [Tailoring] = [Sales], [Salon] = [Sales], [Workshop] = [Sales]
+        [Subcontracts] = [Purchasing], [Tailoring] = [Sales], [Salon] = [Sales], [Workshop] = [Sales], [Commerce] = [Sales]
     };
 
     public static HashSet<string> Parse(string? raw) =>

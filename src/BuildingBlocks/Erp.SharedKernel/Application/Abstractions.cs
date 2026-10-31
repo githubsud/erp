@@ -63,7 +63,10 @@ public sealed record TenantProvisioningContext(
     Guid BranchId,
     Guid AdminUserId,
     int FiscalYearStartMonth,
-    DateOnly Today);
+    DateOnly Today,
+    string TenantCode,
+    string CompanyNameEn,
+    string CompanyNameAr);
 
 /// <summary>Seeds a module's defaults for a new tenant. Runs inside the provisioning transaction.</summary>
 public interface ITenantProvisioner

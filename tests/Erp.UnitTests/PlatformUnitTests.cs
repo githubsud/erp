@@ -25,13 +25,24 @@ public sealed class ArchitectureTests
         violations.ShouldBeEmpty();
     }
 
+    /// <summary>The online store reaches products, stock, prices and the ledger only through those modules' Contracts.</summary>
+    [Fact]
+    public void Commerce_references_only_inventory_sales_and_finance_contracts()
+    {
+        string[] allowed = ["Erp.Modules.Commerce.Contracts", "Erp.Modules.Inventory.Contracts", "Erp.Modules.Sales.Contracts", "Erp.Modules.Finance.Contracts"];
+        typeof(Erp.Modules.Commerce.CommerceModule).Assembly.GetReferencedAssemblies().Select(r => r.Name!)
+            .Where(n => n.StartsWith("Erp.Modules.", StringComparison.Ordinal))
+            .ShouldAllBe(n => allowed.Contains(n));
+    }
+
     [Fact]
     public void Contracts_depend_only_on_the_shared_kernel()
     {
-        var contracts = typeof(Erp.Modules.Finance.Contracts.IPostingService).Assembly;
-        contracts.GetReferencedAssemblies().Select(r => r.Name!)
-            .Where(n => n.StartsWith("Erp.", StringComparison.Ordinal))
-            .ShouldAllBe(n => n == "Erp.SharedKernel");
+        foreach (var contracts in new[] { typeof(Erp.Modules.Finance.Contracts.IPostingService).Assembly,
+                     typeof(Erp.Modules.Sales.Contracts.ISalesPricing).Assembly, typeof(Erp.Modules.Commerce.Contracts.AvailabilityBand).Assembly })
+            contracts.GetReferencedAssemblies().Select(r => r.Name!)
+                .Where(n => n.StartsWith("Erp.", StringComparison.Ordinal))
+                .ShouldAllBe(n => n == "Erp.SharedKernel");
     }
 
     [Fact]
