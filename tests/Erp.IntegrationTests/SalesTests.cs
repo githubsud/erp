@@ -131,7 +131,9 @@ public sealed class SalesTests(ErpFixture fixture)
         (await c.GetAsync<Invoice>($"/api/sales/invoices/{invoice.Id}")).OpenAmount.ShouldBe(488m);
 
         // A post-dated cheque: held in PDC receivable, cannot be deposited early, then bounces after depositing.
-        var receiptDate = Today.Day > 1 ? Today.AddDays(-1) : Today;
+        // Received yesterday, deposited today, so every step is in the books by today. On 1 January yesterday is in last fiscal year,
+        // which a new company does not have: then it is received today and deposited tomorrow.
+        var receiptDate = Today.DayOfYear > 1 ? Today.AddDays(-1) : Today;
         var pdc = await c.PostAsync<Receipt>("/api/sales/receipts", new
         {
             customerId = customer, date = receiptDate, method = "PostDatedCheque", chequeNo = "000451", chequeDate = receiptDate.AddDays(1),
