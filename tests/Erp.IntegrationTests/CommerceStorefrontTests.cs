@@ -12,7 +12,7 @@ namespace Erp.IntegrationTests;
 public sealed class CommerceStorefrontTests(ErpFixture fixture)
 {
     private static readonly string[] ProductFields =
-        ["slug", "titleEn", "titleAr", "categorySlug", "price", "uomCode", "units", "availability", "images", "descriptionEn", "descriptionAr"];
+        ["slug", "titleEn", "titleAr", "categorySlug", "price", "uomCode", "units", "availability", "images", "brand", "fits", "descriptionEn", "descriptionAr"];
 
     private static async Task<Guid> ItemAsync(HttpClient c, string sku, decimal price, Guid group, Guid pcs, string type = "Stock", decimal? reorderLevel = null) =>
         (await c.PostAsync<InventoryTests.Item>("/api/inventory/items", new
@@ -117,5 +117,41 @@ public sealed class CommerceStorefrontTests(ErpFixture fixture)
         await c.PutAsync<JsonElement>("/api/core/modules", new { disabled = new[] { "commerce" } });
         (await shopper.GetAsync($"/api/store/{slug}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await shopper.GetAsync("/api/store/no-such-store/catalog")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Shoppers_find_spare_parts_by_part_number_brand_or_car_like_at_the_till()
+    {
+        var s = await CommerceCartTests.ReadyStoreAsync(fixture);
+        var c = s.Tenant.Client;
+        var filter = await CommerceAdminTests.ItemAsync(c, "OF-1", 35m);
+        await c.PutAsync<JsonElement>($"/api/inventory/items/{filter}/parts", new
+        {
+            partNumbers = new[] { new { partNo = "04152-YZZA1", brand = "Toyota" } },
+            fitments = new object[]
+            {
+                new { make = "Toyota", model = "Corolla", yearFrom = 2014, yearTo = 2019, engine = "1.6" },
+                new { make = "Toyota", model = "Camry", yearFrom = 2021, yearTo = (int?)null }
+            }
+        });
+        await c.PostAsync<JsonElement>("/api/commerce/listings", new { itemId = filter, slug = "oil-filter", titleEn = "Oil filter", titleAr = "فلتر زيت", isPublished = true });
+        var shopper = fixture.Factory.CreateClient();
+        async Task<string[]> Find(string term) =>
+            (await shopper.GetAsync<JsonElement>($"/api/store/{s.Slug}/catalog?search={Uri.EscapeDataString(term)}")).GetProperty("items").EnumerateArray()
+            .Select(p => p.GetProperty("slug").GetString()!).ToArray();
+
+        (await Find("04152yzza1")).ShouldBe(["oil-filter"]);
+        (await Find("04152 YZZA1")).ShouldBe(["oil-filter"]);
+        (await Find("فلتر")).ShouldBe(["oil-filter"]);
+        (await Find("corolla 2015")).ShouldBe(["oil-filter"]);
+        (await Find("corolla 2015 filter")).ShouldBe(["oil-filter"]);
+        // A model year belongs to one car: the 2021 Camry fit does not make it a 2021 Corolla part.
+        (await Find("corolla 2021")).ShouldBeEmpty();
+        (await Find("camry 2024")).ShouldBe(["oil-filter"]);
+        (await Find("patrol")).ShouldBeEmpty();
+
+        // The product page says which cars it fits.
+        var product = await shopper.GetAsync<JsonElement>($"/api/store/{s.Slug}/products/oil-filter");
+        product.GetProperty("fits").EnumerateArray().Select(f => f.GetProperty("model").GetString()).ShouldBe(["Corolla", "Camry"], ignoreOrder: true);
     }
 }

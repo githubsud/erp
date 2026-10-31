@@ -22,9 +22,12 @@ public sealed record PublicCategoryDto(string Slug, string NameEn, string NameAr
 /// <summary>A way the product is sold: the base unit (<see cref="Factor"/> 1) or a pack such as a box of 12.</summary>
 public sealed record PublicUnitDto(string UomCode, decimal Factor, decimal Price);
 
+/// <summary>A car a spare part fits; years left out are open-ended.</summary>
+public sealed record PublicFitmentDto(string Make, string Model, int? YearFrom, int? YearTo, string? Engine);
+
 public sealed record PublicProductDto(string Slug, string TitleEn, string TitleAr, string? CategorySlug, decimal Price, string UomCode,
-    IReadOnlyList<PublicUnitDto> Units, AvailabilityBand Availability, IReadOnlyList<string> Images, string? DescriptionEn = null,
-    string? DescriptionAr = null);
+    IReadOnlyList<PublicUnitDto> Units, AvailabilityBand Availability, IReadOnlyList<string> Images, string? Brand,
+    IReadOnlyList<PublicFitmentDto> Fits, string? DescriptionEn = null, string? DescriptionAr = null);
 
 /// <summary>Published listings of the current store, priced as a guest through Sales and shown with availability bands.</summary>
 internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inventory, ISalesPricing pricing, StockAvailability availability)
@@ -51,7 +54,7 @@ internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inven
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
-            listings = listings.Where(l => l.TitleEn.Contains(term, StringComparison.OrdinalIgnoreCase) || l.TitleAr.Contains(term, StringComparison.Ordinal)).ToList();
+            listings = listings.Where(l => StorefrontSearch.Matches(l, catalog[l.ItemId], term)).ToList();
         }
         if (listings.Count == 0) return [];
 
@@ -74,7 +77,8 @@ internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inven
             var units = new[] { new PublicUnitDto(item.UomCode, 1m, prices[(l.ItemId, null)]) }
                 .Concat((item.Units ?? []).Select(u => new PublicUnitDto(u.UomCode, u.Factor, prices[(l.ItemId, u.UomId)]))).ToList();
             return new PublicProductDto(l.Slug, l.TitleEn, l.TitleAr, CategoryOf(l), units[0].Price, item.UomCode, units,
-                Availability.Band(free.GetValueOrDefault(l.ItemId), item.ReorderLevel, item.Type == ItemType.Stock), images[l.Id].ToList(),
+                Availability.Band(free.GetValueOrDefault(l.ItemId), item.ReorderLevel, item.Type == ItemType.Stock), images[l.Id].ToList(), item.Brand,
+                (item.Fits ?? []).Select(f => new PublicFitmentDto(f.Make, f.Model, f.YearFrom, f.YearTo, f.Engine)).ToList(),
                 withDescription ? l.DescriptionEn : null, withDescription ? l.DescriptionAr : null);
         }).ToList();
     }
