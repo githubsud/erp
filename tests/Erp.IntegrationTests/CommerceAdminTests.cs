@@ -17,9 +17,10 @@ public sealed class CommerceAdminTests(ErpFixture fixture)
         })).Id;
     }
 
-    internal static object Store(string slug, string status = "Open", string? host = null) => new
+    internal static object Store(string slug, string status = "Open", string? host = null, Guid? warehouseId = null, Guid? deliveryItemId = null) => new
     {
-        slug, nameEn = $"Store {slug}", nameAr = $"متجر {slug}", phone = "+974 5555 0000", host, codEnabled = true, minOrder = 50m, deliveryFee = 15m, status
+        slug, nameEn = $"Store {slug}", nameAr = $"متجر {slug}", phone = "+974 5555 0000", host, codEnabled = true, minOrder = 50m, deliveryFee = 15m, status,
+        warehouseId, deliveryItemId
     };
 
     [Fact]
@@ -51,6 +52,21 @@ public sealed class CommerceAdminTests(ErpFixture fixture)
         // The old address is free again.
         (await other.Client.PutJsonAsync("/api/commerce/store", Store(t.Code, "Draft"))).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await other.Client.PutJsonAsync("/api/commerce/store", Store(other.Code + "-x", host: $"{t.Code}.shop.qa"))).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        // Checkout settings: an active warehouse of this company and a service item for the delivery fee.
+        var (main, defaultGroup, pcs) = await InventoryTests.DefaultsAsync(c);
+        var (otherMain, _, _) = await InventoryTests.DefaultsAsync(other.Client);
+        var deliveryItem = (await c.PostAsync<InventoryTests.Item>("/api/inventory/items", new
+        {
+            sku = "DELIVERY", nameEn = "Delivery", nameAr = "توصيل", itemType = "Service", itemGroupId = defaultGroup, uomId = pcs, salesPrice = 0m
+        })).Id;
+        var goods = await ItemAsync(c, "GOODS", 1m);
+        (await c.PutJsonAsync("/api/commerce/store", Store(slug, warehouseId: otherMain))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await (await c.PutJsonAsync("/api/commerce/store", Store(slug, deliveryItemId: goods))).ProblemAsync()).GetProperty("code").GetString()
+            .ShouldBe("commerce.delivery_item");
+        var ready = await c.PutAsync<JsonElement>("/api/commerce/store", Store(slug, host: $"{t.Code}.shop.qa", warehouseId: main, deliveryItemId: deliveryItem));
+        ready.GetProperty("warehouseId").GetGuid().ShouldBe(main);
+        ready.GetProperty("deliveryItemId").GetGuid().ShouldBe(deliveryItem);
 
         // Categories: unique address per store, optionally mapped to an inventory group of this company only.
         var (_, group, _) = await InventoryTests.DefaultsAsync(c);

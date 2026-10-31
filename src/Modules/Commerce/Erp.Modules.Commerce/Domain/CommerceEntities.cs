@@ -22,6 +22,12 @@ public sealed class Store : TenantEntity
     public decimal MinOrder { get; set; }
     public decimal DeliveryFee { get; set; }
     public StoreStatus Status { get; set; } = StoreStatus.Draft;
+
+    /// <summary>Where online orders are sent from; checkout is closed until it is set.</summary>
+    public Guid? WarehouseId { get; set; }
+
+    /// <summary>The service item the delivery fee is charged as; needed when there is a delivery fee.</summary>
+    public Guid? DeliveryItemId { get; set; }
     public uint Version { get; set; }
 }
 

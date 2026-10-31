@@ -11,12 +11,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Erp.Modules.Commerce.Admin;
 
-/// <summary>Host: a custom domain such as shop.example.qa (optional). Status: draft, open or closed.</summary>
+/// <summary>
+/// Host: a custom domain such as shop.example.qa (optional). Status: draft, open or closed. Warehouse: where online orders are sent
+/// from. Delivery item: the service item the delivery fee is charged as.
+/// </summary>
 public sealed record StoreRequest(string Slug, string NameEn, string NameAr, string? Phone, string? Host, bool CodEnabled, decimal MinOrder,
-    decimal DeliveryFee, StoreStatus Status);
+    decimal DeliveryFee, StoreStatus Status, Guid? WarehouseId = null, Guid? DeliveryItemId = null);
 
 public sealed record StoreDto(Guid Id, string Slug, string NameEn, string NameAr, string? Phone, string? Host, string Currency, bool CodEnabled,
-    decimal MinOrder, decimal DeliveryFee, StoreStatus Status);
+    decimal MinOrder, decimal DeliveryFee, StoreStatus Status, Guid? WarehouseId, Guid? DeliveryItemId);
 
 public sealed record CategoryRequest(string Slug, string NameEn, string NameAr, Guid? ParentId, Guid? ItemGroupId, int SortOrder = 0, bool IsActive = true);
 
@@ -58,6 +61,12 @@ internal sealed class StoreAdminService(ErpDbContext db, ITenantContext tenant, 
             if (r.MinOrder < 0 || r.DeliveryFee < 0)
                 throw new BusinessRuleException("commerce.amount_negative", "Amounts cannot be negative.", "لا يمكن أن تكون المبالغ سالبة.");
 
+            if (r.WarehouseId is { } warehouseId && await inventory.GetWarehouseAsync(warehouseId, token) is not { IsActive: true })
+                throw new NotFoundException("Warehouse", warehouseId);
+            if (r.DeliveryItemId is { } deliveryItemId
+                && (await inventory.GetItemsAsync([deliveryItemId], token)).GetValueOrDefault(deliveryItemId) is not { IsActive: true, Type: ItemType.Service })
+                throw new BusinessRuleException("commerce.delivery_item", "Choose an active service item for the delivery fee.", "اختر صنف خدمة نشطاً لرسوم التوصيل.");
+
             var companyId = tenant.RequireCompanyId();
             var store = await db.Set<Store>().SingleOrDefaultAsync(s => s.CompanyId == companyId, token);
             var entry = store is null ? null : await DirectoryOf(store).SingleOrDefaultAsync(token);
@@ -79,6 +88,8 @@ internal sealed class StoreAdminService(ErpDbContext db, ITenantContext tenant, 
             store.MinOrder = Money.Round(r.MinOrder);
             store.DeliveryFee = Money.Round(r.DeliveryFee);
             store.Status = r.Status;
+            store.WarehouseId = r.WarehouseId;
+            store.DeliveryItemId = r.DeliveryItemId;
 
             // The slug is the directory's key: a new slug replaces the row.
             if (entry is not null && entry.StoreSlug != slug)
@@ -248,7 +259,7 @@ internal static class StoreAdminEndpoints
     }
 
     private static StoreDto ToDto(Store s, string? host) =>
-        new(s.Id, s.Slug, s.NameEn, s.NameAr, s.Phone, host, s.Currency, s.CodEnabled, s.MinOrder, s.DeliveryFee, s.Status);
+        new(s.Id, s.Slug, s.NameEn, s.NameAr, s.Phone, host, s.Currency, s.CodEnabled, s.MinOrder, s.DeliveryFee, s.Status, s.WarehouseId, s.DeliveryItemId);
 
     private static CategoryDto ToDto(Category c) => new(c.Id, c.Slug, c.NameEn, c.NameAr, c.ParentId, c.ItemGroupId, c.SortOrder, c.IsActive);
 
