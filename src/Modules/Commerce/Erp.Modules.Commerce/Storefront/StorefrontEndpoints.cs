@@ -27,7 +27,7 @@ public sealed record PublicProductDto(string Slug, string TitleEn, string TitleA
     string? DescriptionAr = null);
 
 /// <summary>Published listings of the current store, priced as a guest through Sales and shown with availability bands.</summary>
-internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inventory, ISalesPricing pricing)
+internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inventory, ISalesPricing pricing, StockAvailability availability)
 {
     public async Task<IReadOnlyList<PublicProductDto>> ProductsAsync(Store store, string? categorySlug, string? search, string? productSlug,
         bool withDescription, CancellationToken ct)
@@ -63,6 +63,7 @@ internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inven
         var listingIds = listings.Select(l => l.Id).ToList();
         var images = (await db.Set<ListingImage>().AsNoTracking().Where(x => listingIds.Contains(x.ListingId)).OrderBy(x => x.SortOrder).ToListAsync(ct))
             .ToLookup(x => x.ListingId, x => x.StorageKey);
+        var free = await availability.AvailableAsync(listings.Select(l => catalog[l.ItemId]), ct);
         string? CategoryOf(Listing l) =>
             (l.CategoryId is { } id ? categories.FirstOrDefault(c => c.Id == id)
                 : categories.FirstOrDefault(c => c.ItemGroupId is { } g && items.TryGetValue(l.ItemId, out var i) && i.ItemGroupId == g))?.Slug;
@@ -73,7 +74,7 @@ internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inven
             var units = new[] { new PublicUnitDto(item.UomCode, 1m, prices[(l.ItemId, null)]) }
                 .Concat((item.Units ?? []).Select(u => new PublicUnitDto(u.UomCode, u.Factor, prices[(l.ItemId, u.UomId)]))).ToList();
             return new PublicProductDto(l.Slug, l.TitleEn, l.TitleAr, CategoryOf(l), units[0].Price, item.UomCode, units,
-                Availability.Band(item.OnHand, item.ReorderLevel, item.Type == ItemType.Stock), images[l.Id].ToList(),
+                Availability.Band(free.GetValueOrDefault(l.ItemId), item.ReorderLevel, item.Type == ItemType.Stock), images[l.Id].ToList(),
                 withDescription ? l.DescriptionEn : null, withDescription ? l.DescriptionAr : null);
         }).ToList();
     }
@@ -112,5 +113,22 @@ internal static class StorefrontEndpoints
         g.MapGet("/products/{productSlug}", async (HttpContext http, string productSlug, StorefrontCatalog catalog, CancellationToken ct) =>
             (await catalog.ProductsAsync(StorefrontTenant.Current(http), null, null, productSlug.Trim().ToLowerInvariant(), true, ct)).SingleOrDefault()
             ?? throw new NotFoundException("Product", productSlug));
+
+        g.MapPost("/cart", async (HttpContext http, CartService carts, CancellationToken ct) =>
+        {
+            var store = StorefrontTenant.Current(http);
+            var (token, cart) = await carts.CreateAsync(store, ct);
+            return new NewCartDto(token, await carts.ToDtoAsync(store, cart, ct));
+        });
+        g.MapGet("/cart", async (HttpContext http, CartService carts, CancellationToken ct) =>
+        {
+            var store = StorefrontTenant.Current(http);
+            return await carts.ToDtoAsync(store, await carts.FindAsync(store, http, ct), ct);
+        });
+        g.MapPut("/cart/lines", async (CartLineRequest r, HttpContext http, CartService carts, CancellationToken ct) =>
+        {
+            var store = StorefrontTenant.Current(http);
+            return await carts.ToDtoAsync(store, await carts.SetLineAsync(store, http, r, ct), ct);
+        });
     }
 }

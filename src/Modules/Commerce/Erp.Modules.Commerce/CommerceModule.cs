@@ -18,6 +18,8 @@ public sealed class CommerceModule : IModule
     {
         services.AddScoped<Admin.StoreAdminService>();
         services.AddScoped<Storefront.StorefrontCatalog>();
+        services.AddScoped<Storefront.StockAvailability>();
+        services.AddScoped<Storefront.CartService>();
         services.AddScoped<ITenantProvisioner, Provisioning.CommerceProvisioner>();
         services.AddSingleton<IPermissionProvider, CommercePermissionProvider>();
     }

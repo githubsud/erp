@@ -85,6 +85,28 @@ public sealed class ListingImage : TenantEntity
     public int SortOrder { get; set; }
 }
 
+public enum CartStatus { Open, CheckedOut }
+
+/// <summary>An anonymous shopper's basket, found by the SHA-256 hash of the key the browser keeps.</summary>
+public sealed class Cart : TenantEntity
+{
+    public Guid StoreId { get; init; }
+    public required string TokenHash { get; init; }
+    public CartStatus Status { get; set; } = CartStatus.Open;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public List<CartLine> Lines { get; init; } = [];
+}
+
+/// <summary>A product in a cart, in <see cref="UomId"/> (a pack such as a box) or, without it, the item's base unit.</summary>
+public sealed class CartLine : TenantEntity
+{
+    public Guid CartId { get; init; }
+    public Guid ListingId { get; init; }
+    public Guid ItemId { get; init; }
+    public Guid? UomId { get; init; }
+    public decimal Quantity { get; set; }
+}
+
 /// <summary>URL slugs: lower-case letters, digits and single hyphens.</summary>
 public static partial class Slugs
 {
@@ -137,6 +159,24 @@ internal sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
     {
         b.ToTable("listing", "commerce");
         b.Property(x => x.Version).HasXminConcurrency();
+    }
+}
+
+internal sealed class CartConfiguration : IEntityTypeConfiguration<Cart>
+{
+    public void Configure(EntityTypeBuilder<Cart> b)
+    {
+        b.ToTable("cart", "commerce");
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.CartId);
+    }
+}
+
+internal sealed class CartLineConfiguration : IEntityTypeConfiguration<CartLine>
+{
+    public void Configure(EntityTypeBuilder<CartLine> b)
+    {
+        b.ToTable("cart_line", "commerce");
+        b.Property(x => x.Quantity).AsQuantity();
     }
 }
 
