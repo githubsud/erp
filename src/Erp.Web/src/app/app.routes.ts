@@ -24,6 +24,18 @@ export const routes: Routes = [
     ]
   },
   {
+    // The online store for shoppers: anonymous, its own layout.
+    path: 'shop/:slug',
+    loadComponent: () => import('./features/shop/shop').then((m) => m.ShopShell),
+    children: [
+      { path: '', loadComponent: () => import('./features/shop/shop').then((m) => m.ShopHomePage) },
+      { path: 'p/:product', loadComponent: () => import('./features/shop/shop').then((m) => m.ShopProductPage) },
+      { path: 'cart', loadComponent: () => import('./features/shop/shop').then((m) => m.ShopCartPage) },
+      { path: 'checkout', loadComponent: () => import('./features/shop/shop').then((m) => m.ShopCheckoutPage) },
+      { path: 'order/:orderNo', loadComponent: () => import('./features/shop/shop').then((m) => m.ShopOrderPage) }
+    ]
+  },
+  {
     path: 'change-password',
     canActivate: [sessionGuard],
     loadComponent: () => import('./features/login/change-password').then((m) => m.ChangePasswordPage)

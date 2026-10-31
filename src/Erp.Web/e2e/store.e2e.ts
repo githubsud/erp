@@ -35,7 +35,8 @@ test('an online cash-on-delivery order is delivered and its cash received from t
     slug, nameEn: 'E2E Grocery', nameAr: 'بقالة الاختبار', codEnabled: true, minOrder: 0, deliveryFee: 10, status: 'Open',
     warehouseId: (warehouses.find((w) => w.code === 'MAIN') ?? warehouses[0]).id, deliveryItemId: delivery.id
   });
-  await owner.post('commerce/listings', { itemId: items.items.find((i) => i.sku === tea.sku)!.id, slug: tea.sku.toLowerCase(), isPublished: true });
+  // Publishing is safe to repeat (the phone shop test lists tea too); a new listing takes the SKU as its address.
+  await owner.post('commerce/listings/publish', { itemIds: [items.items.find((i) => i.sku === tea.sku)!.id], publish: true });
   const orderNo = await shopperOrders(baseURL!, slug, tea.sku, 2);
 
   await signIn(page);

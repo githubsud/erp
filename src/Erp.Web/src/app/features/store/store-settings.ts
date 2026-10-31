@@ -11,7 +11,14 @@ import { SHARED } from '../../shared/shared';
   selector: 'app-store-settings',
   imports: [...SHARED],
   template: `
-    <div class="page-header"><h1>{{ 'store.settings' | t }}</h1></div>
+    <div class="page-header">
+      <h1>{{ 'store.settings' | t }}</h1>
+      <span class="spacer"></span>
+      @if (savedSlug()) {
+        <a mat-stroked-button [href]="shopLink()" target="_blank" rel="noopener"><mat-icon>open_in_new</mat-icon> {{ 'store.openShop' | t }}</a>
+      }
+    </div>
+    @if (savedSlug()) { <p class="secondary">{{ 'store.shopLink' | t }} <a class="ltr" [href]="shopLink()" target="_blank" rel="noopener">{{ shopLink() }}</a></p> }
     <mat-card appearance="outlined" class="form-card">
       <form [formGroup]="form" class="form-grid" (ngSubmit)="save()">
         <mat-form-field>
@@ -70,6 +77,11 @@ import { SHARED } from '../../shared/shared';
         <div class="actions"><button mat-flat-button [disabled]="form.invalid || saving()">{{ 'app.save' | t }}</button></div>
       </form>
     </mat-card>
+  `,
+  styles: `
+    .page-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .spacer { flex: 1; }
+    .secondary { color: var(--mat-sys-on-surface-variant); font-size: 13px; }
   `
 })
 export class StoreSettingsPage implements OnInit {
@@ -81,6 +93,8 @@ export class StoreSettingsPage implements OnInit {
   protected readonly warehouses = signal<Master[]>([]);
   protected readonly services = signal<Item[]>([]);
   protected readonly saving = signal(false);
+  protected readonly savedSlug = signal('');
+  protected readonly shopLink = () => `${location.origin}/shop/${this.savedSlug()}`;
   protected readonly form = this.fb.group({
     status: this.fb.nonNullable.control<StoreStatus>('Draft'),
     slug: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/), Validators.minLength(3)]),
@@ -98,7 +112,13 @@ export class StoreSettingsPage implements OnInit {
   ngOnInit(): void {
     this.trade.warehouses().subscribe((list) => this.warehouses.set(list.filter((w) => w.isActive)));
     this.trade.items({ type: 'Service', active: true, pageSize: 200 }).subscribe((page) => this.services.set(page.items));
-    this.commerce.store().subscribe({ next: (s) => this.form.patchValue(s), error: (e) => this.notify.error(e) });
+    this.commerce.store().subscribe({
+      next: (s) => {
+        this.form.patchValue(s);
+        this.savedSlug.set(s.slug);
+      },
+      error: (e) => this.notify.error(e)
+    });
   }
 
   protected save(): void {
@@ -107,6 +127,7 @@ export class StoreSettingsPage implements OnInit {
     this.commerce.saveStore({ ...v, phone: v.phone || null, host: v.host || null }).subscribe({
       next: (s) => {
         this.form.patchValue(s);
+        this.savedSlug.set(s.slug);
         this.saving.set(false);
         this.notify.success();
       },
