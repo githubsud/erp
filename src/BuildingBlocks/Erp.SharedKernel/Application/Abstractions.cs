@@ -13,7 +13,11 @@ public interface ITenantContext
     /// <summary>The acting user, or <see cref="SystemUser.Id"/> for background work.</summary>
     Guid ActingUserId { get; }
 
-    /// <summary>Switch context. Only used by authentication, provisioning and background jobs.</summary>
+    /// <summary>
+    /// Switch context. Only used by authentication, provisioning, background jobs and the storefront, which resolves an anonymous
+    /// shopper's tenant and company from the store's public slug or host (Commerce <c>StorefrontTenant</c>); row-level security
+    /// still applies to every query after it.
+    /// </summary>
     void Set(Guid tenantId, Guid? companyId, Guid? userId);
 }
 

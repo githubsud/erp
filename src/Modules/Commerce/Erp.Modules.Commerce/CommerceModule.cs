@@ -17,6 +17,7 @@ public sealed class CommerceModule : IModule
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<Admin.StoreAdminService>();
+        services.AddScoped<Storefront.StorefrontCatalog>();
         services.AddScoped<ITenantProvisioner, Provisioning.CommerceProvisioner>();
         services.AddSingleton<IPermissionProvider, CommercePermissionProvider>();
     }
@@ -24,5 +25,6 @@ public sealed class CommerceModule : IModule
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
         Admin.StoreAdminEndpoints.Map(app);
+        Storefront.StorefrontEndpoints.Map(app);
     }
 }
