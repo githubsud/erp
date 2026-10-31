@@ -36,7 +36,8 @@ public sealed record QuotationDto(Guid Id, string QuoteNo, Guid CustomerId, stri
 
 public sealed record SalesOrderDto(Guid Id, string SoNo, Guid CustomerId, string CustomerCode, string CustomerNameEn, string CustomerNameAr, DateOnly OrderDate,
     DateOnly? ExpectedDate, Guid WarehouseId, string? CustomerRef, Guid? QuotationId, string Status, decimal Total, string? Notes, string? CreditWarning,
-    DateTimeOffset? CreditApprovedAt, IReadOnlyList<SalesLineDto> Lines, string Currency = "QAR", decimal ExchangeRate = 1m);
+    DateTimeOffset? CreditApprovedAt, IReadOnlyList<SalesLineDto> Lines, string Currency = "QAR", decimal ExchangeRate = 1m, string Channel = "Direct",
+    string? ExternalRef = null);
 
 public sealed record DeliveryLineDto(Guid Id, int LineNo, Guid SalesOrderLineId, Guid ItemId, string Sku, string NameEn, string NameAr, string UomCode,
     decimal Quantity, decimal UnitCost, decimal Cost, decimal QuantityInvoiced);
@@ -372,7 +373,7 @@ internal static class SalesEndpoints
             customers[o.CustomerId].NameAr, o.OrderDate, o.ExpectedDate, o.WarehouseId, o.CustomerRef, o.QuotationId, o.Status.ToString(), o.Total, o.Notes,
             o.CreditWarning, o.CreditApprovedAt,
             o.Lines.OrderBy(l => l.LineNo).Select(l => Line(l, l.Id, l.LineNo, l.Description, l.QuantityDelivered, l.QuantityInvoiced, items, codes)).ToList(),
-            o.Currency, o.ExchangeRate)).ToList();
+            o.Currency, o.ExchangeRate, o.Channel.ToString(), o.ExternalRef)).ToList();
     }
 
     private static async Task<List<DeliveryNoteDto>> DeliveriesAsync(ErpDbContext db, ITenantContext t, IInventoryQueries inv, Guid? id, Guid? orderId,

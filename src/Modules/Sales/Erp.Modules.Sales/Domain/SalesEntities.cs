@@ -112,6 +112,9 @@ public sealed class QuotationLine : TenantEntity, IPricedLine
 
 public enum SalesOrderStatus { Draft, CreditHold, Confirmed, PartiallyDelivered, Delivered, Closed, Cancelled }
 
+/// <summary>Where an order came from: entered by staff, from the till, or from the online store.</summary>
+public enum SalesChannel { Direct, Pos, Online }
+
 public sealed class SalesOrder : TenantEntity
 {
     public Guid CompanyId { get; init; }
@@ -123,6 +126,10 @@ public sealed class SalesOrder : TenantEntity
     public string? CustomerRef { get; set; }
     public Guid? QuotationId { get; set; }
     public SalesOrderStatus Status { get; set; } = SalesOrderStatus.Draft;
+    public SalesChannel Channel { get; init; } = SalesChannel.Direct;
+
+    /// <summary>The store's own order number for online orders.</summary>
+    public string? ExternalRef { get; init; }
 
     /// <summary>Amounts are in <see cref="Currency"/>; the rate values open orders in QAR for the credit check.</summary>
     public string Currency { get; set; } = "QAR";
