@@ -31,5 +31,6 @@ public sealed class CommerceModule : IModule
     {
         Admin.StoreAdminEndpoints.Map(app);
         Storefront.StorefrontEndpoints.Map(app);
+        Admin.OnlineOrdersAdmin.Map(app);
     }
 }

@@ -74,6 +74,14 @@ const NAV: NavGroup[] = [
     ]
   },
   {
+    label: 'nav.store',
+    items: [
+      { icon: 'shopping_cart_checkout', label: 'nav.storeOrders', link: '/store/orders', permission: 'commerce.order:view' },
+      { icon: 'inventory', label: 'nav.storeProducts', link: '/store/products', permission: 'commerce.listing:edit' },
+      { icon: 'storefront', label: 'nav.storeSettings', link: '/store/settings', permission: 'commerce.store:manage' }
+    ]
+  },
+  {
     label: 'nav.trade',
     items: [
       { icon: 'factory', label: 'nav.suppliers', link: '/purchasing/suppliers', permission: 'pur.suppliers:read' },

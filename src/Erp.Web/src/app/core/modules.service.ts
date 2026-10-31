@@ -71,6 +71,7 @@ export class ModulesService {
     if (starts('/salon')) return 'salon';
     if (starts('/workshop')) return 'workshop';
     if (starts('/ai') || link === '/settings/ai') return 'ai';
+    if (starts('/store')) return 'commerce';
     if (link.startsWith('/sales')) return 'sales';
     if (link.startsWith('/purchasing')) return 'purchasing';
     if (link.startsWith('/inventory') || link === '/settings/trade') return 'inventory';

@@ -38,8 +38,8 @@ export class Api {
     return this.send<T>('POST', path, body, headers);
   }
 
-  put<T>(path: string, body: unknown): Promise<T> {
-    return this.send<T>('PUT', path, body);
+  put<T>(path: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
+    return this.send<T>('PUT', path, body, headers);
   }
 
   private async send<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {

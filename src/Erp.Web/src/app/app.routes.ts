@@ -376,6 +376,21 @@ export const routes: Routes = [
         loadComponent: () => import('./features/sales/receipts').then((m) => m.ReceiptsPage)
       },
       {
+        path: 'store/orders',
+        canActivate: [permissionGuard('commerce.order:view')],
+        loadComponent: () => import('./features/store/online-orders').then((m) => m.OnlineOrdersPage)
+      },
+      {
+        path: 'store/products',
+        canActivate: [permissionGuard('commerce.listing:edit')],
+        loadComponent: () => import('./features/store/store-products').then((m) => m.StoreProductsPage)
+      },
+      {
+        path: 'store/settings',
+        canActivate: [permissionGuard('commerce.store:manage')],
+        loadComponent: () => import('./features/store/store-settings').then((m) => m.StoreSettingsPage)
+      },
+      {
         path: 'sales/leaks',
         canActivate: [permissionGuard('sal.reports:read')],
         loadComponent: () => import('./features/sales/leaks').then((m) => m.LeaksPage)
