@@ -157,3 +157,11 @@ span.secondary, b + .secondary { margin-inline-start: 6px; }
 /* Status chips and row action buttons stay on one line. */
 .chip { white-space: nowrap; }
 td.mat-column-actions { white-space: nowrap; }
+
+/* Printing a statement or a receipt prints the page, not the menu and toolbar around it. */
+@media print {
+  .drawer, .toolbar, .no-print { display: none !important; }
+  .mat-drawer-content, .mat-sidenav-content { margin: 0 !important; }
+  .content { padding: 0 !important; }
+  body { background: #fff; }
+}

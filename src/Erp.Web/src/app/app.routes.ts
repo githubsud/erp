@@ -219,6 +219,36 @@ export const routes: Routes = [
         loadComponent: () => import('./features/purchasing/sourcing').then((m) => m.BlanketDetailPage)
       },
       {
+        path: 'purchasing/partner-shops',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/partner-shops').then((m) => m.PartnerShopsPage)
+      },
+      {
+        path: 'purchasing/partner-shops/commissions',
+        canActivate: [permissionGuard('pur.reports:read')],
+        loadComponent: () => import('./features/purchasing/partner-shops').then((m) => m.PartnerCommissionsPage)
+      },
+      {
+        path: 'purchasing/partner-shops/receipts/:movementId',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/partner-shops').then((m) => m.GoodsSlipPage)
+      },
+      {
+        path: 'purchasing/partner-shops/statements/:settlementId',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/partner-shops').then((m) => m.ShopStatementPage)
+      },
+      {
+        path: 'purchasing/partner-shops/:id/statement',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/partner-shops').then((m) => m.ShopStatementPage)
+      },
+      {
+        path: 'purchasing/partner-shops/:id',
+        canActivate: [permissionGuard('pur.suppliers:read')],
+        loadComponent: () => import('./features/purchasing/partner-shops').then((m) => m.PartnerShopPage)
+      },
+      {
         path: 'purchasing/subcontracts',
         canActivate: [permissionGuard('pur.suppliers:read')],
         loadComponent: () => import('./features/purchasing/subcontracts').then((m) => m.SubcontractsPage)
