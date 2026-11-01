@@ -13,8 +13,14 @@ public sealed class BusinessRuleException(string code, string message, string? m
     : ErpException(code, message, messageAr);
 
 /// <summary>Entity does not exist for the current tenant (HTTP 404).</summary>
-public sealed class NotFoundException(string entity, object key)
-    : ErpException("not_found", $"{entity} '{key}' was not found.", $"لم يتم العثور على {entity} '{key}'.");
+public sealed class NotFoundException : ErpException
+{
+    public NotFoundException(string entity, object key)
+        : base("not_found", $"{entity} '{key}' was not found.", $"لم يتم العثور على {entity} '{key}'.") { }
+
+    /// <summary>For a missing thing the user can fix, with a message that says how.</summary>
+    public NotFoundException(string code, string message, string messageAr) : base(code, message, messageAr) { }
+}
 
 /// <summary>State conflict such as a duplicate code or concurrent edit (HTTP 409).</summary>
 public sealed class ConflictException(string code, string message, string? messageAr = null)

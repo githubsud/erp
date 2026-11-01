@@ -2397,6 +2397,7 @@ export const en = {
   'store.deliveryItem': 'Delivery fee item',
   'store.deliveryItemHint': 'A service item, needed when there is a delivery fee.',
   'store.products': 'Products in store',
+  'store.setUpFirst': 'The online store is not set up yet. Save the store settings first, then put products in the store and add their photos.',
   'store.productsHint': 'Switch on the products shoppers can buy. Prices and stock come from the items.',
   'store.inStoreCount': '{n} in store',
   'store.publishShown': 'Add all shown',

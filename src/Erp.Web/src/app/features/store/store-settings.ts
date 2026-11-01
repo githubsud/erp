@@ -1,6 +1,6 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
-import { CommerceApi, StoreStatus } from '../../core/commerce.api';
+import { CommerceApi, StoreStatus, isNotSetUp } from '../../core/commerce.api';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import { Item, Master } from '../../core/trade.models';
@@ -117,7 +117,8 @@ export class StoreSettingsPage implements OnInit {
         this.form.patchValue(s);
         this.savedSlug.set(s.slug);
       },
-      error: (e) => this.notify.error(e)
+      // A store that was never saved starts from the empty form.
+      error: (e) => isNotSetUp(e) || this.notify.error(e)
     });
   }
 

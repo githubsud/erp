@@ -1,6 +1,12 @@
 import { inject, Injectable } from '@angular/core';
 import { ApiService } from './api.service';
 
+/** The company has never saved its store settings (the server answers 404 with this code). */
+export function isNotSetUp(error: unknown): boolean {
+  return (error as { status?: number; error?: { code?: string } })?.status === 404
+    && (error as { error?: { code?: string } }).error?.code === 'commerce.store_not_set_up';
+}
+
 export type StoreStatus = 'Draft' | 'Open' | 'Closed';
 
 export interface Store {

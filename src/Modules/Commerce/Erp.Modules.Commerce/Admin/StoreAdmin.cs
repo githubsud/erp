@@ -38,8 +38,12 @@ public sealed record ListingDto(Guid Id, Guid ItemId, string Sku, string Slug, s
 /// <summary>Store settings, categories and listings of the signed-in company.</summary>
 internal sealed class StoreAdminService(ErpDbContext db, ITenantContext tenant, IInventoryQueries inventory, IClock clock)
 {
+    public const string NotSetUp = "commerce.store_not_set_up";
+
     public async Task<Store> StoreAsync(CancellationToken ct) =>
-        await db.Set<Store>().SingleOrDefaultAsync(s => s.CompanyId == tenant.RequireCompanyId(), ct) ?? throw new NotFoundException("Store", "company");
+        await db.Set<Store>().SingleOrDefaultAsync(s => s.CompanyId == tenant.RequireCompanyId(), ct)
+        ?? throw new NotFoundException(NotSetUp, "The online store is not set up yet. Save the store settings first.",
+            "لم يتم إعداد المتجر الإلكتروني بعد. احفظ إعدادات المتجر أولاً.");
 
     public async Task<string?> HostAsync(Store store, CancellationToken ct) =>
         await DirectoryOf(store).Select(d => d.Host).SingleOrDefaultAsync(ct);

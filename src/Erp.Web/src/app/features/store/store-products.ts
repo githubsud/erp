@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 import { debounceTime, Observable } from 'rxjs';
-import { CommerceApi, StoreListing } from '../../core/commerce.api';
+import { CommerceApi, isNotSetUp, StoreListing } from '../../core/commerce.api';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import { Item } from '../../core/trade.models';
@@ -23,13 +23,20 @@ import { StorePhotosData, StorePhotosDialog } from './store-photos';
       <span class="secondary">{{ 'store.inStoreCount' | t: { n: publishedCount() } }}</span>
     </div>
     <p class="secondary">{{ 'store.productsHint' | t }}</p>
+    @if (notSetUp()) {
+      <mat-card appearance="outlined" class="setup-banner">
+        <mat-icon>storefront</mat-icon>
+        <span>{{ 'store.setUpFirst' | t }}</span>
+        <a mat-flat-button routerLink="/store/settings">{{ 'store.settings' | t }}</a>
+      </mat-card>
+    }
     <div class="tools">
       <mat-form-field subscriptSizing="dynamic" class="search">
         <mat-label>{{ 'app.search' | t }}</mat-label>
         <input matInput [formControl]="search" />
         <mat-icon matSuffix>search</mat-icon>
       </mat-form-field>
-      <button mat-stroked-button [disabled]="!items().length || busy()" (click)="publishShown()"><mat-icon>publish</mat-icon> {{ 'store.publishShown' | t }}</button>
+      <button mat-stroked-button [disabled]="!items().length || busy() || notSetUp()" (click)="publishShown()"><mat-icon>publish</mat-icon> {{ 'store.publishShown' | t }}</button>
     </div>
     <div class="table-wrap">
       <table class="products">
@@ -40,7 +47,7 @@ import { StorePhotosData, StorePhotosDialog } from './store-photos';
               <td class="ltr">{{ i.sku }}</td>
               <td>{{ i | bi }}</td>
               <td class="num">{{ i.salesPrice ?? 0 | money }}</td>
-              <td><mat-slide-toggle [checked]="published(i.id)" [disabled]="busy() || i.salesPrice === null" (change)="toggle(i, $event.checked)"
+              <td><mat-slide-toggle [checked]="published(i.id)" [disabled]="busy() || notSetUp() || i.salesPrice === null" (change)="toggle(i, $event.checked)"
                 [attr.aria-label]="('store.inStore' | t) + ' ' + i.sku" /></td>
               <td>
                 @if (listingOf(i.id); as l) {
@@ -62,6 +69,9 @@ import { StorePhotosData, StorePhotosDialog } from './store-photos';
     .secondary { color: var(--mat-sys-on-surface-variant); font-size: 13px; }
     .tools { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-block-end: 12px; }
     .search { min-width: 260px; }
+    .setup-banner { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin-block-end: 16px; flex-wrap: wrap;
+      background: var(--mat-sys-secondary-container); }
+    .setup-banner span { flex: 1; min-width: 200px; }
     .products { border-collapse: collapse; width: 100%; }
     .products th, .products td { padding: 8px 12px; border-bottom: 1px solid var(--mat-sys-outline-variant); text-align: start; }
     .products .num { text-align: end; }
@@ -80,6 +90,8 @@ export class StoreProductsPage implements OnInit {
   protected readonly items = signal<Item[]>([]);
   protected readonly listings = signal<StoreListing[]>([]);
   protected readonly busy = signal(false);
+  /** The store settings were never saved: nothing can be put in the store until they are. */
+  protected readonly notSetUp = signal(false);
   protected readonly publishedCount = computed(() => this.listings().filter((l) => l.isPublished).length);
   private readonly publishedIds = computed(() => new Set(this.listings().filter((l) => l.isPublished).map((l) => l.itemId)));
   private readonly byItem = computed(() => new Map(this.listings().map((l) => [l.itemId, l])));
@@ -148,6 +160,12 @@ export class StoreProductsPage implements OnInit {
   }
 
   private loadListings(): void {
-    this.commerce.listings().subscribe({ next: (list) => this.listings.set(list), error: (e) => this.notify.error(e) });
+    this.commerce.listings().subscribe({
+      next: (list) => {
+        this.notSetUp.set(false);
+        this.listings.set(list);
+      },
+      error: (e) => (isNotSetUp(e) ? this.notSetUp.set(true) : this.notify.error(e))
+    });
   }
 }

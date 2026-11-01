@@ -2399,6 +2399,7 @@ export const ar: Record<TranslationKey, string> = {
   'store.deliveryItem': 'صنف رسوم التوصيل',
   'store.deliveryItemHint': 'صنف خدمة، مطلوب عند وجود رسوم توصيل.',
   'store.products': 'منتجات المتجر',
+  'store.setUpFirst': 'لم يتم إعداد المتجر الإلكتروني بعد. احفظ إعدادات المتجر أولاً، ثم أضف المنتجات إلى المتجر وأضف صورها.',
   'store.productsHint': 'فعّل المنتجات التي يمكن للمتسوقين شراؤها. الأسعار والمخزون تأتي من الأصناف.',
   'store.inStoreCount': '{n} في المتجر',
   'store.publishShown': 'إضافة كل المعروض',
