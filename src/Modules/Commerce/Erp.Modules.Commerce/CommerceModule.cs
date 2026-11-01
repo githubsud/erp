@@ -18,6 +18,7 @@ public sealed class CommerceModule : IModule
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<Admin.StoreAdminService>();
+        services.AddScoped<Admin.ListingPhotos>();
         services.AddScoped<Storefront.StorefrontCatalog>();
         services.AddScoped<Storefront.StockAvailability>();
         services.AddScoped<Storefront.CartService>();
@@ -30,6 +31,7 @@ public sealed class CommerceModule : IModule
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
         Admin.StoreAdminEndpoints.Map(app);
+        Admin.ListingPhotoEndpoints.Map(app);
         Storefront.StorefrontEndpoints.Map(app);
         Admin.OnlineOrdersAdmin.Map(app);
     }

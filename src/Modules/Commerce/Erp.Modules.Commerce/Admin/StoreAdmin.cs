@@ -31,8 +31,9 @@ public sealed record ListingRequest(Guid ItemId, string? Slug, string? TitleEn, 
 
 public sealed record PublishRequest(IReadOnlyList<Guid> ItemIds, bool Publish = true);
 
+/// <summary>Images: the photo ids in the order shoppers see them.</summary>
 public sealed record ListingDto(Guid Id, Guid ItemId, string Sku, string Slug, string TitleEn, string TitleAr, string? DescriptionEn, string? DescriptionAr,
-    Guid? CategoryId, bool IsPublished, int SortOrder);
+    Guid? CategoryId, bool IsPublished, int SortOrder, IReadOnlyList<Guid> Images);
 
 /// <summary>Store settings, categories and listings of the signed-in company.</summary>
 internal sealed class StoreAdminService(ErpDbContext db, ITenantContext tenant, IInventoryQueries inventory, IClock clock)
@@ -242,17 +243,18 @@ internal static class StoreAdminEndpoints
             var store = await s.StoreAsync(ct);
             var listings = await db.Set<Listing>().AsNoTracking().Where(l => l.StoreId == store.Id).OrderBy(l => l.SortOrder).ThenBy(l => l.TitleEn).ToListAsync(ct);
             var items = await inventory.GetItemsAsync(listings.Select(l => l.ItemId), ct);
-            return listings.Select(l => ToDto(l, items.GetValueOrDefault(l.ItemId)?.Sku ?? ""));
+            var images = await ImagesAsync(db, listings.Select(l => l.Id).ToList(), ct);
+            return listings.Select(l => ToDto(l, items.GetValueOrDefault(l.ItemId)?.Sku ?? "", images));
         }).RequirePermission(CommercePermissions.ListingEdit);
-        g.MapPost("/listings", async (ListingRequest r, StoreAdminService s, IInventoryQueries inventory, CancellationToken ct) =>
+        g.MapPost("/listings", async (ListingRequest r, StoreAdminService s, ErpDbContext db, IInventoryQueries inventory, CancellationToken ct) =>
         {
             var listing = await s.SaveListingAsync(null, r, ct);
-            return ToDto(listing, (await inventory.GetItemsAsync([listing.ItemId], ct))[listing.ItemId].Sku);
+            return ToDto(listing, (await inventory.GetItemsAsync([listing.ItemId], ct))[listing.ItemId].Sku, await ImagesAsync(db, [listing.Id], ct));
         }).RequirePermission(CommercePermissions.ListingEdit);
-        g.MapPut("/listings/{id:guid}", async (Guid id, ListingRequest r, StoreAdminService s, IInventoryQueries inventory, CancellationToken ct) =>
+        g.MapPut("/listings/{id:guid}", async (Guid id, ListingRequest r, StoreAdminService s, ErpDbContext db, IInventoryQueries inventory, CancellationToken ct) =>
         {
             var listing = await s.SaveListingAsync(id, r, ct);
-            return ToDto(listing, (await inventory.GetItemsAsync([listing.ItemId], ct))[listing.ItemId].Sku);
+            return ToDto(listing, (await inventory.GetItemsAsync([listing.ItemId], ct))[listing.ItemId].Sku, await ImagesAsync(db, [listing.Id], ct));
         }).RequirePermission(CommercePermissions.ListingEdit);
         g.MapPost("/listings/publish", async (PublishRequest r, StoreAdminService s, CancellationToken ct) => new { count = await s.PublishAsync(r, ct) })
             .RequirePermission(CommercePermissions.ListingEdit);
@@ -263,6 +265,10 @@ internal static class StoreAdminEndpoints
 
     private static CategoryDto ToDto(Category c) => new(c.Id, c.Slug, c.NameEn, c.NameAr, c.ParentId, c.ItemGroupId, c.SortOrder, c.IsActive);
 
-    private static ListingDto ToDto(Listing l, string sku) =>
-        new(l.Id, l.ItemId, sku, l.Slug, l.TitleEn, l.TitleAr, l.DescriptionEn, l.DescriptionAr, l.CategoryId, l.IsPublished, l.SortOrder);
+    private static ListingDto ToDto(Listing l, string sku, ILookup<Guid, Guid> images) =>
+        new(l.Id, l.ItemId, sku, l.Slug, l.TitleEn, l.TitleAr, l.DescriptionEn, l.DescriptionAr, l.CategoryId, l.IsPublished, l.SortOrder, images[l.Id].ToList());
+
+    private static async Task<ILookup<Guid, Guid>> ImagesAsync(ErpDbContext db, List<Guid> listingIds, CancellationToken ct) =>
+        (await db.Set<ListingImage>().AsNoTracking().Where(i => listingIds.Contains(i.ListingId)).OrderBy(i => i.SortOrder).ThenBy(i => i.Id)
+            .Select(i => new { i.ListingId, i.Id }).ToListAsync(ct)).ToLookup(i => i.ListingId, i => i.Id);
 }

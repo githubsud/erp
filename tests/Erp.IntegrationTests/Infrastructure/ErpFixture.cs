@@ -44,6 +44,9 @@ public sealed class ErpFixture : IAsyncLifetime
     public WebApplicationFactory<Program> Factory => _factory ?? throw new InvalidOperationException("Fixture not started.");
     public string OwnerConnectionString { get; private set; } = "";
 
+    /// <summary>Product photos and other files of this test run.</summary>
+    public string FilesRoot { get; } = Path.Combine(Path.GetTempPath(), "erp-test-files-" + Guid.NewGuid().ToString("N")[..8]);
+
     public string AppConnectionString =>
         new NpgsqlConnectionStringBuilder(OwnerConnectionString) { Username = "erp_app", Password = AppPassword }.ToString();
 
@@ -76,6 +79,7 @@ public sealed class ErpFixture : IAsyncLifetime
             builder.UseSetting("Commerce:BrowseRequestsPerMinute", "100000");
             builder.UseSetting("Commerce:CartChangesPerMinute", "100000");
             builder.UseSetting("Commerce:CheckoutsPerMinute", "100000");
+            builder.UseSetting("Storage:FilesRoot", FilesRoot);
             builder.ConfigureTestServices(services => services.AddSingleton<IAiChatClient>(Ai));
         });
         _ = _factory.Server; // starts the host and runs migrations
@@ -84,6 +88,7 @@ public sealed class ErpFixture : IAsyncLifetime
     public async Task DisposeAsync()
     {
         if (_factory is not null) await _factory.DisposeAsync();
+        if (Directory.Exists(FilesRoot)) Directory.Delete(FilesRoot, recursive: true);
         if (_container is not null) await _container.DisposeAsync();
         else if (_serverConnectionString is not null && _databaseName is not null)
         {

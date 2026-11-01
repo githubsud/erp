@@ -49,5 +49,8 @@ internal static class StorefrontTenant
     public static Store Current(HttpContext http) =>
         http.Items[ItemKey] as Store ?? throw new InvalidOperationException("No storefront store was resolved for this request.");
 
+    /// <summary>The store as this request names it: its slug, or <see cref="Slugs.HostSlug"/> when found by its own domain.</summary>
+    public static string RouteSlug(HttpContext http) => (http.GetRouteValue("slug") as string ?? "").Trim().ToLowerInvariant();
+
     private static NotFoundException NotFound(string slug) => new("Store", slug);
 }

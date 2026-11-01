@@ -195,6 +195,11 @@ if (-not (Sql 'postgres' "SELECT 1 FROM pg_database WHERE datname = 'erp'")) {
     }
 }
 
+# Product photos and other files: beside the program folder, never inside it (an update replaces the program folder).
+if (-not $settings.Storage) { $settings | Add-Member -NotePropertyName Storage -NotePropertyValue ([pscustomobject]@{ FilesRoot = (Join-Path $InstallDir 'files') }) }
+elseif (-not $settings.Storage.FilesRoot) { $settings.Storage | Add-Member -NotePropertyName FilesRoot -NotePropertyValue (Join-Path $InstallDir 'files') -Force }
+$filesDir = $settings.Storage.FilesRoot
+
 # Written now, so a failure later never loses the new keys.
 $settings | ConvertTo-Json -Depth 5 | Set-Content $configFile -Encoding utf8
 icacls $configDir /inheritance:r /grant:r 'BUILTIN\Administrators:(OI)(CI)F' 'NT AUTHORITY\SYSTEM:(OI)(CI)F' /Q | Out-Null
@@ -221,6 +226,8 @@ if (-not (Get-Service $ApiService -ErrorAction SilentlyContinue)) {
 }
 icacls $appDir /grant "NT SERVICE\${ApiService}:(OI)(CI)RX" /T /Q | Out-Null
 icacls $configDir /grant "NT SERVICE\${ApiService}:(OI)(CI)R" /Q | Out-Null
+New-Item -ItemType Directory -Force $filesDir | Out-Null
+icacls $filesDir /grant "NT SERVICE\${ApiService}:(OI)(CI)M" /Q | Out-Null
 if (-not [Diagnostics.EventLog]::SourceExists('Erp.Api')) { New-EventLog -LogName Application -Source 'Erp.Api' }
 
 # A copy started by hand (development, dotnet run) would hold the port.

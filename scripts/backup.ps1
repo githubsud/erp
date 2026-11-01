@@ -16,6 +16,9 @@
   Where the database is: on a computer set up by install.ps1 the settings file C:\ERP\config\erp.json says (its own
   PostgreSQL service); otherwise the erp-postgres Docker container of a development laptop. -Docker forces the container.
 
+  Product photos (files outside the database) are copied into backups\files and, with -CopyTo, into <CopyTo>\files: new photos
+  only and nothing deleted, so whichever backup is restored later still finds its photos. restore.ps1 puts them back.
+
   IMPORTANT: QID, passport, IBAN and API keys are stored encrypted. A restore is only readable with the same
   Security:FieldEncryptionKey and Security:BlindIndexKey the API uses. Keep a copy of those keys somewhere safe and separate from the backups.
 
@@ -103,11 +106,20 @@ try {
     }
 
     Prune $Dir
+    if ($db.Files -and (Test-Path $db.Files)) {
+        robocopy $db.Files (Join-Path $Dir 'files') /E /XO /XF *.part /NFL /NDL /NJH /NJS /NP | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "copying the photos from $($db.Files) failed" }
+        $checked += ' - photos copied'
+    }
     if ($CopyTo) {
         New-Item -ItemType Directory -Force $CopyTo | Out-Null
         Copy-Item $file, "$file.sha256" $CopyTo
         if ((Get-FileHash (Join-Path $CopyTo $name) -Algorithm SHA256).Hash -ne $hash) { throw "the copy in $CopyTo is damaged" }
         Prune $CopyTo
+        if ($db.Files -and (Test-Path $db.Files)) {
+            robocopy $db.Files (Join-Path $CopyTo 'files') /E /XO /XF *.part /NFL /NDL /NJH /NJS /NP | Out-Null
+            if ($LASTEXITCODE -ge 8) { throw "copying the photos to $CopyTo failed" }
+        }
         $checked += " - copied to $CopyTo"
     }
 

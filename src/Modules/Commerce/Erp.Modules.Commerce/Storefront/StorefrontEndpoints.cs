@@ -1,4 +1,5 @@
 using Erp.Infrastructure.Persistence;
+using Erp.Modules.Commerce.Admin;
 using Erp.Modules.Commerce.Contracts;
 using Erp.Modules.Commerce.Domain;
 using Erp.Modules.Inventory.Contracts;
@@ -25,6 +26,7 @@ public sealed record PublicUnitDto(string UomCode, decimal Factor, decimal Price
 /// <summary>A car a spare part fits; years left out are open-ended.</summary>
 public sealed record PublicFitmentDto(string Make, string Model, int? YearFrom, int? YearTo, string? Engine);
 
+/// <summary>Images: photo addresses, the first one shown first.</summary>
 public sealed record PublicProductDto(string Slug, string TitleEn, string TitleAr, string? CategorySlug, decimal Price, string UomCode,
     IReadOnlyList<PublicUnitDto> Units, AvailabilityBand Availability, IReadOnlyList<string> Images, string? Brand,
     IReadOnlyList<PublicFitmentDto> Fits, string? DescriptionEn = null, string? DescriptionAr = null);
@@ -32,7 +34,8 @@ public sealed record PublicProductDto(string Slug, string TitleEn, string TitleA
 /// <summary>Published listings of the current store, priced as a guest through Sales and shown with availability bands.</summary>
 internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inventory, ISalesPricing pricing, StockAvailability availability)
 {
-    public async Task<IReadOnlyList<PublicProductDto>> ProductsAsync(Store store, string? categorySlug, string? search, string? productSlug,
+    /// <summary><paramref name="routeSlug"/>: the store as the request named it (its slug, or _ for its own domain), for photo addresses.</summary>
+    public async Task<IReadOnlyList<PublicProductDto>> ProductsAsync(Store store, string routeSlug, string? categorySlug, string? search, string? productSlug,
         bool withDescription, CancellationToken ct)
     {
         var categories = await db.Set<Category>().AsNoTracking().Where(c => c.StoreId == store.Id && c.IsActive).ToListAsync(ct);
@@ -64,8 +67,9 @@ internal sealed class StorefrontCatalog(ErpDbContext db, IInventoryQueries inven
         var prices = (await pricing.PriceAsync(null, basket, ct)).Lines.ToDictionary(p => (p.ItemId, p.UomId), p => p.UnitPrice);
 
         var listingIds = listings.Select(l => l.Id).ToList();
-        var images = (await db.Set<ListingImage>().AsNoTracking().Where(x => listingIds.Contains(x.ListingId)).OrderBy(x => x.SortOrder).ToListAsync(ct))
-            .ToLookup(x => x.ListingId, x => x.StorageKey);
+        var images = (await db.Set<ListingImage>().AsNoTracking().Where(x => listingIds.Contains(x.ListingId)).OrderBy(x => x.SortOrder).ThenBy(x => x.Id)
+                .Select(x => new { x.ListingId, x.Id }).ToListAsync(ct))
+            .ToLookup(x => x.ListingId, x => $"/api/store/{Uri.EscapeDataString(routeSlug)}/images/{x.Id}");
         var free = await availability.AvailableAsync(listings.Select(l => catalog[l.ItemId]), ct);
         string? CategoryOf(Listing l) =>
             (l.CategoryId is { } id ? categories.FirstOrDefault(c => c.Id == id)
@@ -111,13 +115,24 @@ internal static class StorefrontEndpoints
         {
             page = Math.Max(page, 1);
             pageSize = Math.Clamp(pageSize, 1, 100);
-            var products = await catalog.ProductsAsync(StorefrontTenant.Current(http), category, search, null, false, ct);
+            var products = await catalog.ProductsAsync(StorefrontTenant.Current(http), StorefrontTenant.RouteSlug(http), category, search, null, false, ct);
             return new PagedResult<PublicProductDto>(products.Skip((page - 1) * pageSize).Take(pageSize).ToList(), products.Count, page, pageSize);
         });
 
         g.MapGet("/products/{productSlug}", async (HttpContext http, string productSlug, StorefrontCatalog catalog, CancellationToken ct) =>
-            (await catalog.ProductsAsync(StorefrontTenant.Current(http), null, null, productSlug.Trim().ToLowerInvariant(), true, ct)).SingleOrDefault()
-            ?? throw new NotFoundException("Product", productSlug));
+            (await catalog.ProductsAsync(StorefrontTenant.Current(http), StorefrontTenant.RouteSlug(http), null, null, productSlug.Trim().ToLowerInvariant(), true, ct))
+            .SingleOrDefault() ?? throw new NotFoundException("Product", productSlug));
+
+        // Photos of published products only; the address carries the photo's id, which changes whenever the photo does.
+        g.MapGet("/images/{imageId:guid}", async (Guid imageId, HttpContext http, ErpDbContext db, IFileStore files, CancellationToken ct) =>
+        {
+            var store = StorefrontTenant.Current(http);
+            var key = await (from i in db.Set<ListingImage>()
+                             join l in db.Set<Listing>() on i.ListingId equals l.Id
+                             where i.Id == imageId && l.StoreId == store.Id && l.IsPublished
+                             select i.StorageKey).SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Photo", imageId);
+            return await PhotoFormat.ServeAsync(http, files, key, true, ct);
+        });
 
         g.MapPost("/cart", async (HttpContext http, CartService carts, CancellationToken ct) =>
         {

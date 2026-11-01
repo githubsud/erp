@@ -10,6 +10,9 @@
   Works on an installed computer (its own PostgreSQL service and the ErpApi service, from C:\ERP\config\erp.json) and on a
   development laptop (Docker container erp-postgres, -Docker to force it).
 
+  Product photos are put back from the files folder next to the backup (backup.ps1 keeps every photo there); photos already on
+  this computer stay.
+
   The API must run with the same Security:FieldEncryptionKey and Security:BlindIndexKey as when the backup was made, or QID, passport, IBAN and
   API keys cannot be read.
 
@@ -76,6 +79,12 @@ Psql "DROP DATABASE IF EXISTS $Database WITH (FORCE);"
 Psql "CREATE DATABASE $Database;"
 Invoke-ErpRestore $db $Database $File 'pg_restore failed. The safety copy can be restored with: restore.ps1 -File <before-restore dump>'
 Write-Host "Database restored from $when." -ForegroundColor Green
+$photos = Join-Path (Split-Path $File -Parent) 'files'
+if ($db.Files -and (Test-Path $photos)) {
+    robocopy $photos $db.Files /E /XO /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { Write-Host "Putting the photos back from $photos failed; copy that folder to $($db.Files) by hand." -ForegroundColor Yellow }
+    else { Write-Host 'Photos put back.' -ForegroundColor Green }
+}
 
 if (-not $NoStart) {
     if ($service) { Start-Service $service.Name }

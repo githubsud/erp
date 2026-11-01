@@ -13,9 +13,11 @@ function Get-ErpDatabase([string]$Config, [switch]$Docker, [string]$Container = 
         return [pscustomobject]@{
             Native = $true; Host = $parts['host']; Port = $parts['port']; User = $parts['username']; Password = $parts['password']
             Bin = $settings.Install.PgBin; ApiService = $settings.Install.ApiService; Container = $null
+            Files = if ($settings.Storage.FilesRoot) { $settings.Storage.FilesRoot } else { Join-Path (Split-Path (Split-Path $Config -Parent) -Parent) 'files' }
         }
     }
-    return [pscustomobject]@{ Native = $false; Container = $Container; ApiService = $null }
+    # A development laptop keeps files under the API project (appsettings.Development.json).
+    return [pscustomobject]@{ Native = $false; Container = $Container; ApiService = $null; Files = (Join-Path (Split-Path $PSScriptRoot -Parent) 'src\Erp.Api\App_Data\files') }
 }
 
 function Use-ErpPassword($db) { if ($db.Native) { $env:PGPASSWORD = $db.Password } }

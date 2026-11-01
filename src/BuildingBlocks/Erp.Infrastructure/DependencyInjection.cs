@@ -1,5 +1,6 @@
 using System.Reflection;
 using Erp.Infrastructure.Email;
+using Erp.Infrastructure.Files;
 using Erp.Infrastructure.Numbering;
 using Erp.Infrastructure.Outbox;
 using Erp.Infrastructure.Persistence;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Erp.Infrastructure;
@@ -25,6 +27,7 @@ public static class DependencyInjection
         var outbox = configuration.GetSection(OutboxOptions.Section).Get<OutboxOptions>() ?? new OutboxOptions();
         var security = configuration.GetSection(SecurityOptions.Section).Get<SecurityOptions>() ?? new SecurityOptions();
         var email = configuration.GetSection(EmailOptions.Section).Get<EmailOptions>() ?? new EmailOptions();
+        var storage = configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
         FieldProtector.Configure(security);
 
         var moduleAssemblies = modules.Select(m => m.Assembly).ToList();
@@ -37,6 +40,8 @@ public static class DependencyInjection
         services.AddSingleton(sp => new DatabaseMigrator(database, migrationAssemblies, sp.GetRequiredService<ILogger<DatabaseMigrator>>()));
 
         services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton(storage);
+        services.AddSingleton<IFileStore>(sp => new LocalFileStore(storage.ResolveRoot(sp.GetRequiredService<IHostEnvironment>().ContentRootPath)));
         services.AddSingleton(email);
         if (string.IsNullOrWhiteSpace(email.Host))
         {
