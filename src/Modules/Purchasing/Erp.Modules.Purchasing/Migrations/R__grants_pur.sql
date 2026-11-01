@@ -5,3 +5,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pur TO erp_app;
 REVOKE DELETE ON pur.goods_receipt, pur.goods_receipt_line, pur.landed_cost_voucher, pur.landed_cost_charge,
     pur.landed_cost_allocation, pur.supplier_payment, pur.supplier_payment_allocation FROM erp_app;
 REVOKE DELETE ON pur.debit_note, pur.debit_note_line FROM erp_app;
+
+-- Goods on trust: movements and settlements are reversed, never deleted.
+REVOKE DELETE ON pur.consignment_movement, pur.consignment_movement_line, pur.consignment_settlement FROM erp_app;

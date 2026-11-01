@@ -1,10 +1,44 @@
+using Erp.SharedKernel.Domain;
+
 namespace Erp.Modules.Inventory.Contracts;
 
 /// <summary>Stock items are counted and valued; service items (freight, maintenance, consultancy) are only bought or sold.</summary>
 public enum ItemType { Stock, Service }
 
+/// <summary><see cref="Consignment"/>: set when the item belongs to a partner shop and is sold on its behalf (goods on trust).</summary>
 public sealed record ItemInfo(Guid Id, string Sku, string NameEn, string NameAr, ItemType Type, Guid ItemGroupId, string UomCode, bool IsActive,
-    decimal? SalesPrice = null, bool TrackBatches = false, bool TrackSerials = false);
+    decimal? SalesPrice = null, bool TrackBatches = false, bool TrackSerials = false, ConsignmentTerms? Consignment = null);
+
+public enum CommissionType { Percent, Fixed }
+
+/// <summary>
+/// An item sold as the agent of its owner (a partner shop, kept as a supplier): the shop keeps ownership and the agent earns a commission known in
+/// advance, a percentage of the sale or a fixed amount per base unit. Goods on trust are held at zero cost, so stock value never includes them.
+/// </summary>
+public sealed record ConsignmentTerms(Guid ConsignorId, CommissionType CommissionType, decimal Commission)
+{
+    /// <summary>The agent's commission on a line (never more than the line), rounded like money.</summary>
+    public decimal CommissionOn(decimal amount, decimal baseQuantity)
+    {
+        var commission = CommissionType == CommissionType.Percent
+            ? Money.Round(amount * Commission / 100m)
+            : Money.Round(baseQuantity * Commission);
+        return Math.Clamp(commission, 0m, Math.Max(amount, 0m));
+    }
+}
+
+/// <summary>Puts items under a partner shop's terms, changes the terms, or takes them back (consignorId null). Called by Purchasing.</summary>
+public interface IConsignmentItems
+{
+    /// <summary>
+    /// Items must be stock items. An item can only change owner (ours ↔ a shop's, or one shop's to another's) while none of it is in stock, so
+    /// goods on trust and our own goods never share one valuation.
+    /// </summary>
+    Task SetAsync(IReadOnlyList<Guid> itemIds, ConsignmentTerms? terms, CancellationToken ct = default);
+
+    /// <summary>The items held for one partner shop.</summary>
+    Task<IReadOnlyList<Guid>> ItemsOfAsync(Guid consignorId, CancellationToken ct = default);
+}
 
 public static class Serials
 {

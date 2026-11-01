@@ -1,9 +1,18 @@
+using Erp.Modules.Inventory.Contracts;
 using Erp.SharedKernel.Domain;
 
 namespace Erp.Modules.Purchasing.Domain;
 
 public static class PurchasingRules
 {
+    /// <summary>A partner shop's goods are received on trust from that shop, never bought: buying them would mix them into our stock value.</summary>
+    public static void RefuseGoodsOnTrust(IEnumerable<ItemInfo> items)
+    {
+        if (items.FirstOrDefault(i => i.Consignment is not null) is { } item)
+            throw new BusinessRuleException("pur.item_on_trust", $"{item.Sku} belongs to a partner shop: receive it on trust instead of buying it.",
+                $"الصنف {item.Sku} مملوك لمحل شريك: استلمه أمانةً بدلاً من شرائه.");
+    }
+
     /// <summary>
     /// Withholding tax rates on gross payments to non-residents without a PE (Income Tax Law No. 24 of 2018, art. 20):
     /// 5% on royalties and technical fees; 7% on interest, commissions, brokerage, directors' and attendance fees and other

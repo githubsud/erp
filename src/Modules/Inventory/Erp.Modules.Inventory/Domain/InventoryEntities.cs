@@ -64,6 +64,11 @@ public sealed class Item : TenantEntity
 
     /// <summary>Each unit has its own serial number (phones, laptops, machines). Serials are kept as one-unit batches.</summary>
     public bool TrackSerials { get; set; }
+
+    /// <summary>Goods on trust: the partner shop (supplier) that owns the item and the commission earned selling it on the shop's behalf.</summary>
+    public Guid? ConsignorId { get; set; }
+    public CommissionType? ConsignmentCommissionType { get; set; }
+    public decimal? ConsignmentCommission { get; set; }
     public bool IsActive { get; set; } = true;
     public uint Version { get; set; }
 }

@@ -21,6 +21,7 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant, IPermi
         if (posting.Lines.Count == 0) return [];
         var items = await LoadStockItemsAsync(posting.Lines.Select(l => l.ItemId), ct);
         var valuations = await LockAsync(items.Keys, ct);
+        var onTrust = await OnTrustAsync(items.Keys, ct);
         var allowNegative = await AllowNegativeAsync(ct);
 
         var results = new List<StockLineResult>();
@@ -38,6 +39,7 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant, IPermi
                 if (line.Value is null && line.UnitCost is not >= 0)
                     throw new BusinessRuleException("inv.unit_cost", $"A unit cost is needed to receive {item.Sku}.", $"يلزم تحديد تكلفة الوحدة لاستلام {item.Sku}.");
                 value = line.Value ?? Money.Round(line.Quantity * line.UnitCost!.Value);
+                if (value != 0 && onTrust.Contains(item.Id)) throw OnTrustAtCost(item);
             }
             else
             {
@@ -71,10 +73,12 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant, IPermi
         var items = await LoadStockItemsAsync(lines.Select(l => l.ItemId), ct);
         var valuations = await LockAsync(items.Keys, ct);
 
+        var onTrust = await OnTrustAsync(items.Keys, ct);
         var results = new List<RevaluationResult>();
         foreach (var line in lines)
         {
             var item = items[line.ItemId];
+            if (onTrust.Contains(item.Id) && line.Amount != 0) throw OnTrustAtCost(item);
             var valuation = valuations[line.ItemId];
             var amount = Money.Round(line.Amount);
             var share = line.ReceivedQuantity <= 0 ? 0m : Math.Clamp(valuation.Quantity / line.ReceivedQuantity, 0m, 1m);
@@ -354,6 +358,20 @@ internal sealed class StockLedger(ErpDbContext db, ITenantContext tenant, IPermi
     }
 
     /// <summary>Locks the valuation rows in a fixed order (no deadlocks between documents touching the same items).</summary>
+    /// <summary>
+    /// Items held for a partner shop, read after their valuation rows are locked (a change of owner locks them too), so the answer cannot
+    /// change before this movement commits.
+    /// </summary>
+    private async Task<HashSet<Guid>> OnTrustAsync(IEnumerable<Guid> itemIds, CancellationToken ct)
+    {
+        var ids = itemIds.ToList();
+        return (await db.Set<Item>().AsNoTracking().Where(i => ids.Contains(i.Id) && i.ConsignorId != null).Select(i => i.Id).ToListAsync(ct)).ToHashSet();
+    }
+
+    private static BusinessRuleException OnTrustAtCost(Item item) =>
+        new("inv.consignment_cost", $"{item.Sku} belongs to a partner shop: it is received on trust, at no cost.",
+            $"الصنف {item.Sku} مملوك لمحل شريك: يُستلم أمانةً بدون تكلفة.");
+
     private async Task<Dictionary<Guid, ItemValuation>> LockAsync(IEnumerable<Guid> itemIds, CancellationToken ct)
     {
         var ids = itemIds.Distinct().OrderBy(id => id).ToArray();
@@ -394,8 +412,15 @@ internal sealed class InventoryQueries(ErpDbContext db, ITenantContext tenant) :
         return await (from i in db.Set<Item>().AsNoTracking()
                       join u in db.Set<Uom>() on i.UomId equals u.Id
                       where list.Contains(i.Id) && i.CompanyId == companyId
-                      select new ItemInfo(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType, i.ItemGroupId, u.Code, i.IsActive, i.SalesPrice, i.TrackBatches, i.TrackSerials))
-            .ToDictionaryAsync(i => i.Id, ct);
+                      select new
+                      {
+                          Info = new ItemInfo(i.Id, i.Sku, i.NameEn, i.NameAr, i.ItemType, i.ItemGroupId, u.Code, i.IsActive, i.SalesPrice, i.TrackBatches,
+                              i.TrackSerials, null),
+                          i.ConsignorId, i.ConsignmentCommissionType, i.ConsignmentCommission
+                      })
+            .ToDictionaryAsync(x => x.Info.Id, x => x.ConsignorId is { } owner
+                ? x.Info with { Consignment = new ConsignmentTerms(owner, x.ConsignmentCommissionType!.Value, x.ConsignmentCommission!.Value) }
+                : x.Info, ct);
     }
 
     public async Task<IReadOnlyList<ReorderCandidate>> GetReorderCandidatesAsync(CancellationToken ct = default)

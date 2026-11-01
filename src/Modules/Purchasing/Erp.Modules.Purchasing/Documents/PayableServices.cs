@@ -87,6 +87,7 @@ internal sealed class SupplierInvoiceService(ErpDbContext db, ITenantContext ten
                                  select new { Line = l, o.SupplierId }).ToDictionaryAsync(x => x.Line.Id, token);
             var items = await inventory.GetItemsAsync(r.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value)
                 .Concat(grnLines.Values.Select(g => g.Line.ItemId)).Concat(poLines.Values.Select(p => p.Line.ItemId)), token);
+            PurchasingRules.RefuseGoodsOnTrust(items.Values);
 
             var currency = PurchasingRules.CurrencyCode(r.Currency ?? supplier.Currency);
             var fx = PurchasingRules.ExchangeRate(currency, r.ExchangeRate);

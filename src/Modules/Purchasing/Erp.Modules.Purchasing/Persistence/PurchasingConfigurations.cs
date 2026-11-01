@@ -152,3 +152,36 @@ internal sealed class DebitNoteLineConfiguration : IEntityTypeConfiguration<Debi
         b.Property(x => x.UnitPrice).AsQuantity();
     }
 }
+
+internal sealed class ConsignmentAgreementConfiguration : IEntityTypeConfiguration<ConsignmentAgreement>
+{
+    public void Configure(EntityTypeBuilder<ConsignmentAgreement> b)
+    {
+        b.ToTable("consignment_agreement", "pur");
+        b.Property(x => x.Commission).AsQuantity();
+        b.Property(x => x.Version).HasXminConcurrency();
+    }
+}
+
+internal sealed class ConsignmentMovementConfiguration : IEntityTypeConfiguration<ConsignmentMovement>
+{
+    public void Configure(EntityTypeBuilder<ConsignmentMovement> b)
+    {
+        b.ToTable("consignment_movement", "pur");
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.ConsignmentMovementId);
+    }
+}
+
+internal sealed class ConsignmentMovementLineConfiguration : IEntityTypeConfiguration<ConsignmentMovementLine>
+{
+    public void Configure(EntityTypeBuilder<ConsignmentMovementLine> b)
+    {
+        b.ToTable("consignment_movement_line", "pur");
+        b.Property(x => x.Quantity).AsQuantity();
+    }
+}
+
+internal sealed class ConsignmentSettlementConfiguration : IEntityTypeConfiguration<ConsignmentSettlement>
+{
+    public void Configure(EntityTypeBuilder<ConsignmentSettlement> b) => b.ToTable("consignment_settlement", "pur");
+}

@@ -238,6 +238,10 @@ internal sealed class PosService(ErpDbContext db, ITenantContext tenant, INumber
             foreach (var l in r.Lines)
             {
                 if (!items.TryGetValue(l.ItemId, out var item) || !item.IsActive) throw new NotFoundException("Item", l.ItemId);
+                // A partner shop's goods are sold through invoices, which split the shop's share from our commission.
+                if (item.Consignment is not null)
+                    throw new BusinessRuleException("sal.pos_consigned", $"{item.Sku} belongs to a partner shop and is sold by invoice, not at the till.",
+                        $"الصنف {item.Sku} مملوك لمحل شريك ويُباع بفاتورة لا من نقطة البيع.");
                 var (uomId, factor) = ItemUnits.Resolve(units, item, l.UomId, "sal");
                 var price = l.UnitPrice ?? ItemUnits.ListPrice(units, item, uomId)
                             ?? throw new BusinessRuleException("sal.price_missing", $"{item.Sku} has no sales price.", $"لا يوجد سعر بيع للصنف {item.Sku}.");

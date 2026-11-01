@@ -270,6 +270,10 @@ public sealed class SalesInvoiceLine : TenantEntity
     public decimal UomFactor { get; init; } = 1m;
     public decimal UomQuantity { get; init; }
     public decimal UomPrice { get; init; }
+
+    /// <summary>Goods on trust: the partner shop the goods belong to and our commission in QAR, fixed when the invoice is posted.</summary>
+    public Guid? ConsignorId { get; set; }
+    public decimal? ConsignmentCommission { get; set; }
 }
 
 public enum CreditNoteLineType { Return, Allowance }
@@ -311,6 +315,10 @@ public sealed class CreditNoteLine : TenantEntity
     public decimal Amount { get; init; }
     public decimal? UnitCost { get; set; }
     public decimal Cost { get; set; }
+
+    /// <summary>Goods on trust: the partner shop and the part of our commission given back (QAR), in proportion to the invoice line.</summary>
+    public Guid? ConsignorId { get; set; }
+    public decimal? ConsignmentCommission { get; set; }
 }
 
 public enum ReceiptMethod { Cash, BankTransfer, Cheque, Card, PostDatedCheque }

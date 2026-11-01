@@ -128,4 +128,12 @@ public static class AccountRoles
 
     /// <summary>Cash counted over or short at the close of a till shift.</summary>
     public const string CashOverShort = "sal.cash_over_short";
+
+    /// <summary>
+    /// Goods on trust sold as a partner shop's agent: the shop's share of each sale is owed to it (party = the shop as supplier) until the
+    /// monthly settlement turns it into a supplier invoice. Only the commission is our income.
+    /// </summary>
+    public const string ConsignmentPayable = "sal.consignment_payable";
+    /// <summary>Commission earned selling partner shops' goods; keyed by item group.</summary>
+    public const string ConsignmentCommission = "sal.consignment_commission";
 }

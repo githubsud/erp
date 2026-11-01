@@ -19,6 +19,7 @@ public sealed class InventoryModule : IModule
     {
         services.AddScoped<IStockService, StockLedger>();
         services.AddScoped<IInventoryQueries, InventoryQueries>();
+        services.AddScoped<IConsignmentItems, Stock.ConsignmentItems>();
         services.AddScoped<InventoryMasterService>();
         services.AddScoped<Documents.KitService>();
         services.AddScoped<IScheduledReport, Endpoints.ReorderScheduledReport>();

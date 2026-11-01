@@ -224,12 +224,18 @@ internal sealed class CreditControlService(ErpDbContext db, ITenantContext tenan
 /// <summary>Collects signed amounts per account role and key, then emits balanced debit/credit posting lines.</summary>
 internal sealed class PostingBuilder(Guid? projectId = null)
 {
-    private readonly Dictionary<(string Role, Guid? Key, Guid? Party), decimal> _amounts = [];
+    private readonly Dictionary<(string Role, Guid? Key, Guid? Party, PartyType? Type), decimal> _amounts = [];
 
-    public void Add(string role, Guid? key, decimal signedDebit, Guid? customerId = null)
+    public void Add(string role, Guid? key, decimal signedDebit, Guid? customerId = null) =>
+        Put((role, key, customerId, customerId is null ? null : PartyType.Customer), signedDebit);
+
+    /// <summary>An amount owed to (or by) a supplier, such as a partner shop's share of a sale of its goods.</summary>
+    public void AddSupplier(string role, decimal signedDebit, Guid supplierId) => Put((role, null, supplierId, PartyType.Supplier), signedDebit);
+
+    private void Put((string, Guid?, Guid?, PartyType?) key, decimal signedDebit)
     {
         if (signedDebit == 0) return;
-        _amounts[(role, key, customerId)] = _amounts.GetValueOrDefault((role, key, customerId)) + signedDebit;
+        _amounts[key] = _amounts.GetValueOrDefault(key) + signedDebit;
     }
 
     public List<PostingLine> Lines() => _amounts.Where(x => x.Value != 0).Select(x => new PostingLine
@@ -238,7 +244,7 @@ internal sealed class PostingBuilder(Guid? projectId = null)
         RoleKey = x.Key.Key,
         Side = x.Value > 0 ? PostingSide.Debit : PostingSide.Credit,
         Amount = Math.Abs(x.Value),
-        PartyType = x.Key.Party is null ? null : PartyType.Customer,
+        PartyType = x.Key.Type,
         PartyId = x.Key.Party,
         ProjectId = x.Key.Party is null ? projectId : null
     }).ToList();

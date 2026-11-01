@@ -33,6 +33,7 @@ internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
         b.Property(x => x.ReorderLevel).AsQuantity();
         b.Property(x => x.PurchasePrice).AsQuantity();
         b.Property(x => x.SalesPrice).AsQuantity();
+        b.Property(x => x.ConsignmentCommission).AsQuantity();
         b.Property(x => x.Version).HasXminConcurrency();
     }
 }

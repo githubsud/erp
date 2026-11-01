@@ -123,6 +123,7 @@ internal sealed class PurchaseOrderService(ErpDbContext db, ITenantContext tenan
         if (r.Lines is not { Count: > 0 })
             throw new BusinessRuleException("pur.no_lines", "Add at least one line.", "أضف سطراً واحداً على الأقل.");
         var items = await inventory.GetItemsAsync(r.Lines.Select(l => l.ItemId), ct);
+        PurchasingRules.RefuseGoodsOnTrust(items.Values);
         var units = await inventory.GetUnitsAsync(r.Lines.Select(l => l.ItemId), ct);
 
         order.SupplierId = supplier.Id;

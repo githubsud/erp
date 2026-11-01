@@ -55,6 +55,7 @@ internal static class ChartOfAccountsTemplate
         new("2170", "21", "Withholding Tax Payable", "ضريبة الاستقطاع المستحقة", L),
         new("2175", "21", "Tax Clearance Retentions", "محتجزات شهادة المخالصة الضريبية", L),
         new("2180", "21", "Social Insurance Payable (GRSIA)", "اشتراكات التأمينات الاجتماعية المستحقة", L),
+        new("2185", "21", "Owed to Partner Shops (Goods on Trust)", "مستحقات المحلات الشريكة (بضاعة الأمانة)", L),
         new("2190", "21", "Corporate Income Tax Payable", "ضريبة الدخل المستحقة", L),
         new("22", "2", "Non-current Liabilities", "الالتزامات غير المتداولة", L, false),
         new("2210", "22", "End of Service Benefits Provision", "مخصص مكافأة نهاية الخدمة", L),
@@ -69,6 +70,7 @@ internal static class ChartOfAccountsTemplate
         new("4110", "4", "Sales Revenue", "إيرادات المبيعات", I),
         new("4120", "4", "Service Revenue", "إيرادات الخدمات", I),
         new("4130", "4", "Sales Returns and Discounts", "مردودات وخصومات المبيعات", I, Normal: NormalBalance.Debit),
+        new("4140", "4", "Commission on Goods on Trust", "عمولة بيع بضاعة الأمانة", I),
         new("4210", "4", "Other Income", "إيرادات أخرى", I),
         new("4220", "4", "Foreign Exchange Differences", "فروقات أسعار الصرف", I),
         new("4230", "4", "Gain or Loss on Disposal of Assets", "أرباح أو خسائر بيع الأصول", I),
@@ -136,6 +138,8 @@ internal static class ChartOfAccountsTemplate
         (AccountRoles.PdcReceivable, "1140"),
         (AccountRoles.RetentionReceivable, "1145"),
         (AccountRoles.CashOverShort, "5345"),
+        (AccountRoles.ConsignmentPayable, "2185"),
+        (AccountRoles.ConsignmentCommission, "4140"),
         (AccountRoles.RetentionPayable, "2135"),
         (AccountRoles.TaxRetentionPayable, "2175")
     ];

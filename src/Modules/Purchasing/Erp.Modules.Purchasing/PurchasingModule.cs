@@ -32,6 +32,7 @@ public sealed class PurchasingModule : IModule
         services.AddScoped<Subcontracts.SubcontractService>();
         services.AddScoped<Sourcing.SourcingService>();
         services.AddScoped<Sourcing.ReorderService>();
+        services.AddScoped<Consignment.ConsignmentService>();
         services.AddScoped<IScheduledReport, SupplierAgingScheduledReport>();
         services.AddScoped<IDashboardProvider, PurchasingDashboard>();
         services.AddScoped<IAiTool, SupplierBalancesAiTool>();
@@ -48,5 +49,6 @@ public sealed class PurchasingModule : IModule
         Subcontracts.SubcontractEndpoints.Map(app);
         Sourcing.SourcingEndpoints.Map(app);
         Sourcing.ReorderEndpoints.Map(app);
+        Consignment.ConsignmentEndpoints.Map(app);
     }
 }

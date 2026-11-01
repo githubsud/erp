@@ -237,13 +237,24 @@ internal sealed class SalesInvoiceService(ErpDbContext db, ITenantContext tenant
                     so.QuantityInvoiced += l.Quantity;
                 }
                 var group = l.ItemId is { } item ? items[item].ItemGroupId : (Guid?)null;
+                var lineBase = SalesRules.ToBase(l.Amount, invoice.ExchangeRate);
+                if ((l.LineType is InvoiceLineType.Delivered or InvoiceLineType.Direct) && items[l.ItemId!.Value].Consignment is { } terms)
+                {
+                    // Sold as the partner shop's agent: only the commission is income; the rest is owed to the shop.
+                    var commission = terms.CommissionOn(lineBase, l.Quantity);
+                    l.ConsignorId = terms.ConsignorId;
+                    l.ConsignmentCommission = commission;
+                    builder.Add(AccountRoles.ConsignmentCommission, group, -commission);
+                    builder.AddSupplier(AccountRoles.ConsignmentPayable, -(lineBase - commission), terms.ConsignorId);
+                    continue;
+                }
                 var role = l.LineType switch
                 {
                     InvoiceLineType.Service => AccountRoles.ServiceRevenue,
                     InvoiceLineType.RetentionRelease => AccountRoles.RetentionReceivable,
                     _ => AccountRoles.SalesRevenue
                 };
-                builder.Add(role, l.LineType == InvoiceLineType.RetentionRelease ? null : group, -SalesRules.ToBase(l.Amount, invoice.ExchangeRate));
+                builder.Add(role, l.LineType == InvoiceLineType.RetentionRelease ? null : group, -lineBase);
             }
 
             var direct = invoice.Lines.Where(l => l.LineType == InvoiceLineType.Direct).ToList();
@@ -389,7 +400,19 @@ internal sealed class CreditNoteService(ErpDbContext db, ITenantContext tenant, 
                     Amount = SalesRules.LineAmount(l.Quantity, price, 0)
                 };
                 note.Lines.Add(line);
-                builder.Add(AccountRoles.SalesReturns, original?.ItemId is { } item ? items[item].ItemGroupId : null, SalesRules.ToBase(line.Amount, invoice.ExchangeRate));
+                var group = original?.ItemId is { } item ? items[item].ItemGroupId : (Guid?)null;
+                var lineBase = SalesRules.ToBase(line.Amount, invoice.ExchangeRate);
+                if (original is { ConsignorId: { } owner, ConsignmentCommission: { } sold })
+                {
+                    // A partner shop's goods: the shop gives back its share and we give back the same part of our commission.
+                    var originalBase = SalesRules.ToBase(original.Amount, invoice.ExchangeRate);
+                    var back = originalBase == 0 ? 0 : Math.Min(sold, Money.Round(sold * lineBase / originalBase));
+                    line.ConsignorId = owner;
+                    line.ConsignmentCommission = back;
+                    builder.Add(AccountRoles.ConsignmentCommission, group, back);
+                    builder.AddSupplier(AccountRoles.ConsignmentPayable, lineBase - back, owner);
+                }
+                else builder.Add(AccountRoles.SalesReturns, group, lineBase);
                 if (l.LineType == CreditNoteLineType.Return) returns.Add((line, original!));
             }
             note.Total = note.Lines.Sum(l => l.Amount);
