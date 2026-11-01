@@ -42,6 +42,11 @@ export class ApiService {
     return this.http.delete<void>(this.url(path));
   }
 
+  /** A file as a blob, e.g. a photo shown with the sign-in token (an <img> cannot send it). */
+  blob(path: string): Observable<Blob> {
+    return this.http.get(this.url(path), { responseType: 'blob' });
+  }
+
   /** Downloads a file (PDF, CSV, SIF) and saves it with the server-provided name. */
   download(path: string, params?: Params, fallbackName = 'download'): Observable<void> {
     return this.http.get(this.url(path), { params: this.params(params), responseType: 'blob', observe: 'response' }).pipe(

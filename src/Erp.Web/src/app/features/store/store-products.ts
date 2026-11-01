@@ -1,17 +1,21 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl } from '@angular/forms';
-import { debounceTime } from 'rxjs';
+import { MatDialog } from '@angular/material/dialog';
+import { debounceTime, Observable } from 'rxjs';
 import { CommerceApi, StoreListing } from '../../core/commerce.api';
 import { NotifyService } from '../../core/notify.service';
 import { TradeApi } from '../../core/trade.api';
 import { Item } from '../../core/trade.models';
+import { I18nService } from '../../core/i18n/i18n.service';
+import { AuthImg } from '../../shared/auth-img';
 import { SHARED } from '../../shared/shared';
+import { StorePhotosData, StorePhotosDialog } from './store-photos';
 
 /** Which inventory items the online store shows. Price and stock always come from the item; the store adds nothing to them. */
 @Component({
   selector: 'app-store-products',
-  imports: [...SHARED],
+  imports: [...SHARED, AuthImg],
   template: `
     <div class="page-header">
       <h1>{{ 'store.products' | t }}</h1>
@@ -29,7 +33,7 @@ import { SHARED } from '../../shared/shared';
     </div>
     <div class="table-wrap">
       <table class="products">
-        <thead><tr><th>{{ 'item.sku' | t }}</th><th>{{ 'store.product' | t }}</th><th class="num">{{ 'store.price' | t }}</th><th>{{ 'store.inStore' | t }}</th></tr></thead>
+        <thead><tr><th>{{ 'item.sku' | t }}</th><th>{{ 'store.product' | t }}</th><th class="num">{{ 'store.price' | t }}</th><th>{{ 'store.inStore' | t }}</th><th>{{ 'store.photos' | t }}</th></tr></thead>
         <tbody>
           @for (i of items(); track i.id) {
             <tr>
@@ -38,6 +42,14 @@ import { SHARED } from '../../shared/shared';
               <td class="num">{{ i.salesPrice ?? 0 | money }}</td>
               <td><mat-slide-toggle [checked]="published(i.id)" [disabled]="busy() || i.salesPrice === null" (change)="toggle(i, $event.checked)"
                 [attr.aria-label]="('store.inStore' | t) + ' ' + i.sku" /></td>
+              <td>
+                @if (listingOf(i.id); as l) {
+                  <button mat-button class="photos" (click)="photos(i, l.id)" [attr.aria-label]="('store.photos' | t) + ' ' + i.sku">
+                    @if (l.images.length) { <app-auth-img class="thumb" [source]="source(l.images[0])" /> } @else { <mat-icon>add_a_photo</mat-icon> }
+                    <span class="ltr">{{ l.images.length }}</span>
+                  </button>
+                }
+              </td>
             </tr>
           }
         </tbody>
@@ -53,18 +65,24 @@ import { SHARED } from '../../shared/shared';
     .products { border-collapse: collapse; width: 100%; }
     .products th, .products td { padding: 8px 12px; border-bottom: 1px solid var(--mat-sys-outline-variant); text-align: start; }
     .products .num { text-align: end; }
+    .photos { min-width: 0; }
+    .thumb { width: 36px; height: 36px; border-radius: 4px; display: inline-block; vertical-align: middle; margin-inline-end: 6px; }
   `
 })
 export class StoreProductsPage implements OnInit {
   private readonly commerce = inject(CommerceApi);
   private readonly trade = inject(TradeApi);
   private readonly notify = inject(NotifyService);
+  private readonly dialogs = inject(MatDialog);
+  private readonly i18n = inject(I18nService);
+  private readonly sources = new Map<string, () => Observable<Blob>>();
   protected readonly search = new FormControl('', { nonNullable: true });
   protected readonly items = signal<Item[]>([]);
   protected readonly listings = signal<StoreListing[]>([]);
   protected readonly busy = signal(false);
   protected readonly publishedCount = computed(() => this.listings().filter((l) => l.isPublished).length);
   private readonly publishedIds = computed(() => new Set(this.listings().filter((l) => l.isPublished).map((l) => l.itemId)));
+  private readonly byItem = computed(() => new Map(this.listings().map((l) => [l.itemId, l])));
 
   constructor() {
     this.search.valueChanges.pipe(debounceTime(300), takeUntilDestroyed()).subscribe(() => this.loadItems());
@@ -77,6 +95,26 @@ export class StoreProductsPage implements OnInit {
 
   protected published(itemId: string): boolean {
     return this.publishedIds().has(itemId);
+  }
+
+  /** Photos need the product in the store (listed once; it may be hidden again). */
+  protected listingOf(itemId: string): StoreListing | undefined {
+    return this.byItem().get(itemId);
+  }
+
+  /** One function per photo, so each thumbnail is fetched once. */
+  protected source(imageId: string): () => Observable<Blob> {
+    let f = this.sources.get(imageId);
+    if (!f) this.sources.set(imageId, (f = () => this.commerce.imageFile(imageId)));
+    return f;
+  }
+
+  protected photos(item: Item, listingId: string): void {
+    const data: StorePhotosData = { listingId, name: this.i18n.isArabic() ? item.nameAr : item.nameEn };
+    this.dialogs
+      .open(StorePhotosDialog, { data, width: '640px', maxWidth: '95vw', autoFocus: false })
+      .afterClosed()
+      .subscribe((changed) => changed && this.loadListings());
   }
 
   protected toggle(item: Item, publish: boolean): void {

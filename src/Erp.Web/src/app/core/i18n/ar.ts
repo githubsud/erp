@@ -2448,5 +2448,14 @@ export const ar: Record<TranslationKey, string> = {
   'shop.status.Delivered': 'تم توصيل الطلب',
   'shop.status.Cancelled': 'تم إلغاء الطلب',
   'shop.orderNo': 'رقم الطلب',
-  'shop.noOrder': 'هذا الطلب غير موجود على هذا الجهاز.'
+  'shop.noOrder': 'هذا الطلب غير موجود على هذا الجهاز.',
+  'store.photos': 'الصور',
+  'store.photosOf': 'صور {name}',
+  'store.photosHint': 'حتى {n} صور. الصورة الأولى هي ما يراه المتسوق أولاً. تُصغَّر الصور قبل إرسالها.',
+  'store.noPhotos': 'لا توجد صور بعد.',
+  'store.addPhotos': 'إضافة صور',
+  'store.firstPhoto': 'تظهر أولاً',
+  'store.makeFirst': 'اجعلها الأولى',
+  'store.deletePhoto': 'حذف الصورة',
+  'shop.photo': 'صورة {n}'
 };

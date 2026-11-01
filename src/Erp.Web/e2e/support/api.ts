@@ -42,6 +42,10 @@ export class Api {
     return this.send<T>('PUT', path, body, headers);
   }
 
+  delete(path: string): Promise<void> {
+    return this.send<void>('DELETE', path);
+  }
+
   private async send<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
     const response = await fetch(`${this.base}/api/${path}`, {
       method,

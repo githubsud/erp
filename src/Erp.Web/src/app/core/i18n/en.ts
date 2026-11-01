@@ -2446,7 +2446,16 @@ export const en = {
   'shop.status.Delivered': 'Order delivered',
   'shop.status.Cancelled': 'Order cancelled',
   'shop.orderNo': 'Order number',
-  'shop.noOrder': 'This order is not found on this device.'
+  'shop.noOrder': 'This order is not found on this device.',
+  'store.photos': 'Photos',
+  'store.photosOf': 'Photos of {name}',
+  'store.photosHint': 'Up to {n} photos. The first one is what shoppers see first. Photos are made smaller before they are sent.',
+  'store.noPhotos': 'No photos yet.',
+  'store.addPhotos': 'Add photos',
+  'store.firstPhoto': 'Shown first',
+  'store.makeFirst': 'Show this first',
+  'store.deletePhoto': 'Delete photo',
+  'shop.photo': 'Photo {n}'
 } as const;
 
 export type TranslationKey = keyof typeof en;

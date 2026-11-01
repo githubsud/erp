@@ -98,7 +98,9 @@ export class ShopShell implements OnInit {
     <div class="grid">
       @for (p of products(); track p.slug) {
         <mat-card appearance="outlined" class="product">
-          <a class="pic" [routerLink]="['/shop', shop.slug(), 'p', p.slug]" [attr.aria-label]="i18n.isArabic() ? p.titleAr : p.titleEn"><mat-icon>inventory_2</mat-icon></a>
+          <a class="pic" [routerLink]="['/shop', shop.slug(), 'p', p.slug]" [attr.aria-label]="i18n.isArabic() ? p.titleAr : p.titleEn">
+            @if (p.images[0]; as src) { <img [src]="src" alt="" loading="lazy" /> } @else { <mat-icon>inventory_2</mat-icon> }
+          </a>
           <a class="title" [routerLink]="['/shop', shop.slug(), 'p', p.slug]">{{ i18n.isArabic() ? p.titleAr : p.titleEn }}</a>
           @if (p.brand) { <span class="secondary">{{ p.brand }}</span> }
           <div class="row">
@@ -125,7 +127,8 @@ export class ShopShell implements OnInit {
     .cats .on { background: var(--mat-sys-secondary-container); }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
     .product { padding: 12px; display: flex; flex-direction: column; gap: 6px; }
-    .pic { display: grid; place-items: center; aspect-ratio: 4 / 3; border-radius: 8px; background: var(--mat-sys-surface-container); color: var(--mat-sys-on-surface-variant); }
+    .pic { display: grid; place-items: center; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; background: var(--mat-sys-surface-container); color: var(--mat-sys-on-surface-variant); }
+    .pic img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
     .pic mat-icon { font-size: 40px; width: 40px; height: 40px; }
     .title { color: inherit; text-decoration: none; font-weight: 500; line-height: 1.3; }
     .row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
@@ -201,7 +204,20 @@ export class ShopHomePage implements OnInit {
     @if (product(); as p) {
       <a mat-button [routerLink]="['/shop', shop.slug()]"><mat-icon class="flip-rtl">arrow_back</mat-icon> {{ 'shop.back' | t }}</a>
       <div class="layout">
-        <div class="pic"><mat-icon>inventory_2</mat-icon></div>
+        <div class="photos">
+          <div class="pic">
+            @if (p.images[photo()]; as src) { <img [src]="src" [alt]="i18n.isArabic() ? p.titleAr : p.titleEn" /> } @else { <mat-icon>inventory_2</mat-icon> }
+          </div>
+          @if (p.images.length > 1) {
+            <div class="thumbs">
+              @for (src of p.images; track src; let i = $index) {
+                <button type="button" [class.on]="photo() === i" (click)="photo.set(i)" [attr.aria-label]="'shop.photo' | t: { n: i + 1 }">
+                  <img [src]="src" alt="" loading="lazy" />
+                </button>
+              }
+            </div>
+          }
+        </div>
         <div class="info">
           <h1>{{ i18n.isArabic() ? p.titleAr : p.titleEn }}</h1>
           @if (p.brand) { <p class="secondary">{{ p.brand }}</p> }
@@ -245,8 +261,14 @@ export class ShopHomePage implements OnInit {
     `
     .layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
     @media (min-width: 720px) { .layout { grid-template-columns: 1fr 1fr; } }
-    .pic { display: grid; place-items: center; aspect-ratio: 4 / 3; border-radius: 12px; background: var(--mat-sys-surface-container); color: var(--mat-sys-on-surface-variant); }
+    .photos { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .pic { display: grid; place-items: center; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; background: var(--mat-sys-surface-container); color: var(--mat-sys-on-surface-variant); }
+    .pic img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
     .pic mat-icon { font-size: 64px; width: 64px; height: 64px; }
+    .thumbs { display: flex; gap: 8px; overflow-x: auto; }
+    .thumbs button { flex: none; width: 64px; height: 64px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: #fff; cursor: pointer; }
+    .thumbs button.on { border-color: var(--mat-sys-primary); }
+    .thumbs img { width: 100%; height: 100%; object-fit: contain; }
     .info { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
     h1 { margin: 0; font: var(--mat-sys-headline-small); }
     h2 { margin: 8px 0 0; font: var(--mat-sys-title-medium); }
@@ -271,6 +293,7 @@ export class ShopProductPage implements OnInit {
   protected readonly unit = signal('');
   protected readonly quantity = signal(1);
   protected readonly busy = signal(false);
+  protected readonly photo = signal(0);
   protected readonly years = yearsText;
 
   ngOnInit(): void {
